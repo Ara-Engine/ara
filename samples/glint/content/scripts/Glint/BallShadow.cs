@@ -1,16 +1,14 @@
 namespace Glint;
 
 /// <summary>
-/// A soft dark disc kept on the deck under the ball: a cheap contact shadow. It follows the
-/// ball's position, sits on the surface below it and shrinks as the ball rises. Presentation
-/// only: nothing reads it back, and it has no collider.
+/// The ball's contact shadow: a soft alpha-blended disc laid on the surface under the ball,
+/// tilted to the surface, growing and fading as the ball rises. It sits under the ray-traced
+/// shadow so the ball never looks like it floats.
 /// </summary>
 public sealed partial class BallShadow : Behaviour
 {
-    /// <summary>Diameter in metres when the ball rests on the deck.</summary>
-    [Property, Default(1.5f)] public partial float Spread { get; set; }
-    /// <summary>Height above the deck, in metres, at which the disc has shrunk to half size.</summary>
-    [Property, Default(2.5f)] public partial float Falloff { get; set; }
+    /// <summary>Disc diameter when the ball touches the surface, metres.</summary>
+    [Property, Default(1.3f)] public partial float Spread { get; set; }
 
     /// <inheritdoc/>
     protected override void OnTick(in Tick tick)
@@ -19,14 +17,20 @@ public sealed partial class BallShadow : Behaviour
         if (ball.IsNull) return;
         var position = World.Read<Transform>(ball).Position;
         ref var transform = ref Get<Transform>();
-        if (!Course.FloorBelow(position, out var top))
+        if (!Course.FloorBelow(position, out var top, out var normal))
         {
-            transform.Scale = Vector3.Zero;
+            // Over the drop: park the disc far below so it cannot be seen.
+            transform.Position = new Vector3(position.X, -400f, position.Z);
             return;
         }
-        var height = MathF.Max(0f, position.Y - 0.5f - top);
-        var size = Spread / (1f + height / Falloff);
+        var height = Math.Max(0f, position.Y - 0.5f - top);
+        var fade = Math.Clamp(1f - height / 6f, 0f, 1f);
+        var size = Spread * (1f + height * 0.25f);
         transform.Position = new Vector3(position.X, top + 0.02f, position.Z);
-        transform.Scale = new Vector3(size, 1f, size);
+        // Euler degrees (Rx * Ry * Rz) that turn +Y onto the surface normal.
+        var roll = MathF.Asin(Math.Clamp(-normal.X, -1f, 1f)) * (180f / MathF.PI);
+        var pitch = MathF.Atan2(normal.Z, normal.Y) * (180f / MathF.PI);
+        transform.Rotation = new Vector3(pitch, 0f, roll);
+        transform.Scale = new Vector3(size * fade, 1f, size * fade);
     }
 }

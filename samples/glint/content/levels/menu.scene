@@ -7,336 +7,535 @@
   "records": {
     "e_b1m": {
       "name": "Spinner bar",
-      "order": "aL",
+      "order": "af",
       "MeshRenderer": {
         "model": "@kit/glint_bar.gltf#as_kitglintbar"
       },
       "Transform": {
-        "position": [0, 1.35, 48],
+        "position": [-174.622, 3.427, 89.079],
         "rotation": [0, 35, 0]
       }
     },
     "e_b2m": {
       "name": "Spinner bar",
-      "order": "aM",
+      "order": "ag",
       "MeshRenderer": {
         "model": "@kit/glint_bar.gltf#as_kitglintbar"
       },
       "Transform": {
-        "position": [0, 1.35, 58],
-        "rotation": [0, 125, 0]
+        "position": [-182.622, 3.427, 89.079],
+        "rotation": [0, 95, 0]
       }
     },
-    "e_c1": {
-      "name": "Checkpoint 1",
-      "order": "aN",
+    "e_b3m": {
+      "name": "Spinner bar",
+      "order": "ah",
       "MeshRenderer": {
-        "model": "@kit/glint_pad.gltf#as_kitglintpad",
-        "emissive": [5000, 5000, 5000]
+        "model": "@kit/glint_bar.gltf#as_kitglintbar"
       },
       "Transform": {
-        "position": [0, 0.8, 40]
+        "position": [-190.622, 3.427, 89.079],
+        "rotation": [0, 55, 0]
       }
     },
-    "e_c2": {
-      "name": "Checkpoint 2",
-      "order": "aO",
+    "e_cannon": {
+      "name": "Cannon",
+      "order": "aA",
       "MeshRenderer": {
-        "model": "@kit/glint_pad.gltf#as_kitglintpad",
-        "emissive": [5000, 5000, 5000]
+        "model": "@kit/glint_cannon.gltf#as_kitglintcannon",
+        "emissive": [12000, 12000, 12000]
       },
       "Transform": {
-        "position": [0, 0.8, 66]
+        "position": [-210.622, 2.927, 89.079],
+        "rotation": [0, -90, 0]
       }
     },
     "e_course": {
-      "name": "Catwalk",
-      "order": "aB",
+      "name": "Course",
+      "order": "a6",
       "MeshRenderer": {
         "model": "@kit/glint_course.gltf#as_kitglintcourse"
       },
       "Transform": {}
     },
     "e_env": {
-      "name": "Dusk sky and fixed exposure",
+      "name": "Clear sky and fixed exposure",
       "order": "a0",
       "Environment": {
-        "sky": [0.1, 0.17, 0.38, 1],
-        "horizon": [0.55, 0.52, 0.56, 1],
-        "skyFalloff": 6,
-        "glow": [0.55, 0.17, 0.05, 1],
-        "glowFalloff": 26,
-        "ground": [0.02, 0.022, 0.03, 1],
-        "intensity": 1600
+        "sky": [0.05, 0.2, 0.7, 1],
+        "horizon": [0.6, 0.78, 1, 1],
+        "skyFalloff": 2.6,
+        "glow": [0.9, 0.5, 0.25, 1],
+        "glowFalloff": 14,
+        "ground": [1.5, 1.62, 1.85, 1],
+        "intensity": 7000
       },
       "HeightFog": {
-        "density": 0.0001,
-        "falloff": 30,
-        "albedo": [0.6, 0.68, 0.85, 1],
-        "anisotropy": 0.5
+        "density": 0.0004,
+        "albedo": [0.6, 0.76, 1, 1],
+        "anisotropy": 0.4
       },
       "PostProcessVolume": {
         "overrides": [
           {
             "exposure": "manual",
-            "ev100": 11
+            "ev100": 13.5
           },
           {
             "module": "toneMapping",
             "toneMapping": "neutral"
+          },
+          {
+            "module": "bloom",
+            "bloom": 0.12
           }
         ]
       }
     },
     "e_gamemenueye": {
       "name": "Menu vista camera",
-      "order": "aR",
+      "order": "aj",
       "Transform": {
-        "position": [-5.5, 3.4, -7]
+        "position": [-7, 3.4, -16]
       }
     },
     "e_gamemenutarget": {
       "name": "Menu vista focus",
-      "order": "aS",
+      "order": "ak",
       "Transform": {
-        "position": [0, 0.8, 24]
+        "position": [3, 2, 40]
+      }
+    },
+    "e_gate0": {
+      "name": "Checkpoint gate",
+      "order": "a7",
+      "MeshRenderer": {
+        "model": "@kit/glint_gate.gltf#as_kitglintgate",
+        "emissive": [9000, 9000, 9000]
+      },
+      "Transform": {
+        "position": [-58.219, 0, 39.852],
+        "rotation": [0, -50, 0]
+      }
+    },
+    "e_gate1": {
+      "name": "Checkpoint gate",
+      "order": "a8",
+      "MeshRenderer": {
+        "model": "@kit/glint_gate.gltf#as_kitglintgate",
+        "emissive": [9000, 9000, 9000]
+      },
+      "Transform": {
+        "position": [-130.622, 2.927, 89.079],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_gate2": {
+      "name": "Checkpoint gate",
+      "order": "a9",
+      "MeshRenderer": {
+        "model": "@kit/glint_gate.gltf#as_kitglintgate",
+        "emissive": [9000, 9000, 9000]
+      },
+      "Transform": {
+        "position": [-200.622, 2.927, 89.079],
+        "rotation": [0, -90, 0]
       }
     },
     "e_goal": {
-      "name": "Goal",
-      "order": "aP",
+      "name": "Goal arch",
+      "order": "aB",
       "MeshRenderer": {
         "model": "@kit/glint_goal.gltf#as_kitglintgoal",
-        "emissive": [6000, 6000, 6000]
+        "emissive": [16000, 16000, 16000]
       },
       "Transform": {
-        "position": [0, -1.8, 94]
+        "position": [-302.522, -5.073, 89.079],
+        "rotation": [0, -90, 0]
       }
     },
     "e_lcp0": {
-      "name": "Checkpoint light",
-      "order": "a8",
+      "name": "Gate light",
+      "order": "a2",
       "Light": {
-        "color": [1, 0.6200000047683716, 0.2199999988079071, 1],
-        "intensity": 150000,
-        "range": 18,
+        "color": [1, 0.44999998807907104, 0.25, 1],
+        "intensity": 90000,
+        "range": 14,
         "sourceRadius": 0.30000001192092896
       },
       "Transform": {
-        "position": [0, 2.4, 40]
+        "position": [-58.219, 3, 39.852]
       }
     },
     "e_lcp1": {
-      "name": "Checkpoint light",
-      "order": "a9",
+      "name": "Gate light",
+      "order": "a3",
       "Light": {
-        "color": [1, 0.6200000047683716, 0.2199999988079071, 1],
-        "intensity": 150000,
-        "range": 18,
+        "color": [1, 0.44999998807907104, 0.25, 1],
+        "intensity": 90000,
+        "range": 14,
         "sourceRadius": 0.30000001192092896
       },
       "Transform": {
-        "position": [0, 2.4, 66]
+        "position": [-130.622, 5.927, 89.079]
       }
     },
-    "e_lfurn0": {
-      "name": "Furnace glow",
+    "e_lcp2": {
+      "name": "Gate light",
       "order": "a4",
       "Light": {
-        "color": [1, 0.4000000059604645, 0.10000000149011612, 1],
-        "intensity": 6000000,
-        "range": 90,
-        "sourceRadius": 1.600000023841858
+        "color": [1, 0.44999998807907104, 0.25, 1],
+        "intensity": 90000,
+        "range": 14,
+        "sourceRadius": 0.30000001192092896
       },
       "Transform": {
-        "position": [-52, -21, 26]
-      }
-    },
-    "e_lfurn1": {
-      "name": "Furnace glow",
-      "order": "a5",
-      "Light": {
-        "color": [1, 0.4000000059604645, 0.10000000149011612, 1],
-        "intensity": 6000000,
-        "range": 90,
-        "sourceRadius": 1.600000023841858
-      },
-      "Transform": {
-        "position": [-64, -21, 74]
-      }
-    },
-    "e_lfurn2": {
-      "name": "Furnace glow",
-      "order": "a6",
-      "Light": {
-        "color": [1, 0.4000000059604645, 0.10000000149011612, 1],
-        "intensity": 6000000,
-        "range": 90,
-        "sourceRadius": 1.600000023841858
-      },
-      "Transform": {
-        "position": [56, -21, 46]
-      }
-    },
-    "e_lfurn3": {
-      "name": "Furnace glow",
-      "order": "a7",
-      "Light": {
-        "color": [1, 0.4000000059604645, 0.10000000149011612, 1],
-        "intensity": 6000000,
-        "range": 90,
-        "sourceRadius": 1.600000023841858
-      },
-      "Transform": {
-        "position": [70, -21, 100]
+        "position": [-200.622, 5.927, 89.079]
       }
     },
     "e_lgoal": {
       "name": "Goal light",
-      "order": "aA",
+      "order": "a5",
       "Light": {
-        "color": [0.30000001192092896, 0.8500000238418579, 1, 1],
-        "intensity": 300000,
-        "range": 30,
-        "sourceRadius": 0.5
+        "color": [1, 0.550000011920929, 0.30000001192092896, 1],
+        "intensity": 220000,
+        "range": 26,
+        "sourceRadius": 0.6000000238418579
       },
       "Transform": {
-        "position": [0, 0, 94]
+        "position": [-302.522, 0.927, 89.079]
       }
     },
-    "e_lmouth0": {
-      "name": "Furnace mouth",
-      "order": "a2",
-      "Light": {
-        "color": [1, 0.44999998807907104, 0.11999999731779099, 1],
-        "intensity": 15000000,
-        "range": 90,
-        "sourceRadius": 2
-      },
-      "Transform": {
-        "position": [26, -20.5, 13]
-      }
-    },
-    "e_lmouth1": {
-      "name": "Furnace mouth",
-      "order": "a3",
-      "Light": {
-        "color": [1, 0.44999998807907104, 0.11999999731779099, 1],
-        "intensity": 15000000,
-        "range": 90,
-        "sourceRadius": 2
-      },
-      "Transform": {
-        "position": [-28, -20.5, 49]
-      }
-    },
-    "e_menuball": {
-      "name": "Ball",
-      "order": "aQ",
-      "MeshRenderer": {
-        "shape": "sphere",
-        "color": [0.97, 0.97, 0.98, 1],
-        "roughness": 0.03,
-        "metallic": 1,
-        "emissive": [180, 175, 170]
-      },
-      "Transform": {
-        "position": [0, 0.5, 6]
-      }
-    },
-    "e_menuballg": {
-      "name": "Ball glow",
-      "parent": "e_menuball",
-      "order": "a0",
-      "Light": {
-        "color": [1, 0.88, 0.7, 1],
-        "intensity": 1500000,
-        "range": 14,
-        "sourceRadius": 0.6
-      },
-      "Transform": {
-        "position": [0, 1.3, 0]
-      }
-    },
-    "e_menumover": {
+    "e_m1m": {
       "name": "Moving platform",
-      "order": "aK",
+      "order": "ad",
       "MeshRenderer": {
         "model": "@kit/glint_mover.gltf#as_kitglintmover"
       },
       "Transform": {
-        "position": [1.8, 0.3, 32.5]
+        "position": [-143.482, 2.527, 89.079],
+        "rotation": [0, -90, 0]
       }
     },
-    "e_smoke0": {
-      "name": "Chimney smoke",
+    "e_m2m": {
+      "name": "Moving platform",
+      "order": "ae",
+      "MeshRenderer": {
+        "model": "@kit/glint_mover.gltf#as_kitglintmover"
+      },
+      "Transform": {
+        "position": [-152.482, 2.527, 89.079],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_menuball": {
+      "name": "Ball",
+      "order": "ai",
+      "MeshRenderer": {
+        "shape": "sphere",
+        "color": [0.97, 0.97, 0.98, 1],
+        "roughness": 0.03,
+        "metallic": 1
+      },
+      "Transform": {
+        "position": [0, 0.5, 9]
+      }
+    },
+    "e_orb0": {
+      "name": "Orb",
+      "order": "aC",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Transform": {
+        "position": [-17.619, 0.9, 5.784]
+      }
+    },
+    "e_orb1": {
+      "name": "Orb",
       "order": "aD",
-      "Transform": {
-        "position": [-52, 20, 30]
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
       },
-      "VisualEffect": {
-        "effect": "smoke",
-        "scale": 5,
-        "intensity": 0.6
+      "Transform": {
+        "position": [-21.449, 0.9, 8.998]
       }
     },
-    "e_smoke1": {
-      "name": "Chimney smoke",
+    "e_orb10": {
+      "name": "Orb",
+      "order": "aM",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Transform": {
+        "position": [-71.855, 2.14, 51.293]
+      }
+    },
+    "e_orb11": {
+      "name": "Orb",
+      "order": "aN",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Transform": {
+        "position": [-75.226, 2.603, 54.122]
+      }
+    },
+    "e_orb12": {
+      "name": "Orb",
+      "order": "aO",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Transform": {
+        "position": [-78.596, 3.065, 56.95]
+      }
+    },
+    "e_orb13": {
+      "name": "Orb",
+      "order": "aP",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Transform": {
+        "position": [-81.967, 3.528, 59.778]
+      }
+    },
+    "e_orb14": {
+      "name": "Orb",
+      "order": "aQ",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Transform": {
+        "position": [-88.744, 3.827, 65.465]
+      }
+    },
+    "e_orb15": {
+      "name": "Orb",
+      "order": "aR",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Transform": {
+        "position": [-92.957, 3.827, 69]
+      }
+    },
+    "e_orb16": {
+      "name": "Orb",
+      "order": "aS",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Transform": {
+        "position": [-97.17, 3.827, 72.535]
+      }
+    },
+    "e_orb17": {
+      "name": "Orb",
+      "order": "aT",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Transform": {
+        "position": [-101.383, 3.827, 76.071]
+      }
+    },
+    "e_orb18": {
+      "name": "Orb",
+      "order": "aU",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Transform": {
+        "position": [-105.597, 3.827, 79.606]
+      }
+    },
+    "e_orb19": {
+      "name": "Orb",
+      "order": "aV",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Transform": {
+        "position": [-111.86, 3.827, 84.729]
+      }
+    },
+    "e_orb2": {
+      "name": "Orb",
       "order": "aE",
-      "Transform": {
-        "position": [-64, 14, 78]
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
       },
-      "VisualEffect": {
-        "effect": "smoke",
-        "scale": 5,
-        "intensity": 0.6
+      "Transform": {
+        "position": [-25.279, 0.9, 12.212]
       }
     },
-    "e_smoke2": {
-      "name": "Chimney smoke",
+    "e_orb20": {
+      "name": "Orb",
+      "order": "aW",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Transform": {
+        "position": [-115.482, 3.827, 86.82]
+      }
+    },
+    "e_orb21": {
+      "name": "Orb",
+      "order": "aX",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Transform": {
+        "position": [-119.412, 3.827, 88.251]
+      }
+    },
+    "e_orb22": {
+      "name": "Orb",
+      "order": "aY",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Transform": {
+        "position": [-123.531, 3.827, 88.977]
+      }
+    },
+    "e_orb23": {
+      "name": "Orb",
+      "order": "aZ",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Transform": {
+        "position": [-170.622, 4.827, 89.079]
+      }
+    },
+    "e_orb24": {
+      "name": "Orb",
+      "order": "aa",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Transform": {
+        "position": [-177.622, 4.827, 89.079]
+      }
+    },
+    "e_orb25": {
+      "name": "Orb",
+      "order": "ab",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Transform": {
+        "position": [-184.622, 4.827, 89.079]
+      }
+    },
+    "e_orb26": {
+      "name": "Orb",
+      "order": "ac",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Transform": {
+        "position": [-191.622, 4.827, 89.079]
+      }
+    },
+    "e_orb3": {
+      "name": "Orb",
       "order": "aF",
-      "Transform": {
-        "position": [56, 24, 50]
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
       },
-      "VisualEffect": {
-        "effect": "smoke",
-        "scale": 5,
-        "intensity": 0.6
+      "Transform": {
+        "position": [-29.11, 0.9, 15.426]
       }
     },
-    "e_smoke3": {
-      "name": "Chimney smoke",
+    "e_orb4": {
+      "name": "Orb",
       "order": "aG",
-      "Transform": {
-        "position": [70, 16, 104]
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
       },
-      "VisualEffect": {
-        "effect": "smoke",
-        "scale": 5,
-        "intensity": 0.6
+      "Transform": {
+        "position": [-32.94, 0.9, 18.64]
       }
     },
-    "e_smoke4": {
-      "name": "Chimney smoke",
+    "e_orb5": {
+      "name": "Orb",
       "order": "aH",
-      "Transform": {
-        "position": [-44, 10, 118]
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
       },
-      "VisualEffect": {
-        "effect": "smoke",
-        "scale": 5,
-        "intensity": 0.6
+      "Transform": {
+        "position": [-36.77, 0.9, 21.854]
       }
     },
-    "e_sparks": {
-      "name": "Goal sparks",
+    "e_orb6": {
+      "name": "Orb",
       "order": "aI",
-      "Transform": {
-        "position": [0, -1.5, 94]
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
       },
-      "VisualEffect": {
-        "effect": "sparks",
-        "scale": 1.2
+      "Transform": {
+        "position": [-40.6, 0.9, 25.068]
+      }
+    },
+    "e_orb7": {
+      "name": "Orb",
+      "order": "aJ",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Transform": {
+        "position": [-44.431, 0.9, 28.282]
+      }
+    },
+    "e_orb8": {
+      "name": "Orb",
+      "order": "aK",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Transform": {
+        "position": [-65.114, 1.215, 45.637]
+      }
+    },
+    "e_orb9": {
+      "name": "Orb",
+      "order": "aL",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Transform": {
+        "position": [-68.484, 1.678, 48.465]
       }
     },
     "e_sun": {
@@ -344,34 +543,13 @@
       "order": "a1",
       "Light": {
         "kind": "directional",
-        "color": [1, 0.64, 0.4, 1],
-        "intensity": 25000
+        "color": [1, 0.86, 0.68, 1],
+        "intensity": 95000
       },
       "Transform": {
-        "position": [0, 40, 30],
-        "rotation": [-23.838583, 61.888367, 21.292444]
+        "position": [0, 60, 30],
+        "rotation": [-29.197546, 38.516926, 19.188194]
       }
-    },
-    "e_swirl": {
-      "name": "Goal swirl",
-      "order": "aJ",
-      "Transform": {
-        "position": [0, -1.5, 94]
-      },
-      "VisualEffect": {
-        "effect": "magic_swirl",
-        "scale": 1.6,
-        "intensity": 0.8
-      }
-    },
-    "e_yard": {
-      "name": "Foundry yard",
-      "order": "aC",
-      "MeshRenderer": {
-        "model": "@kit/glint_yard.gltf#as_kitglintyard",
-        "emissive": [1800, 1800, 1800]
-      },
-      "Transform": {}
     }
   }
 }

@@ -2293,6 +2293,7 @@
       ],
       "projects": [
         "atelier",
+        "glint",
         "showcase"
       ],
       "meters": [1.5, 1.5],
@@ -3828,6 +3829,7 @@
         "Kenney"
       ],
       "projects": [
+        "glint",
         "outpost"
       ],
       "files": [

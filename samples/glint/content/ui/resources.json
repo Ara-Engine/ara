@@ -1,1 +1,13 @@
-{}
+{
+  "fonts": [
+    "third_party/outpost_ui/Font/Kenney Future.ttf"
+  ],
+  "images": {
+    "orb": "ui/icons/orb.png",
+    "flag": "ui/icons/flag.png",
+    "fall": "ui/icons/fall.png",
+    "medal_gold": "ui/icons/medal_gold.png",
+    "medal_silver": "ui/icons/medal_silver.png",
+    "medal_bronze": "ui/icons/medal_bronze.png"
+  }
+}

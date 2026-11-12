@@ -7,9 +7,9 @@
   "records": {
     "e_b1": {
       "name": "Spinner bar",
-      "order": "aV",
+      "order": "b04",
       "Collider": {
-        "halfExtents": [1.7999999523162842, 0.15000000596046448, 0.15000000596046448]
+        "halfExtents": [3.200000047683716, 0.1599999964237213, 0.1599999964237213]
       },
       "MeshRenderer": {
         "model": "@kit/glint_bar.gltf#as_kitglintbar"
@@ -21,14 +21,134 @@
         "degreesPerSecond": 80
       },
       "Transform": {
-        "position": [0, 1.35, 48]
+        "position": [-174.622, 3.427, 89.079]
+      }
+    },
+    "e_b10": {
+      "name": "Banked turn",
+      "order": "am",
+      "Collider": {
+        "halfExtents": [3.5, 0.4000000059604645, 0.7819075584411621]
+      },
+      "RigidBody": {},
+      "Surface": {
+        "half": [3.5, 0.4000000059604645, 0.7819075584411621]
+      },
+      "Transform": {
+        "position": [-115.435, 2.542, 86.92],
+        "rotation": [0, -65, 16]
+      }
+    },
+    "e_b11": {
+      "name": "Banked turn",
+      "order": "an",
+      "Collider": {
+        "halfExtents": [3.5, 0.4000000059604645, 0.7819075584411621]
+      },
+      "RigidBody": {},
+      "Surface": {
+        "half": [3.5, 0.4000000059604645, 0.7819075584411621]
+      },
+      "Transform": {
+        "position": [-116.723, 2.542, 87.476],
+        "rotation": [0, -68.333, 16]
+      }
+    },
+    "e_b12": {
+      "name": "Banked turn",
+      "order": "ao",
+      "Collider": {
+        "halfExtents": [3.5, 0.4000000059604645, 0.7819075584411621]
+      },
+      "RigidBody": {},
+      "Surface": {
+        "half": [3.5, 0.4000000059604645, 0.7819075584411621]
+      },
+      "Transform": {
+        "position": [-118.04, 2.542, 87.955],
+        "rotation": [0, -71.667, 16]
+      }
+    },
+    "e_b13": {
+      "name": "Banked turn",
+      "order": "ap",
+      "Collider": {
+        "halfExtents": [3.5, 0.4000000059604645, 0.7819075584411621]
+      },
+      "RigidBody": {},
+      "Surface": {
+        "half": [3.5, 0.4000000059604645, 0.7819075584411621]
+      },
+      "Transform": {
+        "position": [-119.384, 2.542, 88.357],
+        "rotation": [0, -75, 16]
+      }
+    },
+    "e_b14": {
+      "name": "Banked turn",
+      "order": "aq",
+      "Collider": {
+        "halfExtents": [3.5, 0.4000000059604645, 0.7819075584411621]
+      },
+      "RigidBody": {},
+      "Surface": {
+        "half": [3.5, 0.4000000059604645, 0.7819075584411621]
+      },
+      "Transform": {
+        "position": [-120.748, 2.542, 88.681],
+        "rotation": [0, -78.333, 16]
+      }
+    },
+    "e_b15": {
+      "name": "Banked turn",
+      "order": "ar",
+      "Collider": {
+        "halfExtents": [3.5, 0.4000000059604645, 0.7819075584411621]
+      },
+      "RigidBody": {},
+      "Surface": {
+        "half": [3.5, 0.4000000059604645, 0.7819075584411621]
+      },
+      "Transform": {
+        "position": [-122.129, 2.542, 88.924],
+        "rotation": [0, -81.667, 16]
+      }
+    },
+    "e_b16": {
+      "name": "Banked turn",
+      "order": "as",
+      "Collider": {
+        "halfExtents": [3.5, 0.4000000059604645, 0.7819075584411621]
+      },
+      "RigidBody": {},
+      "Surface": {
+        "half": [3.5, 0.4000000059604645, 0.7819075584411621]
+      },
+      "Transform": {
+        "position": [-123.521, 2.542, 89.087],
+        "rotation": [0, -85, 16]
+      }
+    },
+    "e_b17": {
+      "name": "Banked turn",
+      "order": "at",
+      "Collider": {
+        "halfExtents": [3.5, 0.4000000059604645, 0.7819075584411621]
+      },
+      "RigidBody": {},
+      "Surface": {
+        "half": [3.5, 0.4000000059604645, 0.7819075584411621]
+      },
+      "Transform": {
+        "position": [-124.921, 2.542, 89.168],
+        "rotation": [0, -88.333, 16]
       }
     },
     "e_b2": {
       "name": "Spinner bar",
-      "order": "aW",
+      "order": "b05",
       "Collider": {
-        "halfExtents": [1.7999999523162842, 0.15000000596046448, 0.15000000596046448]
+        "halfExtents": [3.200000047683716, 0.1599999964237213, 0.1599999964237213]
       },
       "MeshRenderer": {
         "model": "@kit/glint_bar.gltf#as_kitglintbar"
@@ -38,18 +158,99 @@
       },
       "Spinner": {
         "degreesPerSecond": -95,
-        "startYaw": 90
+        "startYaw": 60
       },
       "Transform": {
-        "position": [0, 1.35, 58],
-        "rotation": [0, 90, 0]
+        "position": [-182.622, 3.427, 89.079],
+        "rotation": [0, 60, 0]
+      }
+    },
+    "e_b3": {
+      "name": "Spinner bar",
+      "order": "b06",
+      "Collider": {
+        "halfExtents": [3.200000047683716, 0.1599999964237213, 0.1599999964237213]
+      },
+      "MeshRenderer": {
+        "model": "@kit/glint_bar.gltf#as_kitglintbar"
+      },
+      "RigidBody": {
+        "motion": "kinematic"
+      },
+      "Spinner": {
+        "degreesPerSecond": 110,
+        "startYaw": 20
+      },
+      "Transform": {
+        "position": [-190.622, 3.427, 89.079],
+        "rotation": [0, 20, 0]
+      }
+    },
+    "e_b6": {
+      "name": "Banked turn",
+      "order": "ai",
+      "Collider": {
+        "halfExtents": [3.5, 0.4000000059604645, 0.7819075584411621]
+      },
+      "RigidBody": {},
+      "Surface": {
+        "half": [3.5, 0.4000000059604645, 0.7819075584411621]
+      },
+      "Transform": {
+        "position": [-110.672, 2.542, 83.982],
+        "rotation": [0, -51.667, 16]
+      }
+    },
+    "e_b7": {
+      "name": "Banked turn",
+      "order": "aj",
+      "Collider": {
+        "halfExtents": [3.5, 0.4000000059604645, 0.7819075584411621]
+      },
+      "RigidBody": {},
+      "Surface": {
+        "half": [3.5, 0.4000000059604645, 0.7819075584411621]
+      },
+      "Transform": {
+        "position": [-111.797, 2.542, 84.82],
+        "rotation": [0, -55, 16]
+      }
+    },
+    "e_b8": {
+      "name": "Banked turn",
+      "order": "ak",
+      "Collider": {
+        "halfExtents": [3.5, 0.4000000059604645, 0.7819075584411621]
+      },
+      "RigidBody": {},
+      "Surface": {
+        "half": [3.5, 0.4000000059604645, 0.7819075584411621]
+      },
+      "Transform": {
+        "position": [-112.968, 2.542, 85.59],
+        "rotation": [0, -58.333, 16]
+      }
+    },
+    "e_b9": {
+      "name": "Banked turn",
+      "order": "al",
+      "Collider": {
+        "halfExtents": [3.5, 0.4000000059604645, 0.7819075584411621]
+      },
+      "RigidBody": {},
+      "Surface": {
+        "half": [3.5, 0.4000000059604645, 0.7819075584411621]
+      },
+      "Transform": {
+        "position": [-114.182, 2.542, 86.291],
+        "rotation": [0, -61.667, 16]
       }
     },
     "e_ball": {
       "name": "Ball",
-      "order": "ad",
+      "order": "b0X",
       "Ball": {
-        "spawn": [0, 0.6000000238418579, -2]
+        "spawn": [-4.213244438171387, 0.6000000238418579, -5.464668273925781]
       },
       "BallController": {},
       "Collider": {
@@ -60,8 +261,7 @@
         "shape": "sphere",
         "color": [0.97, 0.97, 0.98, 1],
         "roughness": 0.03,
-        "metallic": 1,
-        "emissive": [180, 175, 170]
+        "metallic": 1
       },
       "PlayerControl": {
         "camera": "e_camera"
@@ -72,534 +272,1012 @@
         "continuous": true
       },
       "Transform": {
-        "position": [0, 0.6000000238418579, -2]
+        "position": [-4.213244438171387, 0.6000000238418579, -5.464668273925781]
       }
     },
-    "e_ballg": {
-      "name": "Ball glow",
-      "parent": "e_ball",
-      "order": "a0",
-      "Light": {
-        "color": [1, 0.88, 0.7, 1],
-        "intensity": 1500000,
-        "range": 14,
-        "sourceRadius": 0.6
+    "e_camcannon": {
+      "name": "Cannon view",
+      "order": "b0e",
+      "Camera": {
+        "fov": 60,
+        "priority": 10
       },
       "Transform": {
-        "position": [0, 1.3, 0]
-      }
-    },
-    "e_c1": {
-      "name": "Checkpoint 1",
-      "order": "aa",
-      "Checkpoint": {
-        "radius": 2.6
-      },
-      "MeshRenderer": {
-        "model": "@kit/glint_pad.gltf#as_kitglintpad",
-        "emissive": [5000, 5000, 5000]
-      },
-      "Transform": {
-        "position": [0, 0.8, 40]
-      }
-    },
-    "e_c2": {
-      "name": "Checkpoint 2",
-      "order": "ab",
-      "Checkpoint": {
-        "index": 2,
-        "radius": 2.6
-      },
-      "MeshRenderer": {
-        "model": "@kit/glint_pad.gltf#as_kitglintpad",
-        "emissive": [5000, 5000, 5000]
-      },
-      "Transform": {
-        "position": [0, 0.8, 66]
+        "position": [-192.622, 9.427, 77.079],
+        "rotation": [172.40535, 80.350235, -172.51158]
       }
     },
     "e_camera": {
       "name": "Camera",
-      "order": "ae",
+      "order": "b0a",
       "Camera": {
         "fov": 56
       },
+      "CourseCamera": {},
       "FollowCamera": {
         "target": "e_ball",
-        "distance": 5.5,
-        "height": 1.4
+        "distance": 5.4,
+        "height": 2.2,
+        "pitch": 18,
+        "sensitivity": 0
       },
       "Transform": {
-        "position": [0, 3.5, -9]
+        "position": [0, 4, -12]
+      }
+    },
+    "e_camgoal": {
+      "name": "Goal view",
+      "order": "b0f",
+      "Camera": {
+        "fov": 60,
+        "priority": 10
+      },
+      "Transform": {
+        "position": [-268.522, 2.927, 65.079],
+        "rotation": [-170.53767, 54.41176, 172.28136]
+      }
+    },
+    "e_camover": {
+      "name": "Overview",
+      "order": "b0c",
+      "Camera": {
+        "fov": 58,
+        "priority": 10
+      },
+      "Transform": {
+        "position": [106.632, 187.763, -78.193],
+        "rotation": [-122.27565, 49.162632, 129.85493]
+      }
+    },
+    "e_camturn": {
+      "name": "Turn view",
+      "order": "b0d",
+      "Camera": {
+        "fov": 60,
+        "priority": 10
+      },
+      "Transform": {
+        "position": [-88.738, 24.927, 48.07],
+        "rotation": [-151.18922, 33.31139, 163.19286]
       }
     },
     "e_camwide": {
       "name": "Establishing camera",
-      "order": "ag",
+      "order": "b0b",
       "Camera": {
-        "fov": 66,
+        "fov": 62,
         "priority": 10
       },
       "Transform": {
-        "position": [0, 3.4, -4.3],
-        "rotation": [-174.98334, 0, -180]
+        "position": [0, 7, -17],
+        "rotation": [-175.5444, 21.227804, 178.3839]
+      }
+    },
+    "e_cannon": {
+      "name": "Cannon",
+      "order": "aA",
+      "Cannon": {
+        "breech": [-210.62197875976562, 3.4267969131469727, 89.0785903930664],
+        "muzzle": [-213.8219757080078, 5.026796817779541, 89.0785903930664],
+        "launch": [-22.829544067382812, 16.586633682250977, 0.000013745538126386236]
+      },
+      "CannonController": {},
+      "MeshRenderer": {
+        "model": "@kit/glint_cannon.gltf#as_kitglintcannon",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Transform": {
+        "position": [-210.622, 2.927, 89.079],
+        "rotation": [0, -90, 0]
       }
     },
     "e_course": {
-      "name": "Catwalk",
-      "order": "aB",
+      "name": "Course",
+      "order": "a6",
       "MeshRenderer": {
         "model": "@kit/glint_course.gltf#as_kitglintcourse"
       },
       "Transform": {}
     },
     "e_env": {
-      "name": "Dusk sky and fixed exposure",
+      "name": "Clear sky and fixed exposure",
       "order": "a0",
       "Environment": {
-        "sky": [0.1, 0.17, 0.38, 1],
-        "horizon": [0.55, 0.52, 0.56, 1],
-        "skyFalloff": 6,
-        "glow": [0.55, 0.17, 0.05, 1],
-        "glowFalloff": 26,
-        "ground": [0.02, 0.022, 0.03, 1],
-        "intensity": 1600
+        "sky": [0.05, 0.2, 0.7, 1],
+        "horizon": [0.6, 0.78, 1, 1],
+        "skyFalloff": 2.6,
+        "glow": [0.9, 0.5, 0.25, 1],
+        "glowFalloff": 14,
+        "ground": [1.5, 1.62, 1.85, 1],
+        "intensity": 7000
       },
       "HeightFog": {
-        "density": 0.0001,
-        "falloff": 30,
-        "albedo": [0.6, 0.68, 0.85, 1],
-        "anisotropy": 0.5
+        "density": 0.0004,
+        "albedo": [0.6, 0.76, 1, 1],
+        "anisotropy": 0.4
       },
       "PostProcessVolume": {
         "overrides": [
           {
             "exposure": "manual",
-            "ev100": 11
+            "ev100": 13.5
           },
           {
             "module": "toneMapping",
             "toneMapping": "neutral"
+          },
+          {
+            "module": "bloom",
+            "bloom": 0.12
           }
         ]
       }
     },
-    "e_goal": {
-      "name": "Goal",
-      "order": "ac",
-      "Goal": {
+    "e_fx": {
+      "name": "Ball sparks",
+      "order": "b0Z",
+      "BallFx": {},
+      "Transform": {
+        "position": [-4.213244438171387, 0.6000000238418579, -5.464668273925781]
+      },
+      "VisualEffect": {
+        "effect": "sparks",
+        "scale": 0.8,
+        "intensity": 0
+      }
+    },
+    "e_gate0": {
+      "name": "Checkpoint gate",
+      "order": "a7",
+      "Checkpoint": {
         "radius": 3.2
       },
       "MeshRenderer": {
-        "model": "@kit/glint_goal.gltf#as_kitglintgoal",
-        "emissive": [6000, 6000, 6000]
+        "model": "@kit/glint_gate.gltf#as_kitglintgate",
+        "emissive": [9000, 9000, 9000]
       },
       "Transform": {
-        "position": [0, -1.8, 94]
+        "position": [-58.219, 0, 39.852],
+        "rotation": [0, -50, 0]
+      }
+    },
+    "e_gate1": {
+      "name": "Checkpoint gate",
+      "order": "a8",
+      "Checkpoint": {
+        "index": 2,
+        "radius": 3.2
+      },
+      "MeshRenderer": {
+        "model": "@kit/glint_gate.gltf#as_kitglintgate",
+        "emissive": [9000, 9000, 9000]
+      },
+      "Transform": {
+        "position": [-130.622, 2.927, 89.079],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_gate2": {
+      "name": "Checkpoint gate",
+      "order": "a9",
+      "Checkpoint": {
+        "index": 3,
+        "radius": 3.2
+      },
+      "MeshRenderer": {
+        "model": "@kit/glint_gate.gltf#as_kitglintgate",
+        "emissive": [9000, 9000, 9000]
+      },
+      "Transform": {
+        "position": [-200.622, 2.927, 89.079],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_goal": {
+      "name": "Goal arch",
+      "order": "aB",
+      "Goal": {
+        "radius": 5
+      },
+      "MeshRenderer": {
+        "model": "@kit/glint_goal.gltf#as_kitglintgoal",
+        "emissive": [16000, 16000, 16000]
+      },
+      "Transform": {
+        "position": [-302.522, -5.073, 89.079],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_guard0": {
+      "name": "Guard glass",
+      "order": "az",
+      "Collider": {
+        "halfExtents": [6, 0.5, 0.05999999865889549]
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [-0.077, 0.5, -8.936],
+        "rotation": [0, -50, 0]
+      }
+    },
+    "e_guard1": {
+      "name": "Guard glass",
+      "order": "b00",
+      "Collider": {
+        "halfExtents": [0.05999999865889549, 0.5, 9]
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [-10.687, 0.5, -7.735],
+        "rotation": [0, -50, 0]
+      }
+    },
+    "e_guard2": {
+      "name": "Guard glass",
+      "order": "b01",
+      "Collider": {
+        "halfExtents": [0.05999999865889549, 0.5, 9]
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [-3.102, 0.5, 1.305],
+        "rotation": [0, -50, 0]
       }
     },
     "e_lcp0": {
-      "name": "Checkpoint light",
-      "order": "a8",
+      "name": "Gate light",
+      "order": "a2",
       "Light": {
-        "color": [1, 0.6200000047683716, 0.2199999988079071, 1],
-        "intensity": 150000,
-        "range": 18,
+        "color": [1, 0.44999998807907104, 0.25, 1],
+        "intensity": 90000,
+        "range": 14,
         "sourceRadius": 0.30000001192092896
       },
       "Transform": {
-        "position": [0, 2.4, 40]
+        "position": [-58.219, 3, 39.852]
       }
     },
     "e_lcp1": {
-      "name": "Checkpoint light",
-      "order": "a9",
+      "name": "Gate light",
+      "order": "a3",
       "Light": {
-        "color": [1, 0.6200000047683716, 0.2199999988079071, 1],
-        "intensity": 150000,
-        "range": 18,
+        "color": [1, 0.44999998807907104, 0.25, 1],
+        "intensity": 90000,
+        "range": 14,
         "sourceRadius": 0.30000001192092896
       },
       "Transform": {
-        "position": [0, 2.4, 66]
+        "position": [-130.622, 5.927, 89.079]
       }
     },
-    "e_lfurn0": {
-      "name": "Furnace glow",
+    "e_lcp2": {
+      "name": "Gate light",
       "order": "a4",
       "Light": {
-        "color": [1, 0.4000000059604645, 0.10000000149011612, 1],
-        "intensity": 6000000,
-        "range": 90,
-        "sourceRadius": 1.600000023841858
+        "color": [1, 0.44999998807907104, 0.25, 1],
+        "intensity": 90000,
+        "range": 14,
+        "sourceRadius": 0.30000001192092896
       },
       "Transform": {
-        "position": [-52, -21, 26]
-      }
-    },
-    "e_lfurn1": {
-      "name": "Furnace glow",
-      "order": "a5",
-      "Light": {
-        "color": [1, 0.4000000059604645, 0.10000000149011612, 1],
-        "intensity": 6000000,
-        "range": 90,
-        "sourceRadius": 1.600000023841858
-      },
-      "Transform": {
-        "position": [-64, -21, 74]
-      }
-    },
-    "e_lfurn2": {
-      "name": "Furnace glow",
-      "order": "a6",
-      "Light": {
-        "color": [1, 0.4000000059604645, 0.10000000149011612, 1],
-        "intensity": 6000000,
-        "range": 90,
-        "sourceRadius": 1.600000023841858
-      },
-      "Transform": {
-        "position": [56, -21, 46]
-      }
-    },
-    "e_lfurn3": {
-      "name": "Furnace glow",
-      "order": "a7",
-      "Light": {
-        "color": [1, 0.4000000059604645, 0.10000000149011612, 1],
-        "intensity": 6000000,
-        "range": 90,
-        "sourceRadius": 1.600000023841858
-      },
-      "Transform": {
-        "position": [70, -21, 100]
+        "position": [-200.622, 5.927, 89.079]
       }
     },
     "e_lgoal": {
       "name": "Goal light",
-      "order": "aA",
+      "order": "a5",
       "Light": {
-        "color": [0.30000001192092896, 0.8500000238418579, 1, 1],
-        "intensity": 300000,
-        "range": 30,
-        "sourceRadius": 0.5
+        "color": [1, 0.550000011920929, 0.30000001192092896, 1],
+        "intensity": 220000,
+        "range": 26,
+        "sourceRadius": 0.6000000238418579
       },
       "Transform": {
-        "position": [0, 0, 94]
-      }
-    },
-    "e_lmouth0": {
-      "name": "Furnace mouth",
-      "order": "a2",
-      "Light": {
-        "color": [1, 0.44999998807907104, 0.11999999731779099, 1],
-        "intensity": 15000000,
-        "range": 90,
-        "sourceRadius": 2
-      },
-      "Transform": {
-        "position": [26, -20.5, 13]
-      }
-    },
-    "e_lmouth1": {
-      "name": "Furnace mouth",
-      "order": "a3",
-      "Light": {
-        "color": [1, 0.44999998807907104, 0.11999999731779099, 1],
-        "intensity": 15000000,
-        "range": 90,
-        "sourceRadius": 2
-      },
-      "Transform": {
-        "position": [-28, -20.5, 49]
+        "position": [-302.522, 0.927, 89.079]
       }
     },
     "e_m1": {
       "name": "Moving platform",
-      "order": "aU",
+      "order": "b02",
       "Collider": {
-        "halfExtents": [1.600000023841858, 0.5, 1.600000023841858]
+        "halfExtents": [2.200000047683716, 0.4000000059604645, 2.200000047683716]
       },
       "MeshRenderer": {
         "model": "@kit/glint_mover.gltf#as_kitglintmover"
       },
       "Mover": {
-        "origin": [0, 0.30000001192092896, 32.5],
-        "travel": [3, 0, 0],
-        "periodTicks": 360
+        "origin": [-142.12197875976562, 2.526796817779541, 89.07854461669922],
+        "travel": [-3.4000000953674316, 0, 1.8779392121359706e-6]
       },
       "RigidBody": {
         "motion": "kinematic"
       },
       "Surface": {
-        "half": [1.600000023841858, 0.5, 1.600000023841858]
+        "half": [2.200000047683716, 0.4000000059604645, 2.200000047683716]
       },
       "Transform": {
-        "position": [0, 0.3, 32.5]
+        "position": [-142.122, 2.527, 89.079],
+        "rotation": [0, -90, 0]
       }
     },
-    "e_rail0": {
-      "name": "Dock railing",
+    "e_m2": {
+      "name": "Moving platform",
+      "order": "b03",
+      "Collider": {
+        "halfExtents": [2.200000047683716, 0.4000000059604645, 2.200000047683716]
+      },
+      "MeshRenderer": {
+        "model": "@kit/glint_mover.gltf#as_kitglintmover"
+      },
+      "Mover": {
+        "origin": [-151.12197875976562, 2.526796817779541, 89.07855224609375],
+        "travel": [-3.4000000953674316, 0, 1.8779392121359706e-6],
+        "phaseTicks": 135
+      },
+      "RigidBody": {
+        "motion": "kinematic"
+      },
+      "Surface": {
+        "half": [2.200000047683716, 0.4000000059604645, 2.200000047683716]
+      },
+      "Transform": {
+        "position": [-151.122, 2.527, 89.079],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_orb0": {
+      "name": "Orb",
+      "order": "aC",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Pickup": {
+        "size": 1
+      },
+      "Spinner": {
+        "degreesPerSecond": 110
+      },
+      "Transform": {
+        "position": [-17.619, 0.9, 5.784]
+      }
+    },
+    "e_orb1": {
+      "name": "Orb",
+      "order": "aD",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Pickup": {
+        "size": 1
+      },
+      "Spinner": {
+        "degreesPerSecond": 110,
+        "startYaw": 37
+      },
+      "Transform": {
+        "position": [-21.449, 0.9, 8.998]
+      }
+    },
+    "e_orb10": {
+      "name": "Orb",
+      "order": "aM",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Pickup": {
+        "size": 1
+      },
+      "Spinner": {
+        "degreesPerSecond": 110,
+        "startYaw": 10
+      },
+      "Transform": {
+        "position": [-71.855, 2.14, 51.293]
+      }
+    },
+    "e_orb11": {
+      "name": "Orb",
+      "order": "aN",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Pickup": {
+        "size": 1
+      },
+      "Spinner": {
+        "degreesPerSecond": 110,
+        "startYaw": 47
+      },
+      "Transform": {
+        "position": [-75.226, 2.603, 54.122]
+      }
+    },
+    "e_orb12": {
+      "name": "Orb",
+      "order": "aO",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Pickup": {
+        "size": 1
+      },
+      "Spinner": {
+        "degreesPerSecond": 110,
+        "startYaw": 84
+      },
+      "Transform": {
+        "position": [-78.596, 3.065, 56.95]
+      }
+    },
+    "e_orb13": {
+      "name": "Orb",
+      "order": "aP",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Pickup": {
+        "size": 1
+      },
+      "Spinner": {
+        "degreesPerSecond": 110,
+        "startYaw": 121
+      },
+      "Transform": {
+        "position": [-81.967, 3.528, 59.778]
+      }
+    },
+    "e_orb14": {
+      "name": "Orb",
+      "order": "aQ",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Pickup": {
+        "size": 1
+      },
+      "Spinner": {
+        "degreesPerSecond": 110,
+        "startYaw": 158
+      },
+      "Transform": {
+        "position": [-88.744, 3.827, 65.465]
+      }
+    },
+    "e_orb15": {
+      "name": "Orb",
+      "order": "aR",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Pickup": {
+        "size": 1
+      },
+      "Spinner": {
+        "degreesPerSecond": 110,
+        "startYaw": 195
+      },
+      "Transform": {
+        "position": [-92.957, 3.827, 69]
+      }
+    },
+    "e_orb16": {
+      "name": "Orb",
+      "order": "aS",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Pickup": {
+        "size": 1
+      },
+      "Spinner": {
+        "degreesPerSecond": 110,
+        "startYaw": 232
+      },
+      "Transform": {
+        "position": [-97.17, 3.827, 72.535]
+      }
+    },
+    "e_orb17": {
+      "name": "Orb",
+      "order": "aT",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Pickup": {
+        "size": 1
+      },
+      "Spinner": {
+        "degreesPerSecond": 110,
+        "startYaw": 269
+      },
+      "Transform": {
+        "position": [-101.383, 3.827, 76.071]
+      }
+    },
+    "e_orb18": {
+      "name": "Orb",
+      "order": "aU",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Pickup": {
+        "size": 1
+      },
+      "Spinner": {
+        "degreesPerSecond": 110,
+        "startYaw": 306
+      },
+      "Transform": {
+        "position": [-105.597, 3.827, 79.606]
+      }
+    },
+    "e_orb19": {
+      "name": "Orb",
+      "order": "aV",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Pickup": {
+        "size": 1
+      },
+      "Spinner": {
+        "degreesPerSecond": 110,
+        "startYaw": 343
+      },
+      "Transform": {
+        "position": [-111.86, 3.827, 84.729]
+      }
+    },
+    "e_orb2": {
+      "name": "Orb",
+      "order": "aE",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Pickup": {
+        "size": 1
+      },
+      "Spinner": {
+        "degreesPerSecond": 110,
+        "startYaw": 74
+      },
+      "Transform": {
+        "position": [-25.279, 0.9, 12.212]
+      }
+    },
+    "e_orb20": {
+      "name": "Orb",
+      "order": "aW",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Pickup": {
+        "size": 1
+      },
+      "Spinner": {
+        "degreesPerSecond": 110,
+        "startYaw": 20
+      },
+      "Transform": {
+        "position": [-115.482, 3.827, 86.82]
+      }
+    },
+    "e_orb21": {
+      "name": "Orb",
       "order": "aX",
-      "Collider": {
-        "halfExtents": [4, 0.5, 0.07]
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
       },
-      "RigidBody": {},
+      "Pickup": {
+        "size": 1
+      },
+      "Spinner": {
+        "degreesPerSecond": 110,
+        "startYaw": 57
+      },
       "Transform": {
-        "position": [0, 0.5, -4.93]
+        "position": [-119.412, 3.827, 88.251]
       }
     },
-    "e_rail1": {
-      "name": "Dock railing",
+    "e_orb22": {
+      "name": "Orb",
       "order": "aY",
-      "Collider": {
-        "halfExtents": [0.07, 0.5, 5]
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
       },
-      "RigidBody": {},
+      "Pickup": {
+        "size": 1
+      },
+      "Spinner": {
+        "degreesPerSecond": 110,
+        "startYaw": 94
+      },
       "Transform": {
-        "position": [-3.93, 0.5, 0]
+        "position": [-123.531, 3.827, 88.977]
       }
     },
-    "e_rail2": {
-      "name": "Dock railing",
+    "e_orb23": {
+      "name": "Orb",
       "order": "aZ",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Pickup": {
+        "size": 1
+      },
+      "Spinner": {
+        "degreesPerSecond": 110,
+        "startYaw": 131
+      },
+      "Transform": {
+        "position": [-170.622, 4.827, 89.079]
+      }
+    },
+    "e_orb24": {
+      "name": "Orb",
+      "order": "aa",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Pickup": {
+        "size": 1
+      },
+      "Spinner": {
+        "degreesPerSecond": 110,
+        "startYaw": 168
+      },
+      "Transform": {
+        "position": [-177.622, 4.827, 89.079]
+      }
+    },
+    "e_orb25": {
+      "name": "Orb",
+      "order": "ab",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Pickup": {
+        "size": 1
+      },
+      "Spinner": {
+        "degreesPerSecond": 110,
+        "startYaw": 205
+      },
+      "Transform": {
+        "position": [-184.622, 4.827, 89.079]
+      }
+    },
+    "e_orb26": {
+      "name": "Orb",
+      "order": "ac",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Pickup": {
+        "size": 1
+      },
+      "Spinner": {
+        "degreesPerSecond": 110,
+        "startYaw": 242
+      },
+      "Transform": {
+        "position": [-191.622, 4.827, 89.079]
+      }
+    },
+    "e_orb3": {
+      "name": "Orb",
+      "order": "aF",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Pickup": {
+        "size": 1
+      },
+      "Spinner": {
+        "degreesPerSecond": 110,
+        "startYaw": 111
+      },
+      "Transform": {
+        "position": [-29.11, 0.9, 15.426]
+      }
+    },
+    "e_orb4": {
+      "name": "Orb",
+      "order": "aG",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Pickup": {
+        "size": 1
+      },
+      "Spinner": {
+        "degreesPerSecond": 110,
+        "startYaw": 148
+      },
+      "Transform": {
+        "position": [-32.94, 0.9, 18.64]
+      }
+    },
+    "e_orb5": {
+      "name": "Orb",
+      "order": "aH",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Pickup": {
+        "size": 1
+      },
+      "Spinner": {
+        "degreesPerSecond": 110,
+        "startYaw": 185
+      },
+      "Transform": {
+        "position": [-36.77, 0.9, 21.854]
+      }
+    },
+    "e_orb6": {
+      "name": "Orb",
+      "order": "aI",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Pickup": {
+        "size": 1
+      },
+      "Spinner": {
+        "degreesPerSecond": 110,
+        "startYaw": 222
+      },
+      "Transform": {
+        "position": [-40.6, 0.9, 25.068]
+      }
+    },
+    "e_orb7": {
+      "name": "Orb",
+      "order": "aJ",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Pickup": {
+        "size": 1
+      },
+      "Spinner": {
+        "degreesPerSecond": 110,
+        "startYaw": 259
+      },
+      "Transform": {
+        "position": [-44.431, 0.9, 28.282]
+      }
+    },
+    "e_orb8": {
+      "name": "Orb",
+      "order": "aK",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Pickup": {
+        "size": 1
+      },
+      "Spinner": {
+        "degreesPerSecond": 110,
+        "startYaw": 296
+      },
+      "Transform": {
+        "position": [-65.114, 1.215, 45.637]
+      }
+    },
+    "e_orb9": {
+      "name": "Orb",
+      "order": "aL",
+      "MeshRenderer": {
+        "model": "@kit/glint_orb.gltf#as_kitglintorb",
+        "emissive": [12000, 12000, 12000]
+      },
+      "Pickup": {
+        "size": 1
+      },
+      "Spinner": {
+        "degreesPerSecond": 110,
+        "startYaw": 333
+      },
+      "Transform": {
+        "position": [-68.484, 1.678, 48.465]
+      }
+    },
+    "e_p1": {
+      "name": "Launch deck",
+      "order": "ad",
       "Collider": {
-        "halfExtents": [0.07, 0.5, 5]
+        "halfExtents": [6, 0.4000000059604645, 9]
       },
       "RigidBody": {},
+      "Surface": {
+        "half": [6, 0.4000000059604645, 9]
+      },
       "Transform": {
-        "position": [3.93, 0.5, 0]
+        "position": [-6.894, -0.4, -3.215],
+        "rotation": [0, -50, 0]
+      }
+    },
+    "e_p18": {
+      "name": "Checkpoint pad 2",
+      "order": "au",
+      "Collider": {
+        "halfExtents": [4.5, 0.4000000059604645, 5]
+      },
+      "RigidBody": {},
+      "Surface": {
+        "half": [4.5, 0.4000000059604645, 5]
+      },
+      "Transform": {
+        "position": [-130.622, 2.527, 89.079],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_p19": {
+      "name": "Landing pad",
+      "order": "av",
+      "Collider": {
+        "halfExtents": [4.5, 0.4000000059604645, 4.5]
+      },
+      "RigidBody": {},
+      "Surface": {
+        "half": [4.5, 0.4000000059604645, 4.5]
+      },
+      "Transform": {
+        "position": [-162.122, 2.527, 89.079],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_p2": {
+      "name": "Wide straight",
+      "order": "ae",
+      "Collider": {
+        "halfExtents": [3.5, 0.4000000059604645, 23]
+      },
+      "RigidBody": {},
+      "Surface": {
+        "half": [3.5, 0.4000000059604645, 23]
+      },
+      "Transform": {
+        "position": [-31.408, -0.4, 17.354],
+        "rotation": [0, -50, 0]
+      }
+    },
+    "e_p20": {
+      "name": "Spinner deck",
+      "order": "aw",
+      "Collider": {
+        "halfExtents": [4, 0.4000000059604645, 15]
+      },
+      "RigidBody": {},
+      "Surface": {
+        "half": [4, 0.4000000059604645, 15]
+      },
+      "Transform": {
+        "position": [-181.622, 2.527, 89.079],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_p21": {
+      "name": "Cannon pad",
+      "order": "ax",
+      "Collider": {
+        "halfExtents": [6, 0.4000000059604645, 10]
+      },
+      "RigidBody": {},
+      "Surface": {
+        "half": [6, 0.4000000059604645, 10]
+      },
+      "Transform": {
+        "position": [-206.622, 2.527, 89.079],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_p22": {
+      "name": "Goal pad",
+      "order": "ay",
+      "Collider": {
+        "halfExtents": [9, 0.4000000059604645, 11]
+      },
+      "RigidBody": {},
+      "Surface": {
+        "half": [9, 0.4000000059604645, 11]
+      },
+      "Transform": {
+        "position": [-303.622, -5.473, 89.079],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_p3": {
+      "name": "Checkpoint pad 1",
+      "order": "af",
+      "Collider": {
+        "halfExtents": [4.5, 0.4000000059604645, 6]
+      },
+      "RigidBody": {},
+      "Surface": {
+        "half": [4.5, 0.4000000059604645, 6]
+      },
+      "Transform": {
+        "position": [-58.219, -0.4, 39.852],
+        "rotation": [0, -50, 0]
+      }
+    },
+    "e_p4": {
+      "name": "Climb",
+      "order": "ag",
+      "Collider": {
+        "halfExtents": [2.5, 0.4000000059604645, 14]
+      },
+      "RigidBody": {},
+      "Surface": {
+        "half": [2.5, 0.4000000059604645, 14]
+      },
+      "Transform": {
+        "position": [-73.514, 1.066, 52.685],
+        "rotation": [-9.286, -49.627, -7.101]
+      }
+    },
+    "e_p5": {
+      "name": "Beam",
+      "order": "ah",
+      "Collider": {
+        "halfExtents": [0.8500000238418579, 0.4000000059604645, 17]
+      },
+      "RigidBody": {},
+      "Surface": {
+        "half": [0.8500000238418579, 0.4000000059604645, 17]
+      },
+      "Transform": {
+        "position": [-97.17, 2.527, 72.535],
+        "rotation": [0, -50, 0]
       }
     },
     "e_run": {
       "name": "Run",
-      "order": "ah",
+      "order": "b0g",
       "GlintRun": {
-        "start": [0, 0.6000000238418579, -2]
-      }
-    },
-    "e_s0": {
-      "name": "Start dock",
-      "order": "aK",
-      "Collider": {
-        "halfExtents": [4, 0.5, 5]
-      },
-      "RigidBody": {},
-      "Surface": {
-        "half": [4, 0.5, 5]
-      },
-      "Transform": {
-        "position": [0, -0.5, 0]
-      }
-    },
-    "e_s1": {
-      "name": "Runway",
-      "order": "aL",
-      "Collider": {
-        "halfExtents": [2, 0.5, 7]
-      },
-      "RigidBody": {},
-      "Surface": {
-        "half": [2, 0.5, 7]
-      },
-      "Transform": {
-        "position": [0, -0.5, 12]
-      }
-    },
-    "e_s2": {
-      "name": "Pad B",
-      "order": "aM",
-      "Collider": {
-        "halfExtents": [3, 0.5, 3]
-      },
-      "RigidBody": {},
-      "Surface": {
-        "half": [3, 0.5, 3]
-      },
-      "Transform": {
-        "position": [0, 0.3, 25]
-      }
-    },
-    "e_s3": {
-      "name": "Checkpoint pad 1",
-      "order": "aN",
-      "Collider": {
-        "halfExtents": [3, 0.5, 3]
-      },
-      "RigidBody": {},
-      "Surface": {
-        "half": [3, 0.5, 3]
-      },
-      "Transform": {
-        "position": [0, 0.3, 40]
-      }
-    },
-    "e_s4": {
-      "name": "Beam",
-      "order": "aO",
-      "Collider": {
-        "halfExtents": [0.8999999761581421, 0.5, 10]
-      },
-      "RigidBody": {},
-      "Surface": {
-        "half": [0.8999999761581421, 0.5, 10]
-      },
-      "Transform": {
-        "position": [0, 0.3, 53]
-      }
-    },
-    "e_s5": {
-      "name": "Checkpoint pad 2",
-      "order": "aP",
-      "Collider": {
-        "halfExtents": [3, 0.5, 3]
-      },
-      "RigidBody": {},
-      "Surface": {
-        "half": [3, 0.5, 3]
-      },
-      "Transform": {
-        "position": [0, 0.3, 66]
-      }
-    },
-    "e_s6": {
-      "name": "Island 1",
-      "order": "aQ",
-      "Collider": {
-        "halfExtents": [1.7000000476837158, 0.5, 1.7000000476837158]
-      },
-      "RigidBody": {},
-      "Surface": {
-        "half": [1.7000000476837158, 0.5, 1.7000000476837158]
-      },
-      "Transform": {
-        "position": [0, -0.3, 74]
-      }
-    },
-    "e_s7": {
-      "name": "Island 2",
-      "order": "aR",
-      "Collider": {
-        "halfExtents": [1.7000000476837158, 0.5, 1.7000000476837158]
-      },
-      "RigidBody": {},
-      "Surface": {
-        "half": [1.7000000476837158, 0.5, 1.7000000476837158]
-      },
-      "Transform": {
-        "position": [2, -1, 80]
-      }
-    },
-    "e_s8": {
-      "name": "Island 3",
-      "order": "aS",
-      "Collider": {
-        "halfExtents": [1.7000000476837158, 0.5, 1.7000000476837158]
-      },
-      "RigidBody": {},
-      "Surface": {
-        "half": [1.7000000476837158, 0.5, 1.7000000476837158]
-      },
-      "Transform": {
-        "position": [-1, -1.7, 86]
-      }
-    },
-    "e_s9": {
-      "name": "Goal island",
-      "order": "aT",
-      "Collider": {
-        "halfExtents": [4, 0.5, 4]
-      },
-      "RigidBody": {},
-      "Surface": {
-        "half": [4, 0.5, 4]
-      },
-      "Transform": {
-        "position": [0, -2.3, 94]
+        "orbTotal": 27,
+        "start": [-4.213244438171387, 0.6000000238418579, -5.464668273925781]
       }
     },
     "e_shadow": {
       "name": "Ball contact shadow",
-      "order": "af",
+      "order": "b0Y",
       "BallShadow": {},
       "MeshRenderer": {
         "model": "@kit/glint_blob.gltf#as_kitglintblob"
       },
       "Transform": {
         "position": [0, 0.02, -2],
-        "scale": [1.5, 1, 1.5]
-      }
-    },
-    "e_smoke0": {
-      "name": "Chimney smoke",
-      "order": "aD",
-      "Transform": {
-        "position": [-52, 20, 30]
-      },
-      "VisualEffect": {
-        "effect": "smoke",
-        "scale": 5,
-        "intensity": 0.6
-      }
-    },
-    "e_smoke1": {
-      "name": "Chimney smoke",
-      "order": "aE",
-      "Transform": {
-        "position": [-64, 14, 78]
-      },
-      "VisualEffect": {
-        "effect": "smoke",
-        "scale": 5,
-        "intensity": 0.6
-      }
-    },
-    "e_smoke2": {
-      "name": "Chimney smoke",
-      "order": "aF",
-      "Transform": {
-        "position": [56, 24, 50]
-      },
-      "VisualEffect": {
-        "effect": "smoke",
-        "scale": 5,
-        "intensity": 0.6
-      }
-    },
-    "e_smoke3": {
-      "name": "Chimney smoke",
-      "order": "aG",
-      "Transform": {
-        "position": [70, 16, 104]
-      },
-      "VisualEffect": {
-        "effect": "smoke",
-        "scale": 5,
-        "intensity": 0.6
-      }
-    },
-    "e_smoke4": {
-      "name": "Chimney smoke",
-      "order": "aH",
-      "Transform": {
-        "position": [-44, 10, 118]
-      },
-      "VisualEffect": {
-        "effect": "smoke",
-        "scale": 5,
-        "intensity": 0.6
-      }
-    },
-    "e_sparks": {
-      "name": "Goal sparks",
-      "order": "aI",
-      "Transform": {
-        "position": [0, -1.5, 94]
-      },
-      "VisualEffect": {
-        "effect": "sparks",
-        "scale": 1.2
+        "scale": [1.3, 1, 1.3]
       }
     },
     "e_sun": {
@@ -607,34 +1285,271 @@
       "order": "a1",
       "Light": {
         "kind": "directional",
-        "color": [1, 0.64, 0.4, 1],
-        "intensity": 25000
+        "color": [1, 0.86, 0.68, 1],
+        "intensity": 95000
       },
       "Transform": {
-        "position": [0, 40, 30],
-        "rotation": [-23.838583, 61.888367, 21.292444]
+        "position": [0, 60, 30],
+        "rotation": [-29.197546, 38.516926, 19.188194]
       }
     },
-    "e_swirl": {
-      "name": "Goal swirl",
-      "order": "aJ",
+    "e_wp00": {
+      "name": "Waypoint",
+      "order": "b07",
       "Transform": {
-        "position": [0, -1.5, 94]
+        "position": [0, 0, -9]
       },
-      "VisualEffect": {
-        "effect": "magic_swirl",
-        "scale": 1.6,
-        "intensity": 0.8
+      "Waypoint": {}
+    },
+    "e_wp01": {
+      "name": "Waypoint",
+      "order": "b08",
+      "Transform": {
+        "position": [-13.789, 0, 2.57]
+      },
+      "Waypoint": {
+        "index": 1
       }
     },
-    "e_yard": {
-      "name": "Foundry yard",
-      "order": "aC",
-      "MeshRenderer": {
-        "model": "@kit/glint_yard.gltf#as_kitglintyard",
-        "emissive": [1800, 1800, 1800]
+    "e_wp02": {
+      "name": "Waypoint",
+      "order": "b09",
+      "Transform": {
+        "position": [-49.027, 0, 32.138]
       },
-      "Transform": {}
+      "Waypoint": {
+        "index": 2
+      }
+    },
+    "e_wp03": {
+      "name": "Waypoint",
+      "order": "b0A",
+      "Transform": {
+        "position": [-53.623, 0, 35.995]
+      },
+      "Waypoint": {
+        "index": 3
+      }
+    },
+    "e_wp04": {
+      "name": "Waypoint",
+      "order": "b0B",
+      "Transform": {
+        "position": [-62.816, 0, 43.709]
+      },
+      "Waypoint": {
+        "index": 4
+      }
+    },
+    "e_wp05": {
+      "name": "Waypoint",
+      "order": "b0C",
+      "Transform": {
+        "position": [-84.147, 2.927, 61.608]
+      },
+      "Waypoint": {
+        "index": 5
+      }
+    },
+    "e_wp06": {
+      "name": "Waypoint",
+      "order": "b0D",
+      "Transform": {
+        "position": [-110.193, 2.927, 83.463]
+      },
+      "Waypoint": {
+        "index": 6
+      }
+    },
+    "e_wp07": {
+      "name": "Waypoint",
+      "order": "b0E",
+      "Transform": {
+        "position": [-111.288, 2.927, 84.329]
+      },
+      "Waypoint": {
+        "index": 7
+      }
+    },
+    "e_wp08": {
+      "name": "Waypoint",
+      "order": "b0F",
+      "Transform": {
+        "position": [-112.432, 2.927, 85.13]
+      },
+      "Waypoint": {
+        "index": 8
+      }
+    },
+    "e_wp09": {
+      "name": "Waypoint",
+      "order": "b0G",
+      "Transform": {
+        "position": [-113.62, 2.927, 85.863]
+      },
+      "Waypoint": {
+        "index": 9
+      }
+    },
+    "e_wp10": {
+      "name": "Waypoint",
+      "order": "b0H",
+      "Transform": {
+        "position": [-114.849, 2.927, 86.525]
+      },
+      "Waypoint": {
+        "index": 10
+      }
+    },
+    "e_wp11": {
+      "name": "Waypoint",
+      "order": "b0I",
+      "Transform": {
+        "position": [-116.115, 2.927, 87.115]
+      },
+      "Waypoint": {
+        "index": 11
+      }
+    },
+    "e_wp12": {
+      "name": "Waypoint",
+      "order": "b0J",
+      "Transform": {
+        "position": [-117.412, 2.927, 87.631]
+      },
+      "Waypoint": {
+        "index": 12
+      }
+    },
+    "e_wp13": {
+      "name": "Waypoint",
+      "order": "b0K",
+      "Transform": {
+        "position": [-118.738, 2.927, 88.07]
+      },
+      "Waypoint": {
+        "index": 13
+      }
+    },
+    "e_wp14": {
+      "name": "Waypoint",
+      "order": "b0L",
+      "Transform": {
+        "position": [-120.086, 2.927, 88.432]
+      },
+      "Waypoint": {
+        "index": 14
+      }
+    },
+    "e_wp15": {
+      "name": "Waypoint",
+      "order": "b0M",
+      "Transform": {
+        "position": [-121.454, 2.927, 88.714]
+      },
+      "Waypoint": {
+        "index": 15
+      }
+    },
+    "e_wp16": {
+      "name": "Waypoint",
+      "order": "b0N",
+      "Transform": {
+        "position": [-122.835, 2.927, 88.916]
+      },
+      "Waypoint": {
+        "index": 16
+      }
+    },
+    "e_wp17": {
+      "name": "Waypoint",
+      "order": "b0O",
+      "Transform": {
+        "position": [-124.226, 2.927, 89.038]
+      },
+      "Waypoint": {
+        "index": 17
+      }
+    },
+    "e_wp18": {
+      "name": "Waypoint",
+      "order": "b0P",
+      "Transform": {
+        "position": [-125.622, 2.927, 89.079]
+      },
+      "Waypoint": {
+        "index": 18
+      }
+    },
+    "e_wp19": {
+      "name": "Waypoint",
+      "order": "b0Q",
+      "Transform": {
+        "position": [-135.622, 2.927, 89.079]
+      },
+      "Waypoint": {
+        "index": 19
+      }
+    },
+    "e_wp20": {
+      "name": "Waypoint",
+      "order": "b0R",
+      "Transform": {
+        "position": [-157.622, 2.927, 89.079]
+      },
+      "Waypoint": {
+        "index": 20
+      }
+    },
+    "e_wp21": {
+      "name": "Waypoint",
+      "order": "b0S",
+      "Transform": {
+        "position": [-166.622, 2.927, 89.079]
+      },
+      "Waypoint": {
+        "index": 21
+      }
+    },
+    "e_wp22": {
+      "name": "Waypoint",
+      "order": "b0T",
+      "Transform": {
+        "position": [-196.622, 2.927, 89.079]
+      },
+      "Waypoint": {
+        "index": 22
+      }
+    },
+    "e_wp23": {
+      "name": "Waypoint",
+      "order": "b0U",
+      "Transform": {
+        "position": [-216.622, 2.927, 89.079]
+      },
+      "Waypoint": {
+        "index": 23
+      }
+    },
+    "e_wp24": {
+      "name": "Waypoint",
+      "order": "b0V",
+      "Transform": {
+        "position": [-292.622, -5.073, 89.079]
+      },
+      "Waypoint": {
+        "index": 24
+      }
+    },
+    "e_wp25": {
+      "name": "Waypoint",
+      "order": "b0W",
+      "Transform": {
+        "position": [-302.522, -5.073, 89.079]
+      },
+      "Waypoint": {
+        "index": 25
+      }
     }
   }
 }

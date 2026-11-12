@@ -13,7 +13,7 @@ public static partial class Movers
         transform.Position = mover.Origin + mover.Travel * s;
     }
 
-    /// <summary>Turns each spinner bar.</summary>
+    /// <summary>Turns each spinner.</summary>
     [Query(Order = 0)]
     static void Spin(in Spinner spinner, ref Transform transform, in Tick tick)
     {

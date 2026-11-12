@@ -1,32 +1,62 @@
 <!-- ara:asset ui_glint000000001 -->
 <ui id="glint">
   <panel id="hud">
-    <panel id="top">
-      <panel id="timer-card" class="card"><text id="timer-label" class="eyebrow" text="TIME"/><text id="timer" text="0:00"/></panel>
-      <panel id="status-card" class="card"><text id="checkpoint" text="Checkpoint 0 / 2"/><text id="falls" text="Falls 0"/><text id="best" text="Best --"/></panel>
+        <panel id="clock">
+      <panel id="time" class="row"><text id="t-min" text="0:"/><text id="t-sec" text="00."/><text id="t-cs" text="00"/></panel>
+      <panel id="best" class="row"><text id="best-label" text="BEST "/><text id="b-min" text="-"/><text id="b-sec" text=""/><text id="b-cs" text=""/></panel>
     </panel>
-    <panel id="help"><text id="prompt" text="Roll to start the clock"/><text id="hints" text="WASD roll    Space jump    Right mouse drag camera    Esc pause"/></panel>
-    <panel id="win" class="overlay"><panel id="win-dialog" class="modal">
-      <text id="win-eyebrow" class="eyebrow" text="Foundry Steps"/><text id="win-title" class="title" text="Beacon reached."/>
-      <text id="win-time" text="Time 0:00"/><text id="win-best" text="Best 0:00"/><text id="win-falls" text="Falls 0"/>
-      <text id="win-restart" class="accent" text="Press E to roll again"/>
-      <button id="win-leave" action="leave" text="Back to title"/>
-    </panel></panel>
+    <panel id="counters">
+      <panel id="ui_001" class="counter row"><image class="ci" id="icon-orb" src="orb"/><text class="ct" id="orbs" text="0 / 0"/></panel>
+      <panel id="ui_002" class="counter row"><image class="ci" id="icon-flag" src="flag"/><text class="ct" id="gates" text="0 / 3"/></panel>
+      <panel id="ui_003" class="counter row"><image class="ci" id="icon-fall" src="fall"/><text class="ct" id="falls" text="0"/></panel>
+    </panel>
+    <panel id="keys" class="row">
+      <panel id="ui_004" class="key"><text class="kt" id="ui_005" text="W"/></panel><panel id="ui_006" class="key"><text class="kt" id="ui_007" text="A"/></panel><panel id="ui_008" class="key"><text class="kt" id="ui_009" text="S"/></panel><panel id="ui_010" class="key"><text class="kt" id="ui_011" text="D"/></panel>
+      <text id="ui_012" class="keylabel" text="ROLL"/>
+      <panel id="ui_013" class="key keywide"><text class="kt" id="ui_014" text="SPACE"/></panel><text id="ui_015" class="keylabel" text="JUMP"/>
+      <panel id="ui_016" class="key"><text class="kt" id="ui_017" text="E"/></panel><text id="ui_018" class="keylabel" text="RETRY"/>
+    </panel>
+    <panel id="fade-full" class="fade full"/><panel id="fade-half" class="fade half"/><panel id="fade-light" class="fade light"/>
+    <panel id="win" class="scrim">
+      <panel id="win-content">
+        <image class="wm" id="medal-gold" src="medal_gold"/><image class="wm" id="medal-silver" src="medal_silver"/><image class="wm" id="medal-bronze" src="medal_bronze"/>
+        <text id="win-title" text="COURSE CLEAR"/>
+        <panel id="win-time" class="row"><text id="w-min" text="0:"/><text id="w-sec" text="00."/><text id="w-cs" text="00"/></panel>
+        <panel id="splits">
+          <panel id="ui_019" class="split row"><image id="ui_020" class="si" src="flag"/><text class="st" id="split-1-label" text="GATE 1"/><panel id="ui_021" class="row"><text class="st" id="s1-min" text="0:"/><text class="st" id="s1-sec" text="00."/><text class="st" id="s1-cs" text="00"/></panel></panel>
+          <panel id="ui_022" class="split row"><image id="ui_023" class="si" src="flag"/><text class="st" id="split-2-label" text="GATE 2"/><panel id="ui_024" class="row"><text class="st" id="s2-min" text="0:"/><text class="st" id="s2-sec" text="00."/><text class="st" id="s2-cs" text="00"/></panel></panel>
+          <panel id="ui_025" class="split row"><image id="ui_026" class="si" src="flag"/><text class="st" id="split-3-label" text="GATE 3"/><panel id="ui_027" class="row"><text class="st" id="s3-min" text="0:"/><text class="st" id="s3-sec" text="00."/><text class="st" id="s3-cs" text="00"/></panel></panel>
+          <panel id="ui_028" class="split row"><image id="ui_029" class="si" src="orb"/><text class="st" id="orb-label" text="ORBS"/><text class="st" id="win-orbs" text="0 / 0"/></panel>
+          <panel id="ui_030" class="split row"><image id="ui_031" class="si" src="fall"/><text class="st" id="fall-label" text="FALLS"/><text class="st" id="win-falls" text="0"/></panel>
+        </panel>
+        <panel id="again" class="row"><panel id="ui_032" class="key"><text class="kt" id="ui_033" text="E"/></panel><text id="ui_034" class="keylabel" text="ROLL AGAIN"/><button id="win-leave" action="leave" text="TITLE"/></panel>
+      </panel>
+    </panel>
   </panel>
-  <panel id="main-menu" class="screen"><panel id="menu-content">
-    <text id="menu-eyebrow" class="eyebrow" text="A rolling course"/>
-    <panel id="title-lockup"><text id="logo" class="logo" text="GLINT"/><panel id="title-rule"/></panel>
-    <text id="menu-description" text="Steer a chrome ball over a floating foundry. Two checkpoints, a moving platform and spinning bars between you and the beacon."/>
-    <panel id="menu-buttons"><button id="solo" action="solo" text="Roll"/><button id="quit" action="quit" text="Quit game"/></panel>
-  </panel></panel>
+  <panel id="main-menu" class="screen">
+    <panel id="ui_035" class="shade s1"/><panel id="ui_036" class="shade s2"/><panel id="ui_037" class="shade s3"/><panel id="ui_038" class="shade s4"/>
+    <panel id="menu-content">
+      <text id="logo" text="GLINT"/>
+      <panel id="title-rule"/>
+      <text id="tagline" text="A ROLLING COURSE ABOVE THE CLOUDS"/>
+      <panel id="menu-buttons"><button id="solo" action="solo" text="ROLL"/><button id="quit" action="quit" text="QUIT"/></panel>
+    </panel>
+  </panel>
   <panel id="lobby" class="screen">
-    <text id="lobby-eyebrow" class="eyebrow" text="Course 1"/><text id="lobby-title" class="title" text="Foundry Steps"/>
-    <text id="lobby-text" text="Reach the beacon. The clock starts on your first move; falling puts you back at your last checkpoint."/>
-    <panel id="lobby-row" class="row"><button id="ready" action="ready" text="Start rolling"/><button id="lobby-leave" action="leave" text="Back"/></panel>
+    <panel id="ui_039" class="shade s1"/><panel id="ui_040" class="shade s2"/><panel id="ui_041" class="shade s3"/><panel id="ui_042" class="shade s4"/>
+    <panel id="lobby-content">
+      <text id="lobby-eyebrow" text="COURSE 01"/>
+      <text id="lobby-title" text="SKYWARD"/>
+      <panel id="medals">
+        <panel id="ui_043" class="medal row"><image id="ui_044" class="mi" src="medal_gold"/><text id="ui_045" class="medal-name" text="GOLD"/><text id="ui_046" class="medal-time" text="1:00"/></panel>
+        <panel id="ui_047" class="medal row"><image id="ui_048" class="mi" src="medal_silver"/><text id="ui_049" class="medal-name" text="SILVER"/><text id="ui_050" class="medal-time" text="1:15"/></panel>
+        <panel id="ui_051" class="medal row"><image id="ui_052" class="mi" src="medal_bronze"/><text id="ui_053" class="medal-name" text="BRONZE"/><text id="ui_054" class="medal-time" text="1:40"/></panel>
+      </panel>
+      <panel id="lobby-buttons"><button id="ready" action="ready" text="START"/><button id="lobby-leave" action="leave" text="BACK"/></panel>
+    </panel>
   </panel>
-  <panel id="loading" class="screen"><text id="loading-eyebrow" class="eyebrow" text="Glint"/><text id="loading-title" class="title" text="Heating the foundry..."/><text id="loading-progress" text="Loading the course, physics and scripts."/></panel>
-  <panel id="pause" class="overlay"><panel id="pause-dialog" class="modal">
-    <text id="pause-eyebrow" class="eyebrow" text="Paused"/><text id="pause-title" class="title" text="Take a breath."/>
-    <button id="resume" action="resume" text="Resume"/><button id="pause-leave" action="leave" text="Leave run"/>
-  </panel></panel>
+  <panel id="loading" class="screen solid"><text id="loading-title" text="LOADING"/><text id="loading-progress" text=""/></panel>
+  <panel id="pause" class="scrim">
+    <panel id="pause-content"><text id="pause-title" text="PAUSED"/><button id="resume" action="resume" text="RESUME"/><button id="pause-leave" action="leave" text="LEAVE RUN"/></panel>
+  </panel>
 </ui>

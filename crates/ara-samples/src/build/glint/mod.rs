@@ -1,16 +1,16 @@
-//! "Glint": a small rolling-ball game, one level so far ("Foundry Steps"): a catwalk of
-//! slabs, a sliding platform, two spinner bars, two checkpoints and a goal, floating over a
-//! foundry yard at dusk. The ball is a dynamic sphere steered by C#
+//! "Glint": a rolling-ball game, one course ("Skyward"): a floating route of decks, a beam, a
+//! banked turn, sliders, spinner bars and a cannon that fires the ball across a 76 m gap to the
+//! goal, over open sky, in bright low sun. The ball is a dynamic sphere steered by C#
 //! (`samples/glint/content/scripts/Glint`).
 //!
-//! Two scenes share one art pass: `levels/glint.scene` (the game: colliders, `Surface`
-//! faces, movers, the ball, the run director) and `levels/menu.scene` (the native menu's
-//! backdrop: the same art, no gameplay components, a fly-over camera marked by two points).
-//! Walkable faces carry a `Surface` component with the same half extents as their collider,
-//! because scripts have no contact events or ray casts to ask the physics engine.
-//! The look reuses Atelier's vocabulary: a numeric gradient sky, one sun, a fixed exposure,
-//! plain PBR materials from CC0 sets, lights with explicit source radii, one accent colour.
+//! Everything comes from `course.rs` (the route as data). Two scenes share one art pass:
+//! `levels/glint.scene` (the game: colliders, `Surface` boxes, movers, the ball, the director)
+//! and `levels/menu.scene` (the native menu's backdrop: the same art, no gameplay components, a
+//! fly-over camera marked by two points). The UI's bindings and resources are generated here too.
+mod course;
+mod icons;
 mod kits;
+mod ui;
 
 use super::{
     Ctx, clean,
@@ -18,8 +18,8 @@ use super::{
     place::{Models, Prop, Scene, round3, short},
 };
 use anyhow::Result;
-use glam::Vec3;
-use kits::{BAR, CHIMNEYS, FURNACES, MOVER_SIZE, SLAB, SLABS, YARD_FLOOR};
+use course::Course;
+use glam::{Quat, Vec3};
 use serde_json::{Value, json};
 
 /// Gameplay scene.
@@ -27,22 +27,28 @@ pub const SCENE: (&str, &str) = ("levels/glint.scene", "sc_glint000001");
 /// The menu backdrop the native shell requires at this path.
 const MENU: (&str, &str) = ("levels/menu.scene", "sc_glint000002");
 /// Fixed exposure (EV100): no auto-exposure anywhere.
-const EV100: f32 = 11.0;
-/// Where the ball starts.
-const START: Vec3 = Vec3::new(0.0, 0.6, -2.0);
-/// Direction the sun's light travels: about 13 degrees above the horizon, raking across the
-/// course from its right and ahead, so slab edges and bars throw long shadows left and back.
-const SUN: Vec3 = Vec3::new(-0.88, -0.19, -0.43);
+const EV100: f32 = 13.5;
+/// Direction the sun's light travels: low and warm, from the right and ahead of the start.
+const SUN: Vec3 = Vec3::new(-0.62, -0.38, -0.68);
+/// The spinner bar's length and thickness (m).
+pub const BAR: (f32, f32) = (6.4, 0.32);
+/// Gold, silver and bronze times in seconds (the UI prints the same numbers).
+pub const MEDALS: [u32; 3] = [60, 75, 100];
 
-/// The moving platform's path: centre, travel, period in ticks.
-const MOVER_ORIGIN: Vec3 = Vec3::new(0.0, 0.8 - SLAB * 0.5, 32.5);
-const MOVER_TRAVEL: Vec3 = Vec3::new(3.0, 0.0, 0.0);
-const MOVER_PERIOD: u32 = 360;
+fn euler(rot: Quat) -> [f32; 3] {
+    let (x, y, z) = rot.to_euler(glam::EulerRot::XYZ);
+    [x.to_degrees(), y.to_degrees(), z.to_degrees()]
+}
 
-/// Spinner bars over the beam: id, pivot Z, start yaw, degrees a second.
-const BARS: [(&str, f32, f32, f32); 2] = [("e_b1", 48.0, 0.0, 80.0), ("e_b2", 58.0, 90.0, -95.0)];
-
-fn lamp(id: &str, name: &str, at: Vec3, color: [f32; 3], lumens: f32, radius: f32, range: f32) -> Vec<(&'static str, Value)> {
+fn lamp(
+    id: &str,
+    name: &str,
+    at: Vec3,
+    color: [f32; 3],
+    lumens: f32,
+    radius: f32,
+    range: f32,
+) -> Vec<(&'static str, Value)> {
     light(
         id,
         name,
@@ -53,286 +59,438 @@ fn lamp(id: &str, name: &str, at: Vec3, color: [f32; 3], lumens: f32, radius: f3
     )
 }
 
-/// Registers the kits as models and returns them.
-fn models(ctx: &Ctx) -> Result<Models> {
+/// Registers the kits as models.
+fn models(ctx: &Ctx, c: &Course) -> Result<Models> {
     let mut models = Models::default();
     let root = &ctx.root;
     let lock = &ctx.lock;
+    let slider = c
+        .sliders
+        .first()
+        .map_or(Vec3::new(2.2, 0.4, 2.2), |s| s.half);
+    let cannon = c.cannon.as_ref().expect("the course has a cannon");
     for (name, path) in [
-        ("glint_course", kits::course(root, lock)?),
-        ("glint_mover", kits::mover(root, lock)?),
+        ("glint_course", kits::course(root, lock, c)?),
+        ("glint_mover", kits::mover(root, lock, slider)?),
         ("glint_bar", kits::bar(root, lock)?),
-        ("glint_pad", kits::pad(root, lock)?),
+        ("glint_orb", kits::orb(root, lock)?),
+        ("glint_gate", kits::gate(root, lock)?),
+        (
+            "glint_cannon",
+            kits::cannon(root, lock, cannon.muzzle - cannon.breech)?,
+        ),
         ("glint_goal", kits::goal(root, lock)?),
-        ("glint_yard", kits::yard(root, lock)?),
-        ("glint_blob", kits::blob(root, lock)?),
+        ("glint_blob", blob(root, lock)?),
     ] {
         ctx.model(&mut models, name, &path, &format!("as_kit{}", short(name)))?;
     }
     Ok(models)
 }
 
-/// Sky, sun, lights, effects and the visual course: everything both scenes share. `play`
-/// adds nothing here; gameplay components are added by the callers around these entities.
-fn art(s: &mut Scene) {
+/// The ball's contact shadow: three stacked plain-alpha discs (`BLEND` is coverage, not glass),
+/// widest and faintest at the bottom, so the edge falls off softly.
+fn blob(root: &std::path::Path, lock: &crate::lock::Lock) -> Result<String> {
+    use crate::kit::{Kit, Material};
+    use glam::{Mat4, Vec2};
+    let film = |name: &str, alpha: f32| Material {
+        color: [0.03, 0.05, 0.12, alpha],
+        blend: true,
+        ..Material::flat(name, [0.03, 0.05, 0.12], 1.0, 0.0)
+    };
+    let mut k = Kit::new(vec![
+        film("shadow outer", 0.14),
+        film("shadow mid", 0.2),
+        film("shadow core", 0.3),
+    ]);
+    k.cylinder(0, 0.5, 0.004, 40, Mat4::IDENTITY, Vec2::ONE);
+    k.cylinder(
+        1,
+        0.36,
+        0.004,
+        40,
+        Mat4::from_translation(Vec3::new(0.0, 0.004, 0.0)),
+        Vec2::ONE,
+    );
+    k.cylinder(
+        2,
+        0.2,
+        0.004,
+        40,
+        Mat4::from_translation(Vec3::new(0.0, 0.008, 0.0)),
+        Vec2::ONE,
+    );
+    k.write(root, lock, "glint_blob")
+}
+
+/// Sky, sun, haze, lights and the visual course: everything both scenes share. With
+/// `play` the gameplay components the director and the cannon read are added too.
+fn art(s: &mut Scene, c: &Course, play: bool) {
+    let models = s.models;
     s.entity(
         "e_env",
-        "Dusk sky and fixed exposure",
+        "Clear sky and fixed exposure",
         json!({
-            "Environment": {"sky": [0.1, 0.17, 0.38, 1], "horizon": [0.55, 0.52, 0.56, 1], "skyFalloff": 6.0,
-                "glow": [0.55, 0.17, 0.05, 1], "glowFalloff": 26, "ground": [0.02, 0.022, 0.03, 1],
-                "intensity": 1600, "skyLight": 1},
-            // Dusk haze: warm height fog thickens toward the yard far below.
-            "HeightFog": {"density": 0.0001, "falloff": 30, "albedo": [0.6, 0.68, 0.85, 1], "anisotropy": 0.5},
+            "Environment": {"sky": [0.05, 0.2, 0.7, 1], "horizon": [0.6, 0.78, 1.0, 1], "skyFalloff": 2.6,
+                "glow": [0.9, 0.5, 0.25, 1], "glowFalloff": 14, "ground": [1.5, 1.62, 1.85, 1],
+                "intensity": 7000, "skyLight": 1},
+            // A bright, faintly cool haze: the drop below the course fades into pale haze.
+            "HeightFog": {"density": 0.0004, "falloff": 60, "albedo": [0.6, 0.76, 1.0, 1], "anisotropy": 0.4},
             "PostProcessVolume": {"overrides": [
                 {"exposure": "manual", "ev100": EV100},
                 {"module": "toneMapping", "toneMapping": "neutral"},
+                {"module": "bloom", "bloom": 0.12},
             ]},
         }),
     );
     s.commands.extend(light(
         "e_sun",
         "Sun",
-        Vec3::new(0.0, 40.0, 30.0),
-        json!({"kind": "directional", "color": [1.0, 0.64, 0.4, 1], "intensity": 25_000, "sourceAngle": 0.5357}),
+        Vec3::new(0.0, 60.0, 30.0),
+        json!({"kind": "directional", "color": [1.0, 0.86, 0.68, 1], "intensity": 95_000, "sourceAngle": 0.5357}),
         Some(SUN),
     ));
-    // Furnace glow at the chimneys' feet, far below; checkpoint and goal lights on the course.
-    // The two big furnaces beside the route, mouths facing the start: the key warm sources.
-    for (i, (x, z)) in FURNACES.iter().enumerate() {
+    for (i, (at, _)) in c.checkpoints.iter().enumerate() {
         s.commands.extend(lamp(
-            &format!("e_lmouth{i}"),
-            "Furnace mouth",
-            Vec3::new(*x, YARD_FLOOR + 3.5, z - 11.0),
-            [1.0, 0.45, 0.12],
-            15_000_000.0,
-            2.0,
-            90.0,
+            &format!("e_lcp{i}"),
+            "Gate light",
+            *at + Vec3::new(0.0, 3.0, 0.0),
+            [1.0, 0.45, 0.25],
+            90_000.0,
+            0.3,
+            14.0,
         ));
     }
-    for (i, (x, z, _, _)) in CHIMNEYS.iter().take(4).enumerate() {
-        s.commands.extend(lamp(
-            &format!("e_lfurn{i}"),
-            "Furnace glow",
-            Vec3::new(*x, YARD_FLOOR + 3.0, z - 4.0),
-            [1.0, 0.4, 0.1],
-            6_000_000.0,
-            1.6,
-            90.0,
-        ));
-    }
-    for (i, z) in [40.0f32, 66.0].into_iter().enumerate() {
-        s.commands.extend(lamp(&format!("e_lcp{i}"), "Checkpoint light", Vec3::new(0.0, 2.4, z), [1.0, 0.62, 0.22], 150_000.0, 0.3, 18.0));
-    }
-    s.commands.extend(lamp("e_lgoal", "Goal light", Vec3::new(0.0, 0.0, 94.0), [0.3, 0.85, 1.0], 300_000.0, 0.5, 30.0));
-    s.prop(Prop::new("e_course", "Catwalk", "glint_course", Vec3::ZERO, 0.0).at_origin().decor());
+    s.commands.extend(lamp(
+        "e_lgoal",
+        "Goal light",
+        c.goal + Vec3::new(0.0, 6.0, 0.0),
+        [1.0, 0.55, 0.3],
+        220_000.0,
+        0.6,
+        26.0,
+    ));
     s.prop(
-        Prop::new("e_yard", "Foundry yard", "glint_yard", Vec3::ZERO, 0.0)
+        Prop::new("e_course", "Course", "glint_course", Vec3::ZERO, 0.0)
+            .at_origin()
+            .decor(),
+    );
+    // Checkpoint gates, the cannon, the goal arch.
+    for (i, (at, heading)) in c.checkpoints.iter().enumerate() {
+        s.prop(
+            Prop::new(
+                &format!("e_gate{i}"),
+                "Checkpoint gate",
+                "glint_gate",
+                *at,
+                *heading,
+            )
             .at_origin()
             .decor()
-            .renderer(json!({"emissive": [1800, 1800, 1800]})),
-    );
-    // Steam and sparks: engine-side extras (they do not export).
-    for (i, (x, z, _, h)) in CHIMNEYS.iter().enumerate() {
-        s.entity(
-            &format!("e_smoke{i}"),
-            "Chimney smoke",
-            json!({"Transform": {"position": [x, YARD_FLOOR + h, z]}, "VisualEffect": {"effect": "smoke", "scale": 5, "intensity": 0.6}}),
+            .renderer(json!({"emissive": [9000, 9000, 9000]})),
         );
+        if play {
+            s.commands.push((
+                "component.add",
+                json!({"entity": format!("e_gate{i}"), "component": "Checkpoint", "value": {"index": i + 1, "radius": 3.2}}),
+            ));
+        }
     }
-    s.entity(
-        "e_sparks",
-        "Goal sparks",
-        json!({"Transform": {"position": [0, -1.5, 94]}, "VisualEffect": {"effect": "sparks", "scale": 1.2}}),
+    let cannon = c.cannon.as_ref().expect("cannon");
+    s.prop(
+        Prop::new(
+            "e_cannon",
+            "Cannon",
+            "glint_cannon",
+            cannon.breech - Vec3::new(0.0, 0.5, 0.0),
+            cannon.heading,
+        )
+        .at_origin()
+        .decor()
+        .renderer(json!({"emissive": [12000, 12000, 12000]})),
     );
-    s.entity(
-        "e_swirl",
-        "Goal swirl",
-        json!({"Transform": {"position": [0, -1.5, 94]}, "VisualEffect": {"effect": "magic_swirl", "scale": 1.6, "intensity": 0.8}}),
+    s.prop(
+        Prop::new("e_goal", "Goal arch", "glint_goal", c.goal, cannon.heading)
+            .at_origin()
+            .decor()
+            .renderer(json!({"emissive": [16000, 16000, 16000]})),
     );
+    if play {
+        s.commands.push((
+            "component.add",
+            json!({"entity": "e_cannon", "component": "Cannon", "value": {
+                "breech": cannon.breech.to_array(), "muzzle": cannon.muzzle.to_array(), "launch": cannon.launch.to_array()}}),
+        ));
+        s.commands.push((
+            "component.add",
+            json!({"entity": "e_cannon", "component": "CannonController", "value": {}}),
+        ));
+        s.commands.push((
+            "component.add",
+            json!({"entity": "e_goal", "component": "Goal", "value": {"radius": 5.0}}),
+        ));
+    }
+    let orb = models.get("glint_orb").renderer["model"].clone();
+    for (i, p) in c.pickups.iter().enumerate() {
+        let id = format!("e_orb{i}");
+        let mut components = json!({
+            "Transform": {"position": round3(*p)},
+            "MeshRenderer": {"model": orb, "emissive": [12000, 12000, 12000]},
+        });
+        if play {
+            components["Pickup"] = json!({"size": 1.0});
+            components["Spinner"] = json!({"degreesPerSecond": 110, "startYaw": (i * 37 % 360)});
+        }
+        s.entity(&id, "Orb", components);
+    }
 }
 
 /// The gameplay scene.
-fn game(ctx: &Ctx) -> Result<()> {
+fn game(ctx: &Ctx, c: &Course) -> Result<()> {
     ctx.new_document(SCENE.0, "scene", SCENE.1)?;
-    let models = models(ctx)?;
+    let models = models(ctx, c)?;
     let mut s = Scene::new(&models);
-    art(&mut s);
-    let mover = &models.get("glint_mover").renderer;
-    let bar = &models.get("glint_bar").renderer;
-    // Invisible collision and walkable faces: the course kit draws the slabs.
-    for slab in &SLABS {
-        let half = [slab.size.0 * 0.5, SLAB * 0.5, slab.size.1 * 0.5];
+    art(&mut s, c, true);
+    // Invisible collision and walkable boxes: the course kit draws the pieces.
+    for p in &c.pieces {
+        let half = p.half.to_array();
         s.entity(
-            slab.id,
-            slab.name,
+            &p.id,
+            p.name,
             json!({
-                "Transform": {"position": round3(Vec3::new(slab.at.0, slab.top - SLAB * 0.5, slab.at.1))},
+                "Transform": {"position": round3(p.center), "rotation": round3(Vec3::from_array(p.euler()))},
                 "RigidBody": {"motion": "static"},
                 "Collider": {"halfExtents": half},
                 "Surface": {"half": half},
             }),
         );
     }
-    let half = [MOVER_SIZE.0 * 0.5, SLAB * 0.5, MOVER_SIZE.1 * 0.5];
-    s.entity(
-        "e_m1",
-        "Moving platform",
-        json!({
-            "Transform": {"position": round3(MOVER_ORIGIN)},
-            "MeshRenderer": mover,
-            "RigidBody": {"motion": "kinematic"},
-            "Collider": {"halfExtents": half},
-            "Surface": {"half": half},
-            "Mover": {"origin": MOVER_ORIGIN.to_array(), "travel": MOVER_TRAVEL.to_array(), "periodTicks": MOVER_PERIOD},
-        }),
-    );
-    for (id, z, yaw, rate) in BARS {
+    // The launch deck's glass guard is solid: back and both sides.
+    let first = &c.pieces[0];
+    for (i, (at, half)) in [
+        (
+            Vec3::new(0.0, first.half.y + 0.5, -first.half.z + 0.1),
+            Vec3::new(first.half.x, 0.5, 0.06),
+        ),
+        (
+            Vec3::new(-first.half.x + 0.1, first.half.y + 0.5, 0.0),
+            Vec3::new(0.06, 0.5, first.half.z),
+        ),
+        (
+            Vec3::new(first.half.x - 0.1, first.half.y + 0.5, 0.0),
+            Vec3::new(0.06, 0.5, first.half.z),
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
         s.entity(
-            id,
-            "Spinner bar",
+            &format!("e_guard{i}"),
+            "Guard glass",
+            json!({"Transform": {"position": round3(first.center + first.rot * at), "rotation": round3(Vec3::from_array(first.euler()))},
+                "RigidBody": {"motion": "static"}, "Collider": {"halfExtents": half.to_array()}}),
+        );
+    }
+    // Sliders and bars.
+    let mover = models.get("glint_mover").renderer.clone();
+    for m in &c.sliders {
+        let half = m.half.to_array();
+        s.entity(
+            &m.id,
+            "Moving platform",
             json!({
-                "Transform": {"position": [0, 1.35, z], "rotation": [0, yaw, 0]},
-                "MeshRenderer": bar,
+                "Transform": {"position": round3(m.origin), "rotation": round3(Vec3::from_array(euler(m.rot)))},
+                "MeshRenderer": mover,
                 "RigidBody": {"motion": "kinematic"},
-                "Collider": {"halfExtents": [BAR.0 * 0.5, BAR.1 * 0.5, BAR.1 * 0.5]},
-                "Spinner": {"degreesPerSecond": rate, "startYaw": yaw},
+                "Collider": {"halfExtents": half},
+                "Surface": {"half": half},
+                "Mover": {"origin": m.origin.to_array(), "travel": m.travel.to_array(), "periodTicks": m.period, "phaseTicks": m.phase},
             }),
         );
     }
-    // The dock's railing is solid: back and both sides, the runway side open.
-    for (id, at, half) in [
-        ("e_rail0", [0.0, 0.5, -4.93], [4.0, 0.5, 0.07]),
-        ("e_rail1", [-3.93, 0.5, 0.0], [0.07, 0.5, 5.0]),
-        ("e_rail2", [3.93, 0.5, 0.0], [0.07, 0.5, 5.0]),
-    ] {
-        s.entity(id, "Dock railing", json!({"Transform": {"position": at}, "RigidBody": {"motion": "static"}, "Collider": {"halfExtents": half}}));
+    let bar = models.get("glint_bar").renderer.clone();
+    for b in &c.bars {
+        s.entity(
+            &b.id,
+            "Spinner bar",
+            json!({
+                "Transform": {"position": round3(b.pivot), "rotation": [0, b.yaw, 0]},
+                "MeshRenderer": bar,
+                "RigidBody": {"motion": "kinematic"},
+                "Collider": {"halfExtents": [BAR.0 * 0.5, BAR.1 * 0.5, BAR.1 * 0.5]},
+                "Spinner": {"degreesPerSecond": b.rate, "startYaw": b.yaw},
+            }),
+        );
     }
-    pads(&mut s, &models, true);
+    // The route the camera follows.
+    for (i, w) in c.waypoints.iter().enumerate() {
+        s.entity(
+            &format!("e_wp{i:02}"),
+            "Waypoint",
+            json!({"Transform": {"position": round3(*w)}, "Waypoint": {"index": i}}),
+        );
+    }
     // The ball: a chrome dynamic sphere driven by BallController; PlayerControl gives it an
-    // input slot and its follow camera's orbit.
+    // input slot (its follow camera's own orbit is switched off: CourseCamera steers the yaw).
     s.entity(
         "e_ball",
         "Ball",
         json!({
-            "Transform": {"position": START.to_array()},
+            "Transform": {"position": c.start.to_array()},
             "MeshRenderer": ball_look(),
             "RigidBody": {"motion": "dynamic", "continuous": true, "allowSleep": false},
             "Collider": {"kind": "sphere", "radius": 0.5, "friction": 0.8},
             "PlayerControl": {"camera": "e_camera"},
-            "Ball": {"spawn": START.to_array()},
+            "Ball": {"spawn": c.start.to_array()},
             "BallController": {},
         }),
+    );
+    s.entity(
+        "e_shadow",
+        "Ball contact shadow",
+        json!({
+            "Transform": {"position": [0, 0.02, -2.0], "scale": [1.3, 1, 1.3]},
+            "MeshRenderer": models.get("glint_blob").renderer,
+            "BallShadow": {},
+        }),
+    );
+    s.entity(
+        "e_fx",
+        "Ball sparks",
+        json!({"Transform": {"position": c.start.to_array()}, "VisualEffect": {"effect": "sparks", "scale": 0.8, "intensity": 0.0}, "BallFx": {}}),
     );
     s.entity(
         "e_camera",
         "Camera",
         json!({
-            "Transform": {"position": [0, 3.5, -9]},
+            "Transform": {"position": [0, 4.0, -12.0]},
             "Camera": {"fov": 56},
-            "FollowCamera": {"target": "e_ball", "distance": 5.5, "height": 1.4, "pitch": 20},
-        }),
-    );
-    s.commands.push(ball_glow("e_ball"));
-    // The contact shadow: a black film disc moved by BallShadow (colour alpha on a primitive
-    // does not blend on Renderlab, so it is a glTF kit with a blended material).
-    s.entity(
-        "e_shadow",
-        "Ball contact shadow",
-        json!({
-            "Transform": {"position": [0, 0.02, -2.0], "scale": [1.5, 1, 1.5]},
-            "MeshRenderer": models.get("glint_blob").renderer,
-            "BallShadow": {},
+            "FollowCamera": {"target": "e_ball", "distance": 5.4, "height": 2.2, "pitch": 18, "sensitivity": 0},
+            "CourseCamera": {},
         }),
     );
     // An establishing shot for previews; a higher priority number keeps the follow camera active.
     s.entity(
         "e_camwide",
         "Establishing camera",
-        json!({"Transform": {"position": [0.0, 3.4, -4.3]}, "Camera": {"fov": 66, "priority": 10}}),
+        json!({"Transform": {"position": [0.0, 7.0, -17.0]}, "Camera": {"fov": 62, "priority": 10}}),
     );
-    s.commands.push(("transform.lookAt", json!({"entity": "e_camwide", "point": [0.0, -4.0, 80.0]})));
-    s.entity("e_run", "Run", json!({"GlintRun": {"checkpointCount": 2, "start": START.to_array()}}));
+    s.commands.push((
+        "transform.lookAt",
+        json!({"entity": "e_camwide", "point": [-30.0, 1.0, 60.0]}),
+    ));
+    // Review cameras: the whole route from the side, the turn, the cannon's shot, the goal.
+    let (cannon, goal) = (c.cannon.as_ref().expect("cannon"), c.goal);
+    let centre = (c.start + goal) * 0.5;
+    for (id, name, at, look, fov) in [
+        (
+            "e_camover",
+            "Overview",
+            centre + Vec3::new(260.0, 190.0, -120.0),
+            centre,
+            58.0,
+        ),
+        (
+            "e_camturn",
+            "Turn view",
+            c.waypoints[c.waypoints.len() / 2] + Vec3::new(30.0, 22.0, -40.0),
+            c.waypoints[c.waypoints.len() / 2],
+            60.0,
+        ),
+        (
+            "e_camcannon",
+            "Cannon view",
+            cannon.breech + Vec3::new(18.0, 6.0, -12.0),
+            cannon.muzzle + Vec3::new(-50.0, 6.0, 0.0),
+            60.0,
+        ),
+        (
+            "e_camgoal",
+            "Goal view",
+            goal + Vec3::new(34.0, 8.0, -24.0),
+            goal + Vec3::new(0.0, 4.0, 0.0),
+            60.0,
+        ),
+    ] {
+        s.entity(
+            id,
+            name,
+            json!({"Transform": {"position": round3(at)}, "Camera": {"fov": fov, "priority": 10}}),
+        );
+        s.commands.push((
+            "transform.lookAt",
+            json!({"entity": id, "point": round3(look)}),
+        ));
+    }
+    s.entity(
+        "e_run",
+        "Run",
+        json!({"GlintRun": {"start": c.start.to_array(), "goldTicks": MEDALS[0] * 60, "silverTicks": MEDALS[1] * 60, "bronzeTicks": MEDALS[2] * 60,
+            "orbTotal": c.pickups.len()}}),
+    );
     let calls = std::mem::take(&mut s.commands);
-    ctx.apply(SCENE.0, "Glint: Foundry Steps, ball, course and run director", calls)?;
+    ctx.apply(
+        SCENE.0,
+        "Glint: Skyward, the ball, the course and the run director",
+        calls,
+    )?;
     ctx.set_main(SCENE.0, SCENE.1)
-}
-
-/// A soft, warm light carried above the ball: it puts a bright highlight on the chrome and a
-/// soft contact shadow under it (a source radius of 0.6 m gives the penumbra).
-fn ball_glow(parent: &str) -> (&'static str, Value) {
-    (
-        "entity.create",
-        json!({"id": format!("{parent}g"), "name": "Ball glow", "parent": parent, "components": {
-            "Transform": {"position": [0, 1.3, 0]},
-            "Light": {"kind": "point", "color": [1.0, 0.88, 0.7, 1], "intensity": 1_500_000, "units": "lumens",
-                "range": 14, "sourceRadius": 0.6},
-        }}),
-    )
 }
 
 /// The chrome ball's renderer fields.
 fn ball_look() -> Value {
-    json!({"shape": "sphere", "size": [1, 1, 1], "color": [0.97, 0.97, 0.98, 1], "roughness": 0.03, "metallic": 1, "emissive": [180, 175, 170]})
-}
-
-/// Checkpoint pads and the goal: lit plates; `play` adds the components the director reads.
-fn pads(s: &mut Scene, models: &Models, play: bool) {
-    let pad = &models.get("glint_pad").renderer;
-    for (index, id, z) in [(1, "e_c1", 40.0f32), (2, "e_c2", 66.0)] {
-        let mut components = json!({
-            "Transform": {"position": [0, 0.8, z]},
-            "MeshRenderer": pad,
-        });
-        components["MeshRenderer"]["emissive"] = json!([5000, 5000, 5000]);
-        if play {
-            components["Checkpoint"] = json!({"index": index, "radius": 2.6});
-        }
-        s.entity(id, &format!("Checkpoint {index}"), components);
-    }
-    let mut goal = json!({
-        "Transform": {"position": [0, -1.8, 94]},
-        "MeshRenderer": models.get("glint_goal").renderer,
-    });
-    goal["MeshRenderer"]["emissive"] = json!([6000, 6000, 6000]);
-    if play {
-        goal["Goal"] = json!({"radius": 3.2});
-    }
-    s.entity("e_goal", "Goal", goal);
+    json!({"shape": "sphere", "size": [1, 1, 1], "color": [0.97, 0.97, 0.98, 1], "roughness": 0.03, "metallic": 1})
 }
 
 /// The menu backdrop: the same art, the ball resting at the start, and the fly-over eye and
 /// target the shell's camera uses.
-fn menu(ctx: &Ctx) -> Result<()> {
+fn menu(ctx: &Ctx, c: &Course) -> Result<()> {
     ctx.new_document(MENU.0, "scene", MENU.1)?;
-    let models = models(ctx)?;
+    let models = models(ctx, c)?;
     let mut s = Scene::new(&models);
-    art(&mut s);
-    s.entity(
-        "e_menumover",
-        "Moving platform",
-        json!({"Transform": {"position": round3(MOVER_ORIGIN + MOVER_TRAVEL * 0.6)}, "MeshRenderer": models.get("glint_mover").renderer}),
-    );
-    for (id, z, yaw, _) in BARS {
+    art(&mut s, c, false);
+    let mover = models.get("glint_mover").renderer.clone();
+    for m in &c.sliders {
         s.entity(
-            &format!("{id}m"),
-            "Spinner bar",
-            json!({"Transform": {"position": [0, 1.35, z], "rotation": [0, yaw + 35.0, 0]}, "MeshRenderer": models.get("glint_bar").renderer}),
+            &format!("{}m", m.id),
+            "Moving platform",
+            json!({"Transform": {"position": round3(m.origin + m.travel * 0.4), "rotation": round3(Vec3::from_array(euler(m.rot)))}, "MeshRenderer": mover}),
         );
     }
-    pads(&mut s, &models, false);
-    s.entity("e_menuball", "Ball", json!({"Transform": {"position": [0.0, 0.5, 6.0]}, "MeshRenderer": ball_look()}));
-    s.commands.push(ball_glow("e_menuball"));
-    s.entity("e_gamemenueye", "Menu vista camera", json!({"Transform": {"position": [-5.5, 3.4, -7.0]}}));
-    s.entity("e_gamemenutarget", "Menu vista focus", json!({"Transform": {"position": [0.0, 0.8, 24.0]}}));
+    let bar = models.get("glint_bar").renderer.clone();
+    for b in &c.bars {
+        s.entity(
+            &format!("{}m", b.id),
+            "Spinner bar",
+            json!({"Transform": {"position": round3(b.pivot), "rotation": [0, b.yaw + 35.0, 0]}, "MeshRenderer": bar}),
+        );
+    }
+    s.entity(
+        "e_menuball",
+        "Ball",
+        json!({"Transform": {"position": [0.0, 0.5, 9.0]}, "MeshRenderer": ball_look()}),
+    );
+    // The title view: low and a little to the side of the launch deck, the long straight ahead.
+    s.entity(
+        "e_gamemenueye",
+        "Menu vista camera",
+        json!({"Transform": {"position": [-7.0, 3.4, -16.0]}}),
+    );
+    s.entity(
+        "e_gamemenutarget",
+        "Menu vista focus",
+        json!({"Transform": {"position": [3.0, 2.0, 40.0]}}),
+    );
     let calls = std::mem::take(&mut s.commands);
     ctx.apply(MENU.0, "Glint: native menu backdrop", calls)
 }
 
-/// Builds the Glint project: the game scene and the menu backdrop.
+/// Builds the Glint project: icons, UI data, the game scene and the menu backdrop.
 pub fn build(ctx: &Ctx) -> Result<()> {
     clean(ctx, &["levels", "kit"])?;
-    game(ctx)?;
-    menu(ctx)?;
+    let c = course::build();
+    icons::write(&ctx.path("ui/icons"))?;
+    ui::write(&ctx.path("ui"), c.pickups.len(), c.checkpoints.len())?;
+    game(ctx, &c)?;
+    menu(ctx, &c)?;
     ctx.check()
 }
