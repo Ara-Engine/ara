@@ -62,35 +62,35 @@ native frame boundary, including monitor disconnects; managed transfer buffers a
 
 ## Mapping and application boundaries
 
-Production user settings retain the raster renderer and its complete scalability
-groups. Hardware RT adds D29's deterministic hybrid queries to the reflection
-group on capable devices. The experimental fidelity renderer remains available to
-development/reference callers using the existing presenter API.
+Renderlab draws Ara, and the user's graphics tier reaches it as two numbers: the foliage
+density (`ExternalView::foliage_percent`) and the terrain detail distance
+(`terrain_detail`). The other preferences are validated, saved and reported by
+`play.graphics` like all of them, but they do not change Renderlab's picture yet (the
+"Graphics quality settings" row in `crates/ara-renderlab/AGENTS.md` says what that takes).
+The display, vsync and frame-cap preferences are the platform's and apply as written.
 
-| Preference | Actual renderer/platform control | Boundary |
-|---|---|---|
-| Overall preset | `presets::Plan`, `RasterPlan`, preset scale and budgets | Next frame |
-| View distance | `Quality.lod_pixels`, `min_pixels`, `terrain_detail`; screen-size LOD/culling, not a global metre cutoff | Next frame |
-| Shadows | Cascades (count/resolution/distance/far map), local shadows, VSM and horizon map | Next frame; targets may allocate |
-| GI | `Quality.gi_budget` probe relights | Next frame |
-| Reflections | SSR steps/roughness/distance, capture budgets, optional hybrid query cuts | Next frame; captures warm asynchronously |
-| Post-processing | Bloom, GTAO, DoF sample/radius and motion-blur sample/length budgets | Next frame |
-| Individual post switches | Mask their group budget; authored volumes still supply lens/exposure parameters | Next frame |
-| Textures | Native compressed residency: 256/512/1024/2048 MiB, or explicit cap; bounded to half known VRAM | Next native content publication |
-| Effects | Emissive-light budget: 4/6/8/16; volumetric fog near volume (Low none, Medium 16 px/48 slices, High 12/64, Epic 8/96); authored particle simulation is unchanged | Next frame |
-| Foliage | Stable 25/50/75/100% subset by immutable instance ID; all parts of an instance stay together | Next native content publication |
-| Anti-aliasing | Group chooses TAAU at Low/Medium, TSR at High/Epic; explicit TAAU/TSR override | Next frame |
-| Resolution scale | 0.1..1 of physical output dimensions; preset scale when null; UI stays at display resolution | Next frame |
-| Window mode/resolution/monitor/refresh | SDL windowed, borderless or exclusive display mode; nearest supported exclusive mode | Native frame boundary |
-| Vsync | FIFO, or mailbox/immediate with the existing platform fallback | Swapchain boundary |
-| Frame cap | Presentation cadence only; embedded cadence also respects the owner's cap | Next frame |
-| Hardware RT opt-in | Stored preference vs the immutable startup opt-in; never enabled by Auto/preset | **Save and restart/device reopen** |
-| HDR | Capability-gated request | **Unavailable in this player's current SDR scene/UI output path** |
+| Preference | What it sets | Applied today | Boundary |
+|---|---|---|---|
+| Overall preset | `presets::Plan` and `RasterPlan`: the tiers below derive from it | Through foliage and terrain detail | Next frame |
+| View distance | `Quality.terrain_detail` (metres where terrain layers use their detail maps) | Terrain detail distance only | Next frame |
+| Shadows | Cascades, local shadows, VSM and horizon map budgets | Saved only | Next frame |
+| GI | Probe-relight budget | Saved only | Next frame |
+| Reflections | Reflection trace and capture budgets, hybrid query cuts | Saved only | Next frame |
+| Post-processing | Bloom, ambient occlusion, depth of field and motion blur budgets | Saved only | Next frame |
+| Individual post switches | Mask their group budget; authored volumes still supply lens/exposure parameters | Saved only | Next frame |
+| Textures | Compressed texture budget: 256/512/1024/2048 MiB, or explicit cap; bounded to half known VRAM | Saved only | Next native content publication |
+| Effects | Emissive-light and volumetric fog budgets | Saved only | Next frame |
+| Foliage | Stable 25/50/75/100% subset by immutable instance ID; all parts of an instance stay together | **Yes** | Next native content publication |
+| Anti-aliasing | TAAU or TSR group choice, explicit override | Saved only | Next frame |
+| Resolution scale | 0.1..1 of physical output dimensions; preset scale when null; UI stays at display resolution | Saved only | Next frame |
+| Window mode/resolution/monitor/refresh | SDL windowed, borderless or exclusive display mode; nearest supported exclusive mode | **Yes** (platform) | Native frame boundary |
+| Vsync | FIFO, or mailbox/immediate with the existing platform fallback | **Yes** (platform) | Swapchain boundary |
+| Frame cap | Presentation cadence only; embedded cadence also respects the owner's cap | **Yes** (platform) | Next frame |
+| Hardware RT opt-in | Stored preference vs the immutable startup opt-in; never enabled by Auto/preset. Renderlab picks its own path (`--renderer`) | Saved only | **Save and restart/device reopen** |
+| HDR | Capability-gated request | **Unavailable in this player's current SDR scene/UI output path** | n/a |
 
-The shared High/Epic lighting PSO is enabled when a selected shadow/reflection/post/GI
-group needs it. AA is always temporal; unsupported vendor upscalers and frame
-generation are not advertised. Texture and foliage changes may rebuild derived GPU
-content but never rescatters authored foliage or alters collision/gameplay.
+Texture and foliage changes may rebuild derived content but never rescatter authored
+foliage or alter collision/gameplay.
 
 `Capabilities.DeviceKnown` is false before the first GPU is opened in a purely
 headless player. Querying preferences does not allocate a GPU. Rendering a capture
