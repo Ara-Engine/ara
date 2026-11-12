@@ -205,6 +205,7 @@ impl SceneView {
         };
         match scene.poll(device.gpu_mut()) {
             Ok(true) => {
+                super::super::trace::log(|| "scene frame taken".into());
                 if let Err(error) = self.publish_still(device) {
                     self.fail_renderlab(device, &error);
                 }
