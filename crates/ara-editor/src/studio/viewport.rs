@@ -544,6 +544,11 @@ impl SceneView {
         if let Err(error) = drawn {
             eprintln!("Renderlab could not draw the Scene view: {error:#}");
             self.renderlab_error = Some(format!("{error:#}"));
+            // A failed engine (a lost device, say) shows nothing: its last image goes, so the
+            // Scene is the error, not a stale or black frame.
+            if let Some(scene) = self.renderlab.take() {
+                let _ = scene.release(renderer.gpu_mut());
+            }
         }
     }
     fn render_raster_attempt(
@@ -1117,15 +1122,6 @@ impl SceneView {
     pub(super) fn renderlab_error(&self) -> Option<&str> {
         self.renderlab_error.as_deref()
     }
-    /// Whether the Scene has an image the compositor can show: the old renderer's presented
-    /// frame, or Renderlab's (`scene_frame`: the old renderer renders none beside it).
-    pub(super) fn presentable(&self, renderer: &Renderer) -> bool {
-        renderer.presentation_ready()
-            || self
-                .renderlab
-                .as_ref()
-                .is_some_and(|scene| scene.image().is_some())
-    }
     pub(super) fn presented(&mut self) {
         self.failure = None;
     }
@@ -1149,6 +1145,13 @@ impl SceneView {
     pub(super) fn entities<'a>(&'a self, renderer: &'a Renderer) -> &'a [(u64, String)] {
         self.id_host()
             .map_or_else(|| renderer.entities(), |host| host.entities)
+    }
+    /// Whether the Scene has a frame to show: Renderlab's, or the renderer's presentation.
+    pub(super) fn presentable(&self, renderer: &Renderer) -> bool {
+        self.renderlab
+            .as_ref()
+            .is_some_and(|r| r.image().zip(r.id_image()).is_some())
+            || renderer.presentation_ready()
     }
     pub fn attach(
         &self,

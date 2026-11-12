@@ -4,7 +4,7 @@
 
 - `new_raster` omits RT features/descriptors; `new` enables optional RT.
   Windowed Vulkan devices request KHR/EXT HIGH; denial retries MEDIUM.
-- `Device`: portable descriptors, queues, cooked pipelines, recording and retirement.
+- `Device`: portable descriptors, queues, cooked pipelines, recording and retirement. `GpuLease` shares one heap-stable device; the last lease drops it.
 - `DeviceInfo::ray_tracing_supported` is physical support; `ray_tracing` is logical enablement. User settings query the former.
 - `Command::FillBuffer` repeats a u32 pattern over aligned ranges (zero clears).
   `UpdateBuffer` has no 64 KiB cap: large Vulkan writes use completion-gated
@@ -106,7 +106,7 @@ retain the returned `Completion`, poll it before reusing resources, and keep sho
 the last completed color/ID pair. `FRAMES_IN_FLIGHT` (2) ended scopes may stay unconsumed; a third begin is refused. `upload_queued`
 writes busy constants through ordered GPU updates; ordinary `upload` still rejects
 overwrites. A second graphics-family queue isolates Scene work from the native UI
-queue where available; completion publishes a GPU memory dependency to that UI queue.
+queue where available; `publish_submission_to_ui` publishes one completed graphics submission while other queues may still run.
 Capture/shutdown may use `wait_completion`. Tests hold a queue only through `vulkan::QueueGate` (a host
 timeline wait); device teardown waits until no gate is held, as NVIDIA's Windows `vkDestroyDevice` otherwise deadlocks
 under its process-wide lock (`ara-render` AGENTS.md). `tests/deferred.rs` blocks Scene work behind one: UI progress, polling, ordered updates.

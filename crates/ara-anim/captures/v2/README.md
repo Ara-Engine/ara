@@ -1,7 +1,7 @@
 # Animation v2 capture
 
 `pose-strip.png` and `pose-strip.marks.png` are real deterministic Vulkan
-captures from `ara-anim-capture`, using Ara's committed cooked renderer shaders.
+captures from the removed `ara-anim-capture` binary, using Ara's committed cooked renderer shaders.
 Bone prisms are rotated 0.65 radians for visibility of sagittal motion.
 
 Rows, top to bottom:
@@ -19,7 +19,7 @@ The legend maps visible marks to the actual feature/tick names. All 30 pose enti
 were visible. The image was visually inspected after capture, and Vulkan validation
 completed cleanly. This is solver/debug geometry, not a skinned character-art capture.
 
-Regenerate with `CARGO_BUILD_JOBS=2 cargo run -p ara-anim-capture`. On this Windows
+`ara-anim-capture` was removed in renderer deletion stage 1c, so these captures are not regenerated. On this Windows
 machine, set process-local `VK_LAYER_PATH=C:/VulkanSDK/1.4.363.0/Bin` and an empty
 `VK_IMPLICIT_LAYER_PATH` directory, following ara-render/run.ps1's validation setup.
 The generated GPU cache and large render-ID buffer are intentionally not committed.

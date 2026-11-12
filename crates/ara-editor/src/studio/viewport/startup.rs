@@ -1,9 +1,13 @@
-//! Renderer construction owns its device on a worker until the UI adopts it.
+//! The scene device is opened on a worker. The renderer holds a lease on it,
+//! so the pair can move to the UI thread and either owner can drop first.
 use super::*;
 use std::{ffi::CString, thread::JoinHandle};
 
 /// Keep pumping the loading window/authority while cold PSOs and initial scene
 /// resources are created. No Vulkan owner is shared across these threads.
+///
+/// The device is the first element. Both values hold a lease, so a binding
+/// that drops one of them does not free the device while the other remains.
 pub(crate) fn prepare_renderer(
     scene: ara_frame::scene::Scene,
     size: [u32; 2],
@@ -12,19 +16,19 @@ pub(crate) fn prepare_renderer(
     ray_tracing: bool,
     quality: ara_runtime_render::QualityChoice,
     tick: impl FnMut(Duration) -> ara_ui::Result<bool>,
-) -> ara_ui::Result<Option<Renderer>> {
+) -> ara_ui::Result<Option<(ara_runtime_render::PresentationDevice, Renderer)>> {
     let job = std::thread::Builder::new()
         .name("ara-scene-startup".into())
         .spawn(move || {
             ara_gpu::cpu_scope!("SceneView.renderer_startup_worker");
-            // The raster renderer's device enables hardware ray queries where the
-            // GPU has them; presets trace none without the ray-tracing opt-in.
-            let create = if ray_tracing {
-                Renderer::new
-            } else {
-                Renderer::new_hybrid
-            };
-            let mut renderer = create(scene, size, &extensions, cache)?;
+            // The same device `Renderer::new` / `new_hybrid` opened: hardware ray
+            // queries where the GPU has them. Presets trace none without the opt-in.
+            // On Apple this is the Metal device.
+            if ray_tracing {
+                anyhow::ensure!(!scene.meshes.is_empty(), "Scene has no geometry");
+            }
+            let device = ara_runtime_render::PresentationDevice::open(&extensions, cache)?;
+            let mut renderer = Renderer::on_device(scene, size, device.lease())?;
             if !ray_tracing {
                 let plan = Plan::resolve(
                     quality,
@@ -36,7 +40,7 @@ pub(crate) fn prepare_renderer(
                     renderer.prewarm_view_quality(plan.quality)?;
                 }
             }
-            Ok(renderer)
+            Ok((device, renderer))
         })?;
     wait_for(job, tick)
 }
