@@ -24,7 +24,6 @@ const BINARIES: &[(&str, &str)] = &[
 ];
 const RESOURCES: &[&str] = &[
     "ara-texture-gpu",
-    "ara-render",
     "ara-render-fidelity",
     "ara-runtime-render",
     "ara-render2d",
