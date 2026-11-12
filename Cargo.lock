@@ -556,20 +556,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ara-anim-capture"
-version = "0.0.1-alpha"
-dependencies = [
- "ara-anim",
- "ara-anim-physics",
- "ara-frame",
- "ara-physics",
- "ara-physics-jolt",
- "ara-render",
- "ara-schema",
- "glam 0.30.10",
-]
-
-[[package]]
 name = "ara-anim-physics"
 version = "0.0.1-alpha"
 dependencies = [
@@ -1235,20 +1221,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ara-hotpatch-probe"
-version = "0.0.1-alpha"
-dependencies = [
- "anyhow",
- "ara-frame",
- "ara-gpu",
- "ara-hotpatch",
- "ara-render",
- "ara-render-fidelity",
- "glam 0.30.10",
- "serde_json",
-]
-
-[[package]]
 name = "ara-hotpatch-sim-probe"
 version = "0.0.1-alpha"
 dependencies = [
@@ -1632,23 +1604,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ara-pathtrace"
-version = "0.0.1-alpha"
-dependencies = [
- "anyhow",
- "ara-frame",
- "ara-gpu",
- "ara-landscape",
- "ara-render",
- "ara-render-fidelity",
- "ara-terrain",
- "glam 0.30.10",
- "image",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "ara-perception"
 version = "0.0.1-alpha"
 dependencies = [
@@ -1788,7 +1743,6 @@ dependencies = [
  "ara-nav",
  "ara-ops",
  "ara-pack",
- "ara-pathtrace",
  "ara-physics",
  "ara-platform",
  "ara-play",
@@ -1874,10 +1828,8 @@ dependencies = [
  "ara-hotpatch",
  "ara-json",
  "ara-patch-charts",
- "ara-pathtrace",
  "ara-platform",
  "ara-profile",
- "ara-render-fidelity",
  "ara-vsm",
  "ash 0.38.0+1.4.352",
  "bytemuck",
@@ -1899,7 +1851,6 @@ dependencies = [
  "ara-frame",
  "ara-gpu",
  "ara-hotpatch",
- "ara-pathtrace",
  "ara-render",
  "ara-schema",
  "ara-texture-stream",
@@ -1910,32 +1861,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
-]
-
-[[package]]
-name = "ara-render-geo"
-version = "0.0.1-alpha"
-dependencies = [
- "anyhow",
- "ara-asset",
- "ara-asset-format",
- "ara-color",
- "ara-frame",
- "ara-geo",
- "ara-gpu",
- "ara-importers",
- "ara-platform",
- "ara-render",
- "ara-schema",
- "ara-texture-stream",
- "ara-vsm",
- "bytemuck",
- "glam 0.30.10",
- "gltf",
- "half",
- "image",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -2183,24 +2108,15 @@ dependencies = [
  "ara-components",
  "ara-diag",
  "ara-doc",
- "ara-foliage",
- "ara-frame",
- "ara-gpu",
  "ara-json",
  "ara-ops",
- "ara-pathtrace",
  "ara-play",
  "ara-play-host",
  "ara-proto",
- "ara-render",
- "ara-render-fidelity",
  "ara-rpc",
  "ara-runtime",
- "ara-runtime-render",
  "ara-schema",
  "ara-terrain",
- "ara-vfx",
- "ara-vfx-gpu",
  "blake3",
  "clap",
  "glam 0.30.10",
@@ -11462,7 +11378,7 @@ checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
 [[package]]
 name = "renderlab"
 version = "0.1.3"
-source = "git+https://github.com/Ara-Engine/renderlab?rev=d6a068a471b69abcd6101fa14fe9cb818e53590b#d6a068a471b69abcd6101fa14fe9cb818e53590b"
+source = "git+https://github.com/Ara-Engine/renderlab?rev=5955d4a43bedd9a963de17b606cf19270a48d882#5955d4a43bedd9a963de17b606cf19270a48d882"
 dependencies = [
  "anyhow",
  "ara-gpu",
@@ -11482,7 +11398,7 @@ dependencies = [
 [[package]]
 name = "renderlab-asset"
 version = "0.1.3"
-source = "git+https://github.com/Ara-Engine/renderlab?rev=d6a068a471b69abcd6101fa14fe9cb818e53590b#d6a068a471b69abcd6101fa14fe9cb818e53590b"
+source = "git+https://github.com/Ara-Engine/renderlab?rev=5955d4a43bedd9a963de17b606cf19270a48d882#5955d4a43bedd9a963de17b606cf19270a48d882"
 
 [[package]]
 name = "reqwest"

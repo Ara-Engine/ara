@@ -1099,22 +1099,15 @@ workflow, not quiet-machine frame performance or D26 acceptance. Defaults retain
 the ordinary foreign-CPU guard. No latency capture should be cited as a renderer
 performance benchmark.
 
-For a windowless real-renderer proof without game imports:
+For a windowless simulation proof:
 
 ```
-cargo run -p ara-dev -- hotpatch -- render-probe --output target/hotpatch-proof
-cargo run -p ara-dev -- hotpatch -- render-probe --fidelity --output target/fidelity-hotpatch-proof
 cargo run -p ara-dev -- hotpatch -- sim-probe --output target/sim-hotpatch-proof
 ```
 
-The probe acquires the machine GPU queue after its initial build, then runs the
-renderer beneath that guard for correct load attribution. Collect generation
-captures/status and create `<output>/stop` to finish and release the queue.
-`--start-file <path>` optionally defers device creation for measurement coordination.
-The render probe uses actual ara-render recording; `--fidelity` uses an RT FidelityView
-and its actual graph-building recording function. The sim probe keeps a real ECS
-entity/query/system alive and verifies replay, restore and network refusal after a
-patch. Captures prove behavior, not D26 performance.
+The sim probe keeps a real ECS entity/query/system alive and verifies replay,
+restore and network refusal after a patch. The render probe binary is gone.
+Captures prove behavior, not D26 performance.
 
 Measured evidence and current limitations: [S11](../../spikes/s11-rust-hotpatch/RESULT.md).
 Windows warm medians after the native watcher/link corrections are 2.476 s for
