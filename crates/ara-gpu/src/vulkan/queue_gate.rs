@@ -18,7 +18,7 @@ static OPENED: Condvar = Condvar::new();
 /// driver lock for as long as any queue of another device is held on a host action (a
 /// host-set event or a host-signalled semaphore). The holder's next driver call then
 /// blocks on that lock, so it can never release its queue: a deadlock (reproduced by
-/// `ara-render`'s live and GI tests in parallel, see `crates/ara-render/AGENTS.md`).
+/// GPU tests running in parallel in one process).
 /// Engine code never holds a queue on the host, so outside tests this never waits.
 pub(super) fn without_held_queues<R>(teardown: impl FnOnce() -> R) -> R {
     let mut held = HELD.lock().unwrap_or_else(|e| e.into_inner());

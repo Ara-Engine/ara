@@ -6,7 +6,7 @@ immutable renderer inputs, never gameplay state. Game entities/components own
 interactive trees/rocks; this crate does not create hidden simulation objects.
 
 Public API: register, commands::register, Rule, Surface, scatter, painted,
-Instance, lod_visible. GPU instancing/wind/alpha/depth/impostors live in ara-landscape.
+Instance, lod_visible. GPU instancing, wind, alpha, depth and impostors are Renderlab's (a gap-table row).
 
 Rules operate on a global candidate lattice. Stable rule identity + seed + signed cell coordinates
 determine jitter/acceptance/yaw/scale/wind phase. Half-open bounds avoid duplicates

@@ -68,8 +68,7 @@ pub(crate) fn scene_light(light: &LightView) -> scene::Light {
     }
 }
 
-/// The light-table words `lights`' profiles occupy (`Renderer::set_light_tables`,
-/// `FidelityView::set_light_tables`), and each light's profile offset. Word 0 is
+/// The light-table words `lights`' profiles occupy, and each light's profile offset. Word 0 is
 /// reserved, so a zero offset means none. A profile is `vertical`, `horizontal` (u32),
 /// then its intensities over the peak (f32 bits, azimuth-major), stored once however
 /// many lights share it.

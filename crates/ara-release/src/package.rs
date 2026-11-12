@@ -22,15 +22,7 @@ const BINARIES: &[(&str, &str)] = &[
     ("ara-shader-cook", "ara-shader-cook"),
     ("ara-setup", "ara-setup"),
 ];
-const RESOURCES: &[&str] = &[
-    "ara-texture-gpu",
-    "ara-render",
-    "ara-render-fidelity",
-    "ara-runtime-render",
-    "ara-render2d",
-    "ara-landscape",
-    "ara-vfx-gpu",
-];
+const RESOURCES: &[&str] = &["ara-texture-gpu", "ara-render2d"];
 
 pub fn package(root: &Path, version: &str) -> Result<()> {
     ensure!(

@@ -1120,7 +1120,7 @@ Causes:
 - The runtime uses the default hook or a headless conformance template without renderer capture.
 
 Fixes:
-- Implement `RuntimeHooks::screenshot` using `ara-render` capture at a safe frame boundary and return PNG bytes.
+- Implement `RuntimeHooks::screenshot` using the renderer's capture at a safe frame boundary and return PNG bytes.
 - For a headless verification run, treat the report as runtime-conformance evidence without a rendered screenshot.
 
 ## ARA8087 bridge::BRG_011: Simulation input hook unavailable
@@ -1157,7 +1157,7 @@ Causes:
 - The runtime has not installed a capture-trigger integration.
 
 Fixes:
-- Implement `RuntimeHooks::capture` through `ara-render`, validate the capture kind and schedule work at a safe frame boundary.
+- Implement `RuntimeHooks::capture` through the renderer, validate the capture kind and schedule work at a safe frame boundary.
 
 ## ARA8090 bridge::BRG_014: Invalid bridge input action
 owner: ara-bridge
@@ -1175,7 +1175,7 @@ Fixes:
 owner: ara-export
 shown as: ARA-EXP-BRG-015
 
-Headless desktop export verification reports that GPU timing requires `ara-render`. This warning does not fail conformance verification; the report contains no measured GPU evidence.
+Headless desktop export verification reports that GPU timing requires a renderer. This warning does not fail conformance verification; the report contains no measured GPU evidence.
 
 Causes:
 - The conformance template has no renderer GPU-timing integration.

@@ -39,8 +39,8 @@ pub(super) fn prepare(
     })
 }
 
-/// Move the sole presenter owner to a worker until real content is uploaded and
-/// its lazy effect PSOs/systems are ready. Loading keeps presenting on main.
+/// Move the sole presenter owner to a worker until the renderer has loaded the real
+/// content (its first present loads it, blocking). Loading keeps presenting on main.
 pub(super) fn warm(
     mut presenter: Presenter,
     frame: Arc<RenderFrame>,
@@ -48,20 +48,7 @@ pub(super) fn warm(
 ) -> Result<graphics::Graphics> {
     graphics::Graphics::spawn(move || {
         ara_gpu::cpu_scope!("Player.content_warmup_worker");
-        presenter.set_probe_gi(true);
         presenter.present_with(&frame, || Ok(content))?;
-        loop {
-            let resources_ready = presenter.preallocate_startup_resources()?;
-            if !presenter.readiness().pipelines_pending && resources_ready {
-                break;
-            }
-            presenter.present_with(&frame, || {
-                anyhow::bail!("unchanged startup content unexpectedly rebuilt")
-            })?;
-            if let Some(error) = presenter.presentation_error() {
-                anyhow::bail!("startup presentation: {error}");
-            }
-        }
         if let Some(error) = presenter.presentation_error() {
             anyhow::bail!("startup presentation: {error}");
         }

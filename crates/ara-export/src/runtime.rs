@@ -119,14 +119,8 @@ pub(crate) fn unpack_template(
         std::fs::create_dir_all(output.parent().context("runtime resource parent")?)?;
         std::io::copy(&mut entry, &mut File::create(output)?)?;
     }
-    for package in [
-        "ara-render",
-        "ara-render-fidelity",
-        "ara-runtime-render",
-        "ara-render2d",
-        "ara-landscape",
-        "ara-vfx-gpu",
-    ] {
+    {
+        let package = "ara-render2d";
         ensure!(
             destination.join("resources").join(package).is_dir(),
             "runtime template lacks cooked {package} resources"

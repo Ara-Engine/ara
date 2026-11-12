@@ -201,8 +201,6 @@ pub struct MetalDevice {
     /// The cooked `ClearDepth` pipeline, loaded on first use.
     clear: Option<clear::Clear>,
     shader_worker: Option<reload::Worker>,
-    #[cfg(feature = "fidelity-lab")]
-    pub(crate) lab_params: crate::tunables::Registry,
     submission_stats: vulkan::SubmissionStats,
     /// Last: released after the workers joined, so the archive flush races no compile.
     _cache: cache::Lease,
@@ -322,8 +320,6 @@ impl MetalDevice {
             waits: Default::default(),
             clear: None,
             shader_worker,
-            #[cfg(feature = "fidelity-lab")]
-            lab_params: Default::default(),
             submission_stats: Default::default(),
             _cache: cache,
         })

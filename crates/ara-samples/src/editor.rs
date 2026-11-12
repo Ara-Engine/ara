@@ -99,7 +99,7 @@ fn capture(root: &Path, request: &Request<'_>) -> Result<Value> {
         "editor.camera",
         json!({"session": handle, "target": [x, y, z], "yaw": yaw, "pitch": pitch, "distance": distance}),
     )?;
-    // Let imports, thumbnails and the fidelity view settle before reading the console.
+    // Let imports, thumbnails and the Scene view settle before reading the console.
     std::thread::sleep(Duration::from_secs(8));
     let logs =
         call(&mut client, "logs", json!({"session": handle, "limit": 40})).unwrap_or(Value::Null);

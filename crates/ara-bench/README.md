@@ -28,7 +28,7 @@ original frame while retained. Stop producers before saving a complete capture.
 Records and cursors stay local until the frame/job boundary. Custom worker loops
 without `FrameToken::in_scope` must call `ThreadRegistration::flush()` there.
 
-Enable subsystem features such as `ara-sim/profiling`, `ara-render/profiling`,
+Enable subsystem features such as `ara-sim/profiling`,
 `ara-anim/profiling`, `ara-physics/profiling`, `ara-nav/profiling`,
 `ara-audio/profiling`, `ara-asset/profiling`, `ara-script/profiling`.
 They default off. Compose `tracing_subscriber::registry().with(ProfileLayer)`

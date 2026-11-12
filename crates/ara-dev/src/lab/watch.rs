@@ -53,7 +53,6 @@ impl Watch {
     pub fn poll(&mut self, root: &Path) -> Result<Vec<PathBuf>> {
         let mut current = BTreeMap::new();
         scan(&root.join("crates"), &mut current)?;
-        scan(&root.join("shaders"), &mut current)?;
         for name in ["Cargo.toml", "Cargo.lock", ".cargo/config.toml"] {
             let path = root.join(name);
             let meta = fs::metadata(&path)?;
@@ -107,9 +106,6 @@ impl Watch {
 
 pub(super) fn output(root: &Path, base: &Path, manifest: &Path) -> Result<PathBuf> {
     let parent = manifest.parent().context("shader manifest parent")?;
-    if parent == root.join("shaders") {
-        return Ok(base.join("shaders/crates/ara-render/cooked"));
-    }
     let relative = parent.strip_prefix(root)?;
     let destination = if parent
         .parent()
@@ -157,7 +153,6 @@ mod tests {
         for name in [
             "crates/a/shaders/pipelines.json",
             "crates/a/generated/smoke/pipelines.json",
-            "shaders/pipelines.json",
             "Cargo.toml",
             "Cargo.lock",
             ".cargo/config.toml",
@@ -169,7 +164,7 @@ mod tests {
         }
         let mut watch = Watch::default();
         assert!(watch.poll(&root).unwrap().is_empty());
-        assert_eq!(watch.manifests().len(), 3);
+        assert_eq!(watch.manifests().len(), 2);
         fs::write(root.join("crates/a/src/lib.rs"), b"changed source").unwrap();
         assert!(watch.poll(&root).unwrap().is_empty());
         watch.changed_at = Some(Instant::now() - Duration::from_secs(1));

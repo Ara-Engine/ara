@@ -119,7 +119,6 @@ All numbers were measured on **a Ryzen 7 7800X3D + RTX 4070 SUPER on Windows 11,
 | **Netcode** | **2.98 / 4.83 kB/s** down/up per client: 4 players, 50 entities, 100 ms RTT, 5% loss. It converges and passes all 6 parity/late-join/privacy gates. [S4](spikes/s4-netcode/RESULT.md) |
 | **Audio** | **1,000 panned voices in 0.37 ms** per 2.67 ms block, on one core. 1,000 occluded voices with reverb take 0.46 ms, with zero allocations. [README](crates/ara-audio/README.md) |
 | **Navigation** | <ul><li>**10,000 agents** (full nav tick) in **1.84 ms** on 8 workers, bit-identical across 1, 2, 4 and 8 workers.</li><li>A **10 km path** in 0.33 ms.</li></ul>[RESULTS](crates/ara-nav/RESULTS.md) |
-| **VFX** | **1 M GPU particles in 1.4 ms** at 1440p (stage timestamps). [README](crates/ara-vfx-gpu/README.md) |
 | **Play** | <ul><li>**Play → first tick in 3.5 ms** (p50, 5k entities) from a pool of pre-spawned players.</li><li>Live patches round-trip in about one tick.</li><li>The player survives panics and hangs.</li></ul>[S5](spikes/s5-play-process/RESULT.md) |
 | **C# hot reload** | Body edits: **19 ms p50**. Additive edits: 35–41 ms. Module swap: about 285 ms. Calls between Rust and C# cost 3.5 ns under AOT. [ara-script](crates/ara-script/AGENTS.md) |
 | **Agents** | `arabench`, 22 tasks: **22/22 for Claude Code and for Codex**. Median turns went from 9 to 5–6 after ergonomics fixes. [results](crates/arabench/results/README.md) |

@@ -53,7 +53,6 @@ pub struct Prepared {
     bindings: sync::Bindings,
     changes: render::Changes,
     model_sources: BTreeMap<usize, Arc<str>>,
-    pub(crate) unpublished_materials: BTreeMap<String, Vec<usize>>,
 }
 
 struct Builder {
@@ -135,11 +134,6 @@ pub fn prepare_with_foliage(
         bindings,
         changes: render::Changes::default(),
         model_sources: builder.model_sources,
-        unpublished_materials: builder
-            .unpublished
-            .into_iter()
-            .map(|(asset, materials)| (asset, materials.into_values().collect()))
-            .collect(),
     })
 }
 

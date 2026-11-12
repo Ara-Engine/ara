@@ -49,27 +49,21 @@ impl Window {
         report["presentation_settings"] = self.presentation_settings();
         if self.options.lab_idle {
             report["lab"] = json!({"simulation":"frozen","idle_submits":false});
-            #[cfg(feature = "fidelity-lab")]
-            {
-                report["lab"]["params"] = presenter
-                    .renderer()
-                    .map_or(Value::Null, |r| r.gpu().lab_params().report());
-            }
         }
-        report["gpu_submission_counters"] = presenter.renderer().map_or(Value::Null, |renderer| {
-            json!({"scope":"Cumulative renderer backend only; excludes native WSI and UI submissions",
-                "backend":renderer.gpu().submission_stats()})
+        report["gpu_submission_counters"] = presenter.gpu().map_or(Value::Null, |gpu| {
+            json!({"scope":"Cumulative presentation device only; excludes native WSI and UI submissions",
+                "backend":gpu.submission_stats()})
         });
-        report["gpu_queue_priority"] = presenter.renderer().map_or(Value::Null, |renderer| {
-            let info = renderer.gpu().info();
+        report["gpu_queue_priority"] = presenter.gpu().map_or(Value::Null, |gpu| {
+            let info = gpu.info();
             json!({"extension":info.global_priority_extension,"graphics":info.graphics_global_priority})
         });
         report
             .as_object_mut()
             .context("performance report object")?
             .extend(self.span.report());
-        report["gpu_timestamp_clock"] = presenter.renderer().map_or(Value::Null, |renderer| {
-            let info = renderer.gpu().info();
+        report["gpu_timestamp_clock"] = presenter.gpu().map_or(Value::Null, |gpu| {
+            let info = gpu.info();
             json!({"extension":info.timestamp_clock,"period_ns":info.timestamp_period_ns,"valid_bits":info.timestamp_valid_bits})
         });
         report["completed"] = json!(state == Outcome::Ready);

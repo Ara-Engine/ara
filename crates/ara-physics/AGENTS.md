@@ -50,7 +50,7 @@ Contains no native code or Jolt dependency. `ara-physics-jolt` implements its ba
    checkpoint's world in stable-ID order, then replay lifecycle commands and inputs.
    The adapter rejects mismatched topology before mutating native state.
 
-## ara-render / ara-asset integration
+## Renderer / ara-asset integration
 
 - `DebugPrimitive` is a typed presentation stream. Cache `DebugGeometry` by shape handle;
   compose compound child transforms recursively. No renderer crate is linked here.

@@ -125,14 +125,8 @@ mod tests {
         let player = root.path().join("ara-player");
         std::fs::write(&player, b"\x7fELF fixture")?;
         let key = "a".repeat(64);
-        for package in [
-            "ara-render",
-            "ara-render-fidelity",
-            "ara-runtime-render",
-            "ara-render2d",
-            "ara-landscape",
-            "ara-vfx-gpu",
-        ] {
+        {
+            let package = "ara-render2d";
             let cooked = root.path().join("resources").join(package);
             std::fs::create_dir_all(cooked.join(&key))?;
             std::fs::write(cooked.join(&key).join("main.spv"), b"shader")?;
@@ -146,7 +140,7 @@ mod tests {
         assert!(runtime(&player, root.path(), None)?.resource_files > 0);
         let artifact = root
             .path()
-            .join("resources/ara-render")
+            .join("resources/ara-render2d")
             .join(&key)
             .join("main.spv");
         std::fs::write(&artifact, b"corrupt shader")?;

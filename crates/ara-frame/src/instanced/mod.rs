@@ -6,10 +6,10 @@ mod changes;
 mod material;
 mod textures;
 mod validate;
-pub use validate::{CheckedScene, ValidatedScene};
 pub use changes::{CasterChanges, Changes, FrameWork, transport};
 pub use material::{Material, MaterialExtras, TextureSlot, TextureTransform, Volume};
 pub use textures::{TextureBinding, TextureStats, Textures};
+pub use validate::{CheckedScene, ValidatedScene};
 
 /// Absent native texture or unused material index. Sampling supplies neutral
 /// white/flat-normal texels without allocating default images in the heap.
@@ -118,7 +118,7 @@ impl Instance {
     }
 }
 
-/// Engine-owned scene content consumed by both raster and fidelity views.
+/// Engine-owned scene content a renderer consumes.
 pub struct Scene {
     /// Unique model-space geometry, rather than one world-space mesh per draw.
     pub geometry: Vec<Geometry>,

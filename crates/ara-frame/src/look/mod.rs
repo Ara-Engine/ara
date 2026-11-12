@@ -1,4 +1,4 @@
-//! Authored look and quality budgets. GPU passes that apply them stay in `ara-render`.
+//! Authored look and quality budgets. GPU passes that apply them live in the renderer.
 //!
 //! Hosts map the scene's authored look onto [`Look`]. The renderer applies it at a
 //! frame boundary. The defaults reproduce the M1 baseline: manual exposure, the ACES
@@ -15,7 +15,7 @@ pub use lens::{
     AoTuning, DepthOfField, DepthOfFieldQuality, Lens, MotionBlurQuality, OverPreset, SsrTuning,
 };
 pub use volumetric::{
-    FogVolume, FogVolumeShape, VolumetricFog, VolumetricFogQuality, MAX_FOG_VOLUMES,
+    FogVolume, FogVolumeShape, MAX_FOG_VOLUMES, VolumetricFog, VolumetricFogQuality,
 };
 
 /// Display curve applied after exposure. The values match `ara_render_fidelity::ToneMapper`.

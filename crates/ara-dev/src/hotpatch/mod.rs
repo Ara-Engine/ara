@@ -210,11 +210,7 @@ pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
         "--bin",
         bin,
         "--features",
-        if bin == "ara-player" && std::env::var_os("ARA_HOTPATCH_LAB_CONTROL").is_some() {
-            "hotpatch,fidelity-lab"
-        } else {
-            feature
-        },
+        feature,
         "--port",
         &options.port.to_string(),
     ]);

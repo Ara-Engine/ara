@@ -17,11 +17,11 @@ try {
     if ($Mode -eq 'Check') {
         cargo check -p ara-editor -p ara-editor-gpu
         if ($LASTEXITCODE -ne 0) { throw 'check failed' }
-        cargo test -p ara-editor -p ara-editor-gpu -p ara-render -p ara-ui -p ara-ui-document -p ara-host
+        cargo test -p ara-editor -p ara-editor-gpu -p ara-ui -p ara-ui-document -p ara-host
         if ($LASTEXITCODE -ne 0) { throw 'tests failed' }
-        cargo clippy -p ara-editor -p ara-editor-gpu -p ara-render -p ara-ui -p ara-ui-document -p ara-host --all-targets -- -D warnings
+        cargo clippy -p ara-editor -p ara-editor-gpu -p ara-ui -p ara-ui-document -p ara-host --all-targets -- -D warnings
         if ($LASTEXITCODE -ne 0) { throw 'clippy failed' }
-        cargo fmt -p ara-editor -p ara-editor-gpu -p ara-render -p ara-ui -p ara-ui-document -p ara-host -- --check
+        cargo fmt -p ara-editor -p ara-editor-gpu -p ara-ui -p ara-ui-document -p ara-host -- --check
     } else {
         if (-not $Project) { throw '-Project must name an initialized project' }
         cargo run -p ara-editor -- $Project --sample

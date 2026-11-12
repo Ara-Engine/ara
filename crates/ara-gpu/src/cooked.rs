@@ -99,13 +99,13 @@ mod override_tests {
             override_dir(root, "ara-render-fidelity", Some("ara-render-fidelity")),
             Some(root.to_owned())
         );
-        assert!(override_dir(root, "ara-render", Some("ara-render-fidelity")).is_none());
+        assert!(override_dir(root, "ara-render2d", Some("ara-render-fidelity")).is_none());
         let cooked = std::path::Path::new("workspace/crates/ara-render-fidelity/cooked");
         assert_eq!(
             override_dir(cooked, "ara-render-fidelity", None),
             Some(cooked.to_owned())
         );
-        assert!(override_dir(cooked, "ara-render", None).is_none());
+        assert!(override_dir(cooked, "ara-render2d", None).is_none());
     }
 
     #[test]

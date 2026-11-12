@@ -19,11 +19,9 @@ mod packing;
 mod terrain;
 #[cfg(test)]
 mod tests;
-/// Particle composition over fidelity HDR radiance and depth.
-pub mod vfx;
 pub use content::{Content, EnvironmentMap, Foliage, TerrainLayer};
 
-/// Scene textures the fidelity view accepts.
+/// Scene textures a prepared scene accepts.
 const TEXTURE_LIMIT: usize = 96;
 /// LOD tolerance for props (metres of geometric error).
 const PROP_ERROR: f32 = 0.002;
@@ -325,7 +323,7 @@ fn solid(rgba: [u8; 4], srgb: bool) -> Texture {
     }
 }
 
-/// Every local light (the fidelity view has no 64-light cap).
+/// Every local light (a prepared scene has no 64-light cap).
 fn lights(frame: &RenderFrame) -> Vec<scene::Light> {
     crate::lights::scene_lights(&frame.lights)
 }

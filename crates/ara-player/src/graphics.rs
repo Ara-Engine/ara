@@ -245,12 +245,9 @@ impl World {
             .resource_mut::<Service>()
             .request(request)
             .map_err(|d| anyhow::anyhow!(d.to_string()))?;
-        let quality = presenter.and_then(Presenter::renderer).map(|r| {
-            let quality = r.quality();
-            json!({"shadowCascades":quality.shadows.cascades, "shadowResolution":quality.shadows.resolution,
-                "shadowDistance":quality.shadows.distance, "giBudget":quality.gi_budget,
-                "bloom":quality.bloom,"lodPixels":quality.lod_pixels,"minPixels":quality.min_pixels})
-        });
-        Ok(json!({"state":state,"rendererQuality":quality}))
+        let quality = presenter
+            .and_then(Presenter::quality)
+            .map(|preset| preset.name());
+        Ok(json!({"state":state,"quality":quality}))
     }
 }

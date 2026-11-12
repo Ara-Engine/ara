@@ -161,7 +161,7 @@ pub trait RuntimeHooks: Send + 'static {
         Err(BridgeError::new(
             "ARA-EXP-BRG-010",
             "renderer capture hook is not installed",
-            "install RuntimeHooks::screenshot from ara-render",
+            "install RuntimeHooks::screenshot from the renderer",
         ))
     }
     /// Queues input for a simulation tick; never mutates a document.
@@ -185,7 +185,7 @@ pub trait RuntimeHooks: Send + 'static {
         Err(BridgeError::new(
             "ARA-EXP-BRG-013",
             "capture trigger hook is not installed",
-            "install RuntimeHooks::capture from ara-render",
+            "install RuntimeHooks::capture from the renderer",
         ))
     }
 }
