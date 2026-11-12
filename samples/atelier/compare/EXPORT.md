@@ -56,8 +56,10 @@ ARA_UNITY_EXPORT=<dir> ara capture --root samples/atelier --scene levels/atelier
    the dolly or the cut. Use `camera_clips.json` (position and rotation keys, `cut`, fov).
 6. **Occlusion maps.** Not exported (the ARM maps' red channel); Renderlab ignores them too,
    occlusion comes from traced GI. Unity and Unreal will add their own AO unless it is off.
-7. **Units and handedness.** Right-handed, +Y up, metres, cameras look along -Z. Unity builds
-   negate Z (X in `atelier.spec.json`'s note: use one convention and say which). Light units:
+7. **Units and handedness.** Right-handed, +Y up, metres, cameras look along -Z. Two notes
+   disagree on the Unity conversion: the exporter's sidecar says "Unity builds negate Z",
+   `atelier.spec.json` says "negate X and flip winding". Both are valid mirror conversions
+   (they differ by a 180 degree turn about Y); pick one for every engine and state it. Light units:
    Ara stores point-equivalent lumens (4 pi times candela); the glTF carries candela and Unity's
    spot normalisation differs from Unreal's.
 8. **Sky resolution and orientation.** The widened gradient is 128 px high, row 0 the zenith,
