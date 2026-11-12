@@ -106,7 +106,7 @@ retain the returned `Completion`, poll it before reusing resources, and keep sho
 the last completed color/ID pair. `FRAMES_IN_FLIGHT` (2) ended scopes may stay unconsumed; a third begin is refused. `upload_queued`
 writes busy constants through ordered GPU updates; ordinary `upload` still rejects
 overwrites. A second graphics-family queue isolates Scene work from the native UI
-queue where available; completion publishes a GPU memory dependency to that UI queue.
+queue where available; `publish_submission_to_ui` publishes one completed graphics submission while other queues may still run.
 Capture/shutdown may use `wait_completion`. Tests hold a queue only through `vulkan::QueueGate` (a host
 timeline wait); device teardown waits until no gate is held, as NVIDIA's Windows `vkDestroyDevice` otherwise deadlocks
 under its process-wide lock (`ara-render` AGENTS.md). `tests/deferred.rs` blocks Scene work behind one: UI progress, polling, ordered updates.
