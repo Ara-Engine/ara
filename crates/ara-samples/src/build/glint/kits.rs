@@ -9,7 +9,7 @@ use crate::{
 };
 use anyhow::Result;
 use glam::{Mat4, Vec2, Vec3};
-use std::path::Path;
+use std::{f32::consts::FRAC_PI_2, path::Path};
 
 /// Thickness of every slab, metres.
 pub const SLAB: f32 = 1.0;
@@ -102,12 +102,14 @@ pub fn course(root: &Path, lock: &Lock) -> Result<String> {
     const PLATE: usize = 2;
     const AMBER: usize = 3;
     const GIRDER: usize = 4;
+    const RAIL: usize = 5;
     let mut k = Kit::new(vec![
         Material::textured("rust steel", "rusty_metal_02").tinted([0.55, 0.5, 0.46]),
         Material::textured("poured concrete", "concrete_floor_02").tinted([0.72, 0.7, 0.66]),
         Material::textured("tread plate", "metal_plate").tinted([0.8, 0.82, 0.85]),
         Material::flat("amber paint", [0.85, 0.42, 0.08], 0.5, 0.0),
         Material::flat("black girder steel", [0.06, 0.065, 0.07], 0.55, 1.0),
+        Material::flat("galvanised rail", [0.72, 0.74, 0.76], 0.38, 1.0),
     ]);
     let body_m = meters(lock, "rusty_metal_02");
     let concrete_m = meters(lock, "concrete_floor_02");
@@ -124,8 +126,19 @@ pub fn course(root: &Path, lock: &Lock) -> Result<String> {
             Top::Plate => (PLATE, plate_m),
         };
         slab_box(&mut k, m, v(x0, s.top - cap, z0), v(x1, s.top, z1), uv);
-        // Amber edge line, 8 cm in from the border, 1.5 cm proud.
-        let e = 0.08;
+        // A concrete kerb along the border, then the amber edge line just inside it.
+        if s.size.0 > 2.0 {
+            let kerb = 0.14;
+            for (a, b) in [
+                (v(x0, s.top, z0), v(x1, s.top + 0.07, z0 + kerb)),
+                (v(x0, s.top, z1 - kerb), v(x1, s.top + 0.07, z1)),
+                (v(x0, s.top, z0 + kerb), v(x0 + kerb, s.top + 0.07, z1 - kerb)),
+                (v(x1 - kerb, s.top, z0 + kerb), v(x1, s.top + 0.07, z1 - kerb)),
+            ] {
+                slab_box(&mut k, CONCRETE, a, b, concrete_m);
+            }
+        }
+        let e = 0.22;
         let w = 0.1;
         let y = s.top + 0.012;
         for (a, b) in [
@@ -154,6 +167,25 @@ pub fn course(root: &Path, lock: &Lock) -> Result<String> {
             slab_box(&mut k, GIRDER, v(s.at.0 - c, bottom - depth, s.at.1 - c), v(s.at.0 + c, bottom, s.at.1 + c), Vec2::ONE);
         }
     }
+    // The start dock's railing: posts every 1.6 m along the back and both sides, an amber top
+    // rail and a steel mid rail. (Its collision is added by the scene; the runway side is open.)
+    let post = |k: &mut Kit, x: f32, z: f32| slab_box(k, RAIL, v(x - 0.04, 0.0, z - 0.04), v(x + 0.04, 1.05, z + 0.04), Vec2::ONE);
+    let mut x = -3.9;
+    while x <= 3.95 {
+        post(&mut k, x, -4.9);
+        x += 1.3;
+    }
+    for sx in [-3.9, 3.9] {
+        let mut z = -4.9;
+        while z <= 4.95 {
+            post(&mut k, sx, z);
+            z += 1.3;
+        }
+        slab_box(&mut k, AMBER, v(sx - 0.035, 1.0, -4.94), v(sx + 0.035, 1.07, 5.0), Vec2::ONE);
+        slab_box(&mut k, RAIL, v(sx - 0.025, 0.55, -4.94), v(sx + 0.025, 0.6, 5.0), Vec2::ONE);
+    }
+    slab_box(&mut k, AMBER, v(-3.94, 1.0, -4.94), v(3.94, 1.07, -4.86), Vec2::ONE);
+    slab_box(&mut k, RAIL, v(-3.94, 0.55, -4.94), v(3.94, 0.6, -4.88), Vec2::ONE);
     k.write(root, lock, "glint_course")
 }
 
@@ -232,8 +264,19 @@ pub fn goal(root: &Path, lock: &Lock) -> Result<String> {
     k.write(root, lock, "glint_goal")
 }
 
-/// The foundry yard far below the course: ground, slag channels, chimneys, tanks, sheds and
-/// a glazed control tower. Pure scenery, no collision.
+/// A horizontal cylinder from `start` along +X (`along == 0`) or +Z (`along == 1`).
+fn pipe(kit: &mut Kit, material: usize, radius: f32, start: Vec3, along: u32, length: f32) {
+    let rotation = if along == 0 {
+        Mat4::from_rotation_z(-FRAC_PI_2)
+    } else {
+        Mat4::from_rotation_x(FRAC_PI_2)
+    };
+    kit.cylinder(material, radius, length, 20, Mat4::from_translation(start) * rotation, Vec2::ONE);
+}
+
+/// The foundry yard far below the course: textured ground, route markings, slag channels,
+/// furnaces, chimneys and tanks with banding, gantry frames, pipe racks, plate stacks, sheds
+/// and a glazed control tower. Pure scenery, no collision.
 pub fn yard(root: &Path, lock: &Lock) -> Result<String> {
     const GROUND: usize = 0;
     const BRICK: usize = 1;
@@ -242,18 +285,30 @@ pub fn yard(root: &Path, lock: &Lock) -> Result<String> {
     const SHED: usize = 4;
     const GLASS: usize = 5;
     const WINDOW: usize = 6;
+    const PIPE: usize = 7;
+    const AMBER: usize = 8;
+    const MARK: usize = 9;
+    const STEEL: usize = 10;
+    const PLATES: usize = 11;
     let mut k = Kit::new(vec![
-        Material::flat("yard ground", [0.06, 0.055, 0.05], 0.95, 0.0),
+        Material::textured("yard concrete", "concrete_floor_02").tinted([0.2, 0.19, 0.18]),
         Material::flat("sooty brick", [0.15, 0.12, 0.105], 0.92, 0.0),
-        Material::flat("tank steel", [0.22, 0.23, 0.25], 0.62, 0.4),
+        Material::flat("tank steel", [0.24, 0.25, 0.27], 0.6, 0.45),
         Material::emitter("slag", [1.0, 0.38, 0.08]),
-        Material::flat("shed cladding", [0.07, 0.075, 0.08], 0.6, 0.6),
+        Material::textured("shed cladding", "metal_plate").tinted([0.16, 0.17, 0.19]),
         Material::glass("control glass", [0.6, 0.8, 0.9], 0.3),
         Material::emitter("window light", [1.0, 0.82, 0.55]),
+        Material::flat("pipe steel", [0.34, 0.35, 0.37], 0.5, 0.8),
+        Material::flat("amber paint", [0.85, 0.42, 0.08], 0.5, 0.0),
+        Material::flat("road marking", [0.7, 0.66, 0.55], 0.85, 0.0),
+        Material::flat("black girder steel", [0.06, 0.065, 0.07], 0.55, 1.0),
+        Material::textured("stacked plate", "metal_plate").tinted([0.3, 0.31, 0.33]),
     ]);
     let v = Vec3::new;
     let floor = YARD_FLOOR;
-    slab_box(&mut k, GROUND, v(-220.0, floor - 1.0, -120.0), v(220.0, floor, 260.0), Vec2::ONE);
+    let ground_m = meters(lock, "concrete_floor_02") * 2.0;
+    let plate_m = meters(lock, "metal_plate") * 2.0;
+    slab_box(&mut k, GROUND, v(-220.0, floor - 1.0, -120.0), v(220.0, floor, 260.0), ground_m);
     // Slag channels: long glowing strips in the ground.
     for (x, z0, z1) in [(-22.0, -40.0, 140.0), (26.0, -40.0, 140.0), (-60.0, 10.0, 120.0)] {
         slab_box(&mut k, SLAG, v(x - 1.4, floor + 0.01, z0), v(x + 1.4, floor + 0.06, z1), Vec2::ONE);
@@ -261,33 +316,116 @@ pub fn yard(root: &Path, lock: &Lock) -> Result<String> {
     for z in [20.0, 60.0, 100.0] {
         slab_box(&mut k, SLAG, v(-80.0, floor + 0.01, z - 1.2), v(80.0, floor + 0.05, z + 1.2), Vec2::ONE);
     }
-    // Chimneys: tall brick cylinders with a lit mouth.
+    // Floor markings that follow the route: a dashed centre line under the catwalk.
+    let mut z = -30.0;
+    while z < 124.0 {
+        slab_box(&mut k, MARK, v(-0.18, floor + 0.01, z), v(0.18, floor + 0.03, z + 2.4), Vec2::ONE);
+        z += 5.0;
+    }
+    // Furnaces: a dark block, a framed glowing mouth, a hood, a stack, amber hazard borders.
+    for (x, z) in FURNACES {
+        slab_box(&mut k, SHED, v(x - 9.0, floor, z - 6.0), v(x + 9.0, floor + 11.0, z + 6.0), plate_m);
+        slab_box(&mut k, SLAG, v(x - 5.0, floor + 1.2, z - 6.05), v(x + 5.0, floor + 6.0, z - 6.0), Vec2::ONE);
+        for (a, b) in [
+            (v(x - 5.6, floor + 0.9, z - 6.3), v(x - 5.0, floor + 6.6, z - 5.9)),
+            (v(x + 5.0, floor + 0.9, z - 6.3), v(x + 5.6, floor + 6.6, z - 5.9)),
+            (v(x - 5.6, floor + 6.0, z - 6.3), v(x + 5.6, floor + 6.6, z - 5.9)),
+        ] {
+            slab_box(&mut k, STEEL, a, b, Vec2::ONE);
+        }
+        slab_box(&mut k, SHED, v(x - 6.0, floor + 6.6, z - 7.4), v(x + 6.0, floor + 7.6, z - 5.8), plate_m);
+        k.cylinder(BRICK, 1.6, 16.0, 24, Mat4::from_translation(v(x + 5.0, floor + 11.0, z + 2.0)), Vec2::ONE);
+        for band in [0.0, 5.0, 10.0] {
+            k.cylinder(PIPE, 1.7, 0.4, 24, Mat4::from_translation(v(x + 5.0, floor + 11.5 + band, z + 2.0)), Vec2::ONE);
+        }
+        let (hx0, hx1, hz0, hz1) = (x - 10.0, x + 10.0, z - 16.0, z - 7.0);
+        for (a, b) in [
+            (v(hx0, floor + 0.01, hz0), v(hx1, floor + 0.04, hz0 + 0.25)),
+            (v(hx0, floor + 0.01, hz1 - 0.25), v(hx1, floor + 0.04, hz1)),
+            (v(hx0, floor + 0.01, hz0), v(hx0 + 0.25, floor + 0.04, hz1)),
+            (v(hx1 - 0.25, floor + 0.01, hz0), v(hx1, floor + 0.04, hz1)),
+        ] {
+            slab_box(&mut k, AMBER, a, b, Vec2::ONE);
+        }
+    }
+    // Chimneys: sooty brick with steel bands, a platform ring and a lit mouth.
     for (x, z, r, h) in CHIMNEYS {
         k.cylinder(BRICK, r, h, 32, Mat4::from_translation(v(x, floor, z)), Vec2::ONE);
+        for f in [0.3, 0.6, 0.88] {
+            k.cylinder(PIPE, r + 0.07, 0.4, 32, Mat4::from_translation(v(x, floor + h * f, z)), Vec2::ONE);
+        }
+        k.cylinder(STEEL, r + 0.9, 0.18, 32, Mat4::from_translation(v(x, floor + h - 1.4, z)), Vec2::ONE);
         k.cylinder(SLAG, r * 0.8, 0.3, 24, Mat4::from_translation(v(x, floor + h - 0.2, z)), Vec2::ONE);
         slab_box(&mut k, SLAG, v(x - 2.2, floor, z - r - 0.1), v(x + 2.2, floor + 3.6, z - r), Vec2::ONE);
     }
-    // Furnaces: a dark block, a wide glowing mouth, a hood and a short stack.
-    for (x, z) in FURNACES {
-        slab_box(&mut k, SHED, v(x - 9.0, floor, z - 6.0), v(x + 9.0, floor + 11.0, z + 6.0), Vec2::ONE);
-        slab_box(&mut k, SLAG, v(x - 5.0, floor + 1.2, z - 6.05), v(x + 5.0, floor + 6.0, z - 6.0), Vec2::ONE);
-        slab_box(&mut k, SHED, v(x - 6.0, floor + 6.0, z - 7.2), v(x + 6.0, floor + 7.2, z - 5.8), Vec2::ONE);
-        k.cylinder(BRICK, 1.6, 16.0, 24, Mat4::from_translation(v(x + 5.0, floor + 11.0, z + 2.0)), Vec2::ONE);
-    }
-    // Tanks and sheds.
+    // Tanks: banded steel, a cap, a caged ladder and a pipe stub.
     for (x, z, r, h) in [(-34.0, 60.0, 6.0, 12.0), (34.0, 20.0, 5.0, 10.0), (38.0, 96.0, 7.0, 14.0), (-30.0, 8.0, 4.5, 9.0)] {
         k.cylinder(TANK, r, h, 40, Mat4::from_translation(v(x, floor, z)), Vec2::ONE);
+        for f in [0.12, 0.5, 0.88] {
+            k.cylinder(STEEL, r + 0.1, 0.45, 40, Mat4::from_translation(v(x, floor + h * f, z)), Vec2::ONE);
+        }
+        k.cylinder(STEEL, r * 1.03, 0.3, 40, Mat4::from_translation(v(x, floor + h, z)), Vec2::ONE);
+        let lx = x - r - 0.15;
+        for dz in [-0.3, 0.3] {
+            slab_box(&mut k, PIPE, v(lx - 0.03, floor, z + dz - 0.03), v(lx + 0.03, floor + h + 0.8, z + dz + 0.03), Vec2::ONE);
+        }
+        let mut y = 0.5;
+        while y < h {
+            slab_box(&mut k, PIPE, v(lx - 0.03, floor + y, z - 0.3), v(lx + 0.03, floor + y + 0.05, z + 0.3), Vec2::ONE);
+            y += 0.6;
+        }
+        pipe(&mut k, PIPE, 0.28, v(x + r - 0.2, floor + 1.0, z), 1, 9.0);
     }
+    // Gantry frames across the route: uprights, a top beam, diagonal braces, a trolley.
+    for z in [14.0, 46.0, 78.0] {
+        let top = floor + 19.0;
+        for x in [-14.0, 14.0] {
+            slab_box(&mut k, STEEL, v(x - 0.4, floor, z - 0.4), v(x + 0.4, top + 0.6, z + 0.4), Vec2::ONE);
+            let flip = if x < 0.0 { 1.0 } else { -1.0 };
+            for dz in [-1.0, 1.0] {
+                k.cuboid(STEEL, v(0.25, 7.6, 0.25), Mat4::from_translation(v(x + flip * 2.3, top - 3.5, z + dz * 0.1)) * Mat4::from_rotation_z(flip * 0.52), Vec2::ONE);
+            }
+        }
+        slab_box(&mut k, STEEL, v(-14.4, top, z - 0.5), v(14.4, top + 0.9, z + 0.5), Vec2::ONE);
+        slab_box(&mut k, AMBER, v(-1.5, top - 1.4, z - 0.9), v(1.5, top, z + 0.9), Vec2::ONE);
+    }
+    // Pipe racks: two long runs along the route on frames, one run across the yard.
+    for (x, h) in [(-18.0, 6.0), (18.0, 4.5)] {
+        pipe(&mut k, PIPE, 0.5, v(x - 0.6, floor + h, -30.0), 1, 160.0);
+        pipe(&mut k, PIPE, 0.34, v(x + 0.7, floor + h, -30.0), 1, 160.0);
+        let mut zf = -28.0;
+        while zf < 128.0 {
+            slab_box(&mut k, STEEL, v(x - 1.2, floor, zf - 0.15), v(x - 0.9, floor + h - 0.5, zf + 0.15), Vec2::ONE);
+            slab_box(&mut k, STEEL, v(x + 0.9, floor, zf - 0.15), v(x + 1.2, floor + h - 0.5, zf + 0.15), Vec2::ONE);
+            slab_box(&mut k, STEEL, v(x - 1.2, floor + h - 0.5, zf - 0.15), v(x + 1.2, floor + h - 0.3, zf + 0.15), Vec2::ONE);
+            // A flange at each frame.
+            k.cylinder(PIPE, 0.62, 0.25, 20, Mat4::from_translation(v(x - 0.6, floor + h, zf)) * Mat4::from_rotation_x(FRAC_PI_2), Vec2::ONE);
+            zf += 12.0;
+        }
+    }
+    pipe(&mut k, PIPE, 0.42, v(-60.0, floor + 4.0, -26.0), 0, 120.0);
+    // Stacked plates and a few drums by the route.
+    for (x, z) in [(10.0, -14.0), (-12.0, -8.0), (16.0, 70.0), (-14.0, 90.0), (-8.0, 40.0)] {
+        for i in 0..6 {
+            let off = ((i * 37 + (x as i32) * 3) % 5) as f32 * 0.12 - 0.25;
+            slab_box(&mut k, PLATES, v(x - 2.0 + off, floor + 0.2 * i as f32, z - 1.0), v(x + 2.0 + off, floor + 0.2 * (i as f32 + 1.0), z + 1.0), plate_m);
+        }
+    }
+    // Sheds with ribs and a lit window band facing the course; a glazed control tower.
     for (x, z, sx, sz, h) in [(-70.0, 40.0, 24.0, 40.0, 14.0), (66.0, 78.0, 28.0, 30.0, 12.0), (-4.0, 140.0, 60.0, 16.0, 16.0), (80.0, 10.0, 20.0, 26.0, 10.0)] {
-        slab_box(&mut k, SHED, v(x - sx * 0.5, floor, z - sz * 0.5), v(x + sx * 0.5, floor + h, z + sz * 0.5), Vec2::ONE);
-        // A band of lit windows along the side facing the course.
+        slab_box(&mut k, SHED, v(x - sx * 0.5, floor, z - sz * 0.5), v(x + sx * 0.5, floor + h, z + sz * 0.5), plate_m);
         slab_box(&mut k, WINDOW, v(x - sx * 0.5 + 1.0, floor + h * 0.55, z - sz * 0.5 - 0.05), v(x + sx * 0.5 - 1.0, floor + h * 0.55 + 0.9, z - sz * 0.5), Vec2::ONE);
+        let mut rx = x - sx * 0.5 + 1.5;
+        while rx < x + sx * 0.5 - 1.0 {
+            slab_box(&mut k, STEEL, v(rx - 0.12, floor, z - sz * 0.5 - 0.25), v(rx + 0.12, floor + h, z - sz * 0.5), Vec2::ONE);
+            rx += 3.0;
+        }
+        slab_box(&mut k, STEEL, v(x - sx * 0.5 - 0.3, floor + h, z - sz * 0.5 - 0.3), v(x + sx * 0.5 + 0.3, floor + h + 0.5, z + sz * 0.5 + 0.3), Vec2::ONE);
     }
-    // Control tower: a glazed box on legs with a lit interior.
     let (tx, tz) = (-48.0, 2.0);
-    slab_box(&mut k, SHED, v(tx - 1.0, floor, tz - 1.0), v(tx + 1.0, floor + 14.0, tz + 1.0), Vec2::ONE);
+    slab_box(&mut k, SHED, v(tx - 1.0, floor, tz - 1.0), v(tx + 1.0, floor + 14.0, tz + 1.0), plate_m);
     slab_box(&mut k, WINDOW, v(tx - 4.0, floor + 15.0, tz - 4.0), v(tx + 4.0, floor + 15.4, tz + 4.0), Vec2::ONE);
     slab_box(&mut k, GLASS, v(tx - 4.5, floor + 15.4, tz - 4.5), v(tx + 4.5, floor + 18.4, tz + 4.5), Vec2::ONE);
-    slab_box(&mut k, SHED, v(tx - 5.0, floor + 18.4, tz - 5.0), v(tx + 5.0, floor + 18.9, tz + 5.0), Vec2::ONE);
+    slab_box(&mut k, STEEL, v(tx - 5.0, floor + 18.4, tz - 5.0), v(tx + 5.0, floor + 18.9, tz + 5.0), Vec2::ONE);
     k.write(root, lock, "glint_yard")
 }

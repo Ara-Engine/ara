@@ -47,7 +47,7 @@
     },
     "e_ball": {
       "name": "Ball",
-      "order": "aa",
+      "order": "ad",
       "Ball": {
         "spawn": [0, 0.6000000238418579, -2]
       },
@@ -76,7 +76,7 @@
     },
     "e_c1": {
       "name": "Checkpoint 1",
-      "order": "aX",
+      "order": "aa",
       "Checkpoint": {
         "radius": 2.6
       },
@@ -90,7 +90,7 @@
     },
     "e_c2": {
       "name": "Checkpoint 2",
-      "order": "aY",
+      "order": "ab",
       "Checkpoint": {
         "index": 2,
         "radius": 2.6
@@ -105,7 +105,7 @@
     },
     "e_camera": {
       "name": "Camera",
-      "order": "ab",
+      "order": "ae",
       "Camera": {
         "fov": 60
       },
@@ -121,7 +121,7 @@
     },
     "e_camwide": {
       "name": "Establishing camera",
-      "order": "ac",
+      "order": "af",
       "Camera": {
         "fov": 52,
         "priority": 10
@@ -172,7 +172,7 @@
     },
     "e_goal": {
       "name": "Goal",
-      "order": "aZ",
+      "order": "ac",
       "Goal": {
         "radius": 3.2
       },
@@ -325,9 +325,42 @@
         "position": [0, 0.3, 32.5]
       }
     },
+    "e_rail0": {
+      "name": "Dock railing",
+      "order": "aX",
+      "Collider": {
+        "halfExtents": [4, 0.5, 0.07]
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [0, 0.5, -4.93]
+      }
+    },
+    "e_rail1": {
+      "name": "Dock railing",
+      "order": "aY",
+      "Collider": {
+        "halfExtents": [0.07, 0.5, 5]
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [-3.93, 0.5, 0]
+      }
+    },
+    "e_rail2": {
+      "name": "Dock railing",
+      "order": "aZ",
+      "Collider": {
+        "halfExtents": [0.07, 0.5, 5]
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [3.93, 0.5, 0]
+      }
+    },
     "e_run": {
       "name": "Run",
-      "order": "ad",
+      "order": "ag",
       "GlintRun": {
         "start": [0, 0.6000000238418579, -2]
       }

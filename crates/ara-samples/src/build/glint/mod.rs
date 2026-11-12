@@ -199,6 +199,14 @@ fn game(ctx: &Ctx) -> Result<()> {
             }),
         );
     }
+    // The dock's railing is solid: back and both sides, the runway side open.
+    for (id, at, half) in [
+        ("e_rail0", [0.0, 0.5, -4.93], [4.0, 0.5, 0.07]),
+        ("e_rail1", [-3.93, 0.5, 0.0], [0.07, 0.5, 5.0]),
+        ("e_rail2", [3.93, 0.5, 0.0], [0.07, 0.5, 5.0]),
+    ] {
+        s.entity(id, "Dock railing", json!({"Transform": {"position": at}, "RigidBody": {"motion": "static"}, "Collider": {"halfExtents": half}}));
+    }
     pads(&mut s, &models, true);
     // The ball: a chrome dynamic sphere driven by BallController; PlayerControl gives it an
     // input slot and its follow camera's orbit.
