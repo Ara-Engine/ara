@@ -54,1272 +54,1272 @@
       "name": "High cloud",
       "order": "b1a",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
         "position": [520.951, 132.203, 251.435],
         "rotation": [0, 180.66192626953125, 0],
-        "scale": [5.624545097351074, 3.0286014080047607, 4.326573371887207]
+        "scale": [2.8751330375671387, 1.9167553186416626, 2.395944118499756]
       }
     },
     "e_cirrus1": {
       "name": "High cloud",
       "order": "b1b",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [-659.668, 154.698, 672.867],
-        "rotation": [0, 170.40603637695312, 0],
-        "scale": [5.690244674682617, 3.0639779567718506, 4.377111434936523]
+        "position": [-191.474, 103.056, 945.56],
+        "rotation": [0, 175.02037048339844, 0],
+        "scale": [2.4232585430145264, 1.615505576133728, 2.0193819999694824]
       }
     },
     "e_cirrus2": {
       "name": "High cloud",
       "order": "b1c",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [-913.203, 76.852, 269.082],
-        "rotation": [0, 97.5820541381836, 0],
-        "scale": [5.509512424468994, 2.966660737991333, 4.238086700439453]
+        "position": [-659.668, 154.698, 672.867],
+        "rotation": [0, 170.40603637695312, 0],
+        "scale": [2.911520481109619, 1.9410135746002197, 2.42626690864563]
       }
     },
     "e_cirrus3": {
       "name": "High cloud",
       "order": "b1d",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [-962.678, 128.257, -206.184],
-        "rotation": [0, 0.802014172077179, 0],
-        "scale": [4.199098110198975, 2.2610528469085693, 3.2300755977630615]
+        "position": [-913.203, 76.852, 269.082],
+        "rotation": [0, 97.5820541381836, 0],
+        "scale": [2.811422348022461, 1.8742815256118774, 2.3428518772125244]
       }
     },
     "e_cirrus4": {
       "name": "High cloud",
       "order": "b1e",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [-585.219, 152.662, -479.081],
-        "rotation": [0, 338.3016662597656, 0],
-        "scale": [7.614030838012695, 4.099862575531006, 5.85694694519043]
+        "position": [-962.678, 128.257, -206.184],
+        "rotation": [0, 0.802014172077179, 0],
+        "scale": [2.0856544971466064, 1.3904362916946411, 1.738045334815979]
       }
     },
     "e_cirrus5": {
       "name": "High cloud",
       "order": "b1f",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [-216.117, 134.509, -647.283],
-        "rotation": [0, 285.3907165527344, 0],
-        "scale": [7.440855503082275, 4.006614685058594, 5.723735332489014]
+        "position": [-585.219, 152.662, -479.081],
+        "rotation": [0, 338.3016662597656, 0],
+        "scale": [3.977001667022705, 2.651334524154663, 3.3141679763793945]
       }
     },
     "e_cirrus6": {
       "name": "High cloud",
       "order": "b1g",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [234.876, 125.831, -600.458],
-        "rotation": [0, 296.8221435546875, 0],
-        "scale": [5.8458638191223145, 3.147773027420044, 4.496818542480469]
+        "position": [-216.117, 134.509, -647.283],
+        "rotation": [0, 285.3907165527344, 0],
+        "scale": [3.881089448928833, 2.587392807006836, 3.234241008758545]
       }
     },
     "e_cirrus7": {
       "name": "High cloud",
       "order": "b1h",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [478.96, 124.478, -208.351],
-        "rotation": [0, 102.5973892211914, 0],
-        "scale": [7.251315593719482, 3.904554605484009, 5.577935218811035]
+        "position": [234.876, 125.831, -600.458],
+        "rotation": [0, 296.8221435546875, 0],
+        "scale": [2.9977095127105713, 1.998473048210144, 2.498091220855713]
       }
     },
     "e_cirrus8": {
       "name": "High cloud",
       "order": "b1i",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [654.284, 86.318, 289.684],
-        "rotation": [0, 64.71595001220703, 0],
-        "scale": [4.190587997436523, 2.2564704418182373, 3.22352933883667]
+        "position": [478.96, 124.478, -208.351],
+        "rotation": [0, 102.5973892211914, 0],
+        "scale": [3.776113748550415, 2.517409086227417, 3.146761417388916]
       }
     },
     "e_cirrus9": {
       "name": "High cloud",
       "order": "b1j",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [-631.38, 167.356, 636.785],
-        "rotation": [0, 16.139162063598633, 0],
-        "scale": [5.087704181671143, 2.739532947540283, 3.913618564605713]
+        "position": [654.284, 86.318, 289.684],
+        "rotation": [0, 64.71595001220703, 0],
+        "scale": [2.0809412002563477, 1.3872941732406616, 1.7341176271438599]
       }
     },
     "e_cloud0": {
       "name": "Cloud bank",
       "order": "b02",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [-150.22, -70.213, 26.851],
+        "position": [-150.22, -66.251, 26.851],
         "rotation": [0, 320.7562255859375, 0],
-        "scale": [2.281400680541992, 1.268585443496704, 2.0341315269470215]
+        "scale": [1.9345006942749023, 0.7681666612625122, 1.724830150604248]
       }
     },
     "e_cloud1": {
       "name": "Cloud bank",
       "order": "b03",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [-275.118, -86.45, 91.022],
+        "position": [-275.118, -72.156, 91.022],
         "rotation": [0, 308.06134033203125, 0],
-        "scale": [2.0647470951080322, 1.2075281143188477, 2.178452253341675]
+        "scale": [1.7539559602737427, 0.8544930219650269, 1.8505460023880005]
       }
     },
     "e_cloud10": {
       "name": "Cloud bank",
       "order": "b0C",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [-98.536, -82.691, -200.802],
+        "position": [-98.536, -70.789, -200.802],
         "rotation": [0, 12.299382209777832, 0],
-        "scale": [3.718287944793701, 2.008488416671753, 4.197208404541016]
+        "scale": [3.131906509399414, 0.7204944491386414, 3.5353002548217773]
       }
     },
     "e_cloud11": {
       "name": "Cloud bank",
       "order": "b0D",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [-126.343, -86.171, 277.837],
+        "position": [-126.343, -72.054, 277.837],
         "rotation": [0, 84.29938507080078, 0],
-        "scale": [3.3675990104675293, 2.2194087505340576, 3.5693929195404053]
+        "scale": [2.8396658897399902, 1.0771435499191284, 3.0098249912261963]
       }
     },
     "e_cloud12": {
       "name": "Cloud bank",
       "order": "b0E",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [-442.345, -81.183, -110.655],
+        "position": [-442.345, -70.241, -110.655],
         "rotation": [0, 204.22247314453125, 0],
-        "scale": [2.5027787685394287, 1.6796058416366577, 2.950594186782837]
+        "scale": [2.1189823150634766, 1.1132891178131104, 2.4981260299682617]
       }
     },
     "e_cloud13": {
       "name": "Cloud bank",
       "order": "b0F",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [73.284, -67.702, -34.345],
+        "position": [73.284, -65.338, -34.345],
         "rotation": [0, 215.81871032714844, 0],
-        "scale": [4.370043754577637, 2.991787910461426, 4.365109443664551]
+        "scale": [3.6750364303588867, 1.1538383960723877, 3.670886754989624]
       }
     },
     "e_cloud14": {
       "name": "Cloud bank",
       "order": "b0G",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [-374.941, -78.61, 268.48],
+        "position": [-374.941, -69.305, 268.48],
         "rotation": [0, 281.0126037597656, 0],
-        "scale": [2.950185537338257, 1.881253719329834, 2.8108580112457275]
+        "scale": [2.4918212890625, 1.01301908493042, 2.374140977859497]
       }
     },
     "e_cloud15": {
       "name": "Cloud bank",
       "order": "b0H",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [-244.315, -76.205, -275.999],
+        "position": [-244.315, -68.43, -275.999],
         "rotation": [0, 245.96566772460938, 0],
-        "scale": [4.066852569580078, 2.062518358230591, 4.056303024291992]
+        "scale": [3.422377347946167, 0.6214603185653687, 3.4134998321533203]
       }
     },
     "e_cloud16": {
       "name": "Cloud bank",
       "order": "b0I",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [35.858, -67.979, 229.902],
+        "position": [35.858, -65.439, 229.902],
         "rotation": [0, 240.9063720703125, 0],
-        "scale": [3.0201327800750732, 1.7201460599899292, 2.8516948223114014]
+        "scale": [2.5501108169555664, 0.8086793422698975, 2.4078867435455322]
       }
     },
     "e_cloud17": {
       "name": "Cloud bank",
       "order": "b0J",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [-529.278, -79.64, 40.26],
+        "position": [-529.278, -69.679, 40.26],
         "rotation": [0, 192.23622131347656, 0],
-        "scale": [3.289118766784668, 2.2729625701904297, 3.462395429611206]
+        "scale": [2.774265766143799, 1.1731655597686768, 2.9204189777374268]
       }
     },
     "e_cloud18": {
       "name": "Cloud bank",
       "order": "b0K",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [31.417, -77.466, -208.486],
+        "position": [31.417, -68.889, -208.486],
         "rotation": [0, 36.75532150268555, 0],
-        "scale": [3.3659510612487793, 2.218189239501953, 3.04306960105896]
+        "scale": [2.8382925987243652, 1.0770245790481567, 2.5660271644592285]
       }
     },
     "e_cloud19": {
       "name": "Cloud bank",
       "order": "b0L",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [-220.888, -69.244, 369.013],
+        "position": [-220.888, -65.899, 369.013],
         "rotation": [0, 134.95811462402344, 0],
-        "scale": [2.103712558746338, 1.3466874361038208, 2.2709245681762695]
+        "scale": [1.7864271402359009, 1.0204440355300903, 1.9284199476242065]
       }
     },
     "e_cloud2": {
       "name": "Cloud bank",
       "order": "b04",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [-194.346, -68.317, -95.324],
+        "position": [-194.346, -65.562, -95.324],
         "rotation": [0, 358.3520202636719, 0],
-        "scale": [3.9977846145629883, 2.6267523765563965, 4.649899005889893]
+        "scale": [3.3648204803466797, 1.0711559057235718, 3.913686513900757]
       }
     },
     "e_cloud20": {
       "name": "Cloud bank",
       "order": "b0M",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [-430.087, -85.817, -242.794],
+        "position": [-430.087, -71.925, -242.794],
         "rotation": [0, 132.00823974609375, 0],
-        "scale": [4.217368125915527, 2.469407796859741, 4.03212833404541]
+        "scale": [3.547806739807129, 0.8565987944602966, 3.3919761180877686]
       }
     },
     "e_cloud21": {
       "name": "Cloud bank",
       "order": "b0N",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [151.384, -68.47, 74.808],
+        "position": [151.384, -65.618, 74.808],
         "rotation": [0, 176.86610412597656, 0],
-        "scale": [3.8883590698242188, 2.181497812271118, 3.173609495162964]
+        "scale": [3.273632526397705, 0.7830991148948669, 2.6718804836273193]
       }
     },
     "e_cloud22": {
       "name": "Cloud bank",
       "order": "b0O",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [-507.088, -83.08, 236.992],
+        "position": [-507.088, -70.93, 236.992],
         "rotation": [0, 102.9104995727539, 0],
-        "scale": [2.989993095397949, 1.514870524406433, 2.6835570335388184]
+        "scale": [2.524994373321533, 0.6199405193328857, 2.2662148475646973]
       }
     },
     "e_cloud23": {
       "name": "Cloud bank",
       "order": "b0P",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [-122.541, -72.312, -340.002],
+        "position": [-122.541, -67.014, -340.002],
         "rotation": [0, 284.00091552734375, 0],
-        "scale": [3.284284830093384, 2.1591084003448486, 3.950613498687744]
+        "scale": [2.770237445831299, 1.0722179412841797, 3.3322741985321045]
       }
     },
     "e_cloud24": {
       "name": "Cloud bank",
       "order": "b0Q",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [-14.179, -86.433, 359.972],
+        "position": [-14.179, -72.149, 359.972],
         "rotation": [0, 74.81803894042969, 0],
-        "scale": [2.121950149536133, 1.1787564754486084, 2.6742208003997803]
+        "scale": [1.80162513256073, 0.7665187120437622, 2.270526170730591]
       }
     },
     "e_cloud25": {
       "name": "Cloud bank",
       "order": "b0R",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [-578.234, -84.416, -92.196],
+        "position": [-578.234, -71.416, -92.196],
         "rotation": [0, 153.04188537597656, 0],
-        "scale": [3.194305419921875, 1.718637228012085, 2.8040771484375]
+        "scale": [2.6952545642852783, 0.7140947580337524, 2.365992307662964]
       }
     },
     "e_cloud26": {
       "name": "Cloud bank",
       "order": "b0S",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [157.413, -72.636, -140.628],
+        "position": [157.413, -67.133, -140.628],
         "rotation": [0, 145.62051391601562, 0],
-        "scale": [4.084834098815918, 2.0849015712738037, 3.849910259246826]
+        "scale": [3.437361717224121, 0.6312016844749451, 3.2396748065948486]
       }
     },
     "e_cloud27": {
       "name": "Cloud bank",
       "order": "b0T",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [-362.1, -74.447, 402.083],
+        "position": [-362.1, -67.791, 402.083],
         "rotation": [0, 40.7049674987793, 0],
-        "scale": [3.812002658843994, 2.327040433883667, 3.7855947017669678]
+        "scale": [3.2100024223327637, 0.9313527345657349, 3.187764883041382]
       }
     },
     "e_cloud28": {
       "name": "Cloud bank",
       "order": "b0U",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [-345.224, -84.69, -362.805],
+        "position": [-345.224, -71.516, -362.805],
         "rotation": [0, 359.8681640625, 0],
-        "scale": [2.817615032196045, 1.9646947383880615, 2.854525566101074]
+        "scale": [2.381345748901367, 1.1918699741363525, 2.412541151046753]
       }
     },
     "e_cloud29": {
       "name": "Cloud bank",
       "order": "b0V",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [167.862, -86.335, 222.847],
+        "position": [167.862, -72.114, 222.847],
         "rotation": [0, 189.01715087890625, 0],
-        "scale": [4.215463638305664, 2.1334228515625, 5.084864616394043]
+        "scale": [3.54621958732605, 0.6182833909988403, 4.277595043182373]
       }
     },
     "e_cloud3": {
       "name": "Cloud bank",
       "order": "b05",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [-116.774, -82.812, 142.014],
+        "position": [-116.774, -70.833, 142.014],
         "rotation": [0, 5.498741149902344, 0],
-        "scale": [2.9935455322265625, 2.0112414360046387, 3.432288408279419]
+        "scale": [2.527954578399658, 1.1155779361724854, 2.898458957672119]
       }
     },
     "e_cloud30": {
       "name": "Cloud bank",
       "order": "b0W",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [-619.296, -81.98, 136.045],
+        "position": [-619.296, -70.53, 136.045],
         "rotation": [0, 94.91783142089844, 0],
-        "scale": [3.157317638397217, 2.0995934009552, 3.2280664443969727]
+        "scale": [2.66443133354187, 1.0949783325195312, 2.724135637283325]
       }
     },
     "e_cloud31": {
       "name": "Cloud bank",
       "order": "b0X",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [30.379, -80.758, -339.332],
+        "position": [30.379, -70.086, -339.332],
         "rotation": [0, 271.9432373046875, 0],
-        "scale": [2.4528634548187256, 1.695393443107605, 2.305115222930908]
+        "scale": [2.0773861408233643, 1.1735683679580688, 1.9522548913955688]
       }
     },
     "e_cloud32": {
       "name": "Cloud bank",
       "order": "b0Y",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [-130.165, -70.147, 462.662],
+        "position": [-130.165, -66.227, 462.662],
         "rotation": [0, 285.1709899902344, 0],
-        "scale": [2.440814971923828, 1.4723737239837646, 2.9622559547424316]
+        "scale": [2.06734561920166, 0.9096910357475281, 2.5090010166168213]
       }
     },
     "e_cloud33": {
       "name": "Cloud bank",
       "order": "b0Z",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [-560.023, -73.701, -248.04],
+        "position": [-560.023, -67.52, -248.04],
         "rotation": [0, 158.05722045898438, 0],
-        "scale": [2.188418388366699, 1.3546421527862549, 1.8813352584838867]
+        "scale": [1.8570153713226318, 0.9570153951644897, 1.596435308456421]
       }
     },
     "e_cloud34": {
       "name": "Cloud bank",
       "order": "b0a",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [248.98, -79.708, -10.771],
+        "position": [248.98, -69.704, -10.771],
         "rotation": [0, 110.6834487915039, 0],
-        "scale": [3.9406180381774902, 2.4174835681915283, 4.4444169998168945]
+        "scale": [3.3171815872192383, 0.9404349327087402, 3.7412755489349365]
       }
     },
     "e_cloud35": {
       "name": "Cloud bank",
       "order": "b0b",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [-518.908, -71.772, 366.109],
+        "position": [-518.908, -66.818, 366.109],
         "rotation": [0, 210.3968963623047, 0],
-        "scale": [2.8606455326080322, 1.6786600351333618, 3.637910842895508]
+        "scale": [2.4172046184539795, 0.860434889793396, 3.0739827156066895]
       }
     },
     "e_cloud36": {
       "name": "Cloud bank",
       "order": "b0c",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [-202.787, -71.215, -441.767],
+        "position": [-202.787, -66.616, -441.767],
         "rotation": [0, 317.5536804199219, 0],
-        "scale": [2.8405401706695557, 1.9540672302246094, 3.2324771881103516]
+        "scale": [2.4004502296447754, 1.1637629270553589, 2.731663703918457]
       }
     },
     "e_cloud37": {
       "name": "Cloud bank",
       "order": "b0d",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [114.081, -85.459, 378.659],
+        "position": [114.081, -71.795, 378.659],
         "rotation": [0, 348.69488525390625, 0],
-        "scale": [2.983218193054199, 1.6639697551727295, 3.476733922958374]
+        "scale": [2.519348621368408, 0.7733303308486938, 2.936126232147217]
       }
     },
     "e_cloud38": {
       "name": "Cloud bank",
       "order": "b0e",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [-684.306, -79.804, -17.56],
+        "position": [-684.306, -69.739, -17.56],
         "rotation": [0, 148.59783935546875, 0],
-        "scale": [2.714634895324707, 1.7036689519882202, 3.426421642303467]
+        "scale": [2.2955291271209717, 0.9827604293823242, 2.8974246978759766]
       }
     },
     "e_cloud39": {
       "name": "Cloud bank",
       "order": "b0f",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [183.254, -76.624, -267.877],
+        "position": [183.254, -68.583, -267.877],
         "rotation": [0, 88.1226806640625, 0],
-        "scale": [2.6446876525878906, 1.4826433658599854, 2.7481184005737305]
+        "scale": [2.2372398376464844, 0.781835675239563, 2.3247358798980713]
       }
     },
     "e_cloud4": {
       "name": "Cloud bank",
       "order": "b06",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [-367.098, -69.843, -1.81],
+        "position": [-367.098, -66.117, -1.81],
         "rotation": [0, 323.07989501953125, 0],
-        "scale": [4.136800289154053, 2.5789432525634766, 4.928369045257568]
+        "scale": [3.4806668758392334, 0.9702449440956116, 4.146685600280762]
       }
     },
     "e_cloud40": {
       "name": "Cloud bank",
       "order": "b0g",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [-293.416, -75.542, 512.515],
+        "position": [-293.416, -68.189, 512.515],
         "rotation": [0, 203.83795166015625, 0],
-        "scale": [2.486738443374634, 1.5909017324447632, 2.9303557872772217]
+        "scale": [2.1056153774261475, 1.0192630290985107, 2.4812428951263428]
       }
     },
     "e_cloud41": {
       "name": "Cloud bank",
       "order": "b0h",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [-471.214, -83.391, -396.065],
+        "position": [-471.214, -71.043, -396.065],
         "rotation": [0, 266.2302551269531, 0],
-        "scale": [3.4412450790405273, 1.826293706893921, 4.290936470031738]
+        "scale": [2.9010376930236816, 0.6921218037605286, 3.6173441410064697]
       }
     },
     "e_cloud42": {
       "name": "Cloud bank",
       "order": "b0i",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [282.627, -79.75, 160.499],
+        "position": [282.627, -69.719, 160.499],
         "rotation": [0, 220.3012237548828, 0],
-        "scale": [2.8027467727661133, 1.4274955987930298, 3.4811410903930664]
+        "scale": [2.368955612182617, 0.6279606819152832, 2.942352294921875]
       }
     },
     "e_cloud43": {
       "name": "Cloud bank",
       "order": "b0j",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [-660.219, -76.085, 260.436],
+        "position": [-660.219, -68.387, 260.436],
         "rotation": [0, 180.9695587158203, 0],
-        "scale": [2.688523769378662, 1.4333664178848267, 3.0493319034576416]
+        "scale": [2.2737698554992676, 0.6994278430938721, 2.5789167881011963]
       }
     },
     "e_cloud44": {
       "name": "Cloud bank",
       "order": "b0k",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [-25.206, -85.28, -458.321],
+        "position": [-25.206, -71.73, -458.321],
         "rotation": [0, 172.8944854736328, 0],
-        "scale": [4.382531642913818, 3.067718505859375, 3.815948963165283]
+        "scale": [3.6854429244995117, 1.1999634504318237, 3.2089812755584717]
       }
     },
     "e_cloud45": {
       "name": "Cloud bank",
       "order": "b0l",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [-7.784, -87.079, 511.451],
+        "position": [-7.784, -72.384, 511.451],
         "rotation": [0, 90.21560668945312, 0],
-        "scale": [2.369475841522217, 1.3340038061141968, 3.053563356399536]
+        "scale": [2.007896661758423, 0.788986086845398, 2.5875930786132812]
       }
     },
     "e_cloud46": {
       "name": "Cloud bank",
       "order": "b0m",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [-683.049, -78.762, -199.664],
+        "position": [-683.049, -69.36, -199.664],
         "rotation": [0, 217.85122680664062, 0],
-        "scale": [2.7166125774383545, 1.5074536800384521, 2.886838674545288]
+        "scale": [2.2971770763397217, 0.7647058963775635, 2.4411208629608154]
       }
     },
     "e_cloud47": {
       "name": "Cloud bank",
       "order": "b0n",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [305.795, -78.437, -130.663],
+        "position": [305.795, -69.242, -130.663],
         "rotation": [0, 178.23391723632812, 0],
-        "scale": [2.38493013381958, 1.2296937704086304, 2.5077521800994873]
+        "scale": [2.020775318145752, 0.6468299627304077, 2.1248438358306885]
       }
     },
     "e_cloud48": {
       "name": "Cloud bank",
       "order": "b0o",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [-478.194, -69.366, 492.909],
+        "position": [-478.194, -65.943, 492.909],
         "rotation": [0, 81.4264144897461, 0],
-        "scale": [2.863135814666748, 1.8469858169555664, 2.3540101051330566]
+        "scale": [2.4192798137664795, 1.0352758169174194, 1.9890811443328857]
       }
     },
     "e_cloud49": {
       "name": "Cloud bank",
       "order": "b0p",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [-319.654, -67.778, -506.717],
+        "position": [-319.654, -65.366, -506.717],
         "rotation": [0, 101.92172241210938, 0],
-        "scale": [3.1219043731689453, 2.0662972927093506, 3.0841994285583496]
+        "scale": [2.634920358657837, 1.0856122970581055, 2.6030969619750977]
       }
     },
     "e_cloud5": {
       "name": "Cloud bank",
       "order": "b07",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [-51.58, -85.588, -70.786],
+        "position": [-51.58, -71.842, -70.786],
         "rotation": [0, 19.13298225402832, 0],
-        "scale": [2.2657268047332764, 1.4888662099838257, 2.5394396781921387]
+        "scale": [1.9214389324188232, 1.0713756084442139, 2.153559684753418]
       }
     },
     "e_cloud50": {
       "name": "Cloud bank",
       "order": "b0q",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [244.316, -76.812, 346.062],
+        "position": [244.316, -68.651, 346.062],
         "rotation": [0, 101.46577453613281, 0],
-        "scale": [2.1491599082946777, 1.1169105768203735, 2.263742446899414]
+        "scale": [1.8243000507354736, 0.6590890884399414, 1.921562671661377]
       }
     },
     "e_cloud51": {
       "name": "Cloud bank",
       "order": "b0r",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [-757.443, -79.518, 95.701],
+        "position": [-757.443, -69.635, 95.701],
         "rotation": [0, 167.04417419433594, 0],
-        "scale": [4.176168441772461, 2.3928773403167725, 3.4869589805603027]
+        "scale": [3.5134737491607666, 0.8189517259597778, 2.933631420135498]
       }
     },
     "e_cloud52": {
       "name": "Cloud bank",
       "order": "b0s",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [159.215, -67.249, -401.136],
+        "position": [159.215, -65.174, -401.136],
         "rotation": [0, 215.69236755371094, 0],
-        "scale": [2.55412220954895, 1.330727458000183, 2.8484690189361572]
+        "scale": [2.1617684364318848, 0.6630350351333618, 2.4108989238739014]
       }
     },
     "e_cloud53": {
       "name": "Cloud bank",
       "order": "b0t",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [-184.383, -87.663, 593.829],
+        "position": [-184.383, -72.597, 593.829],
         "rotation": [0, 265.7468566894531, 0],
-        "scale": [2.4983839988708496, 1.5607703924179077, 2.39669132232666]
+        "scale": [2.1153202056884766, 0.9741359949111938, 2.029219388961792]
       }
     },
     "e_cloud54": {
       "name": "Cloud bank",
       "order": "b0u",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [-607.016, -78.35, -381.005],
+        "position": [-607.016, -69.21, -381.005],
         "rotation": [0, 359.2913513183594, 0],
-        "scale": [3.5232043266296387, 2.251770257949829, 3.6763954162597656]
+        "scale": [2.969336986541748, 1.0173770189285278, 3.0984456539154053]
       }
     },
     "e_cloud55": {
       "name": "Cloud bank",
       "order": "b0v",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [372.041, -79.601, 56.346],
+        "position": [372.041, -69.665, 56.346],
         "rotation": [0, 33.30556106567383, 0],
-        "scale": [2.96454119682312, 1.547139048576355, 3.069941282272339]
+        "scale": [2.5037841796875, 0.6656443476676941, 2.5928027629852295]
       }
     },
     "e_cloud56": {
       "name": "Cloud bank",
       "order": "b0w",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [-654.529, -69.541, 398.235],
+        "position": [-654.529, -66.007, 398.235],
         "rotation": [0, 187.0505828857422, 0],
-        "scale": [3.97727632522583, 2.0785677433013916, 3.421847343444824]
+        "scale": [3.3477301597595215, 0.6678324937820435, 2.8802177906036377]
       }
     },
     "e_cloud57": {
       "name": "Cloud bank",
       "order": "b0x",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [-123.806, -67.891, -555.691],
+        "position": [-123.806, -65.407, -555.691],
         "rotation": [0, 250.01419067382812, 0],
-        "scale": [2.1843533515930176, 1.4041423797607422, 1.777414083480835]
+        "scale": [1.8536279201507568, 1.0284550189971924, 1.5083019733428955]
       }
     },
     "e_cloud58": {
       "name": "Cloud bank",
       "order": "b0y",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [131.401, -85.747, 515.485],
+        "position": [131.401, -71.9, 515.485],
         "rotation": [0, 284.7864685058594, 0],
-        "scale": [3.155669689178467, 1.7566826343536377, 3.6773290634155273]
+        "scale": [2.663058042526245, 0.7700251936912537, 3.1032843589782715]
       }
     },
     "e_cloud59": {
       "name": "Cloud bank",
       "order": "b0z",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [-788.158, -88.57, -107.304],
+        "position": [-788.158, -72.927, -107.304],
         "rotation": [0, 211.5175018310547, 0],
-        "scale": [2.432281970977783, 1.646369218826294, 2.550936222076416]
+        "scale": [2.060235023498535, 1.1306477785110474, 2.1607396602630615]
       }
     },
     "e_cloud6": {
       "name": "Cloud bank",
       "order": "b08",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [-256.407, -85.345, 217.829],
+        "position": [-256.407, -71.754, 217.829],
         "rotation": [0, 46.86289596557617, 0],
-        "scale": [2.7665278911590576, 1.921912670135498, 2.5109400749206543]
+        "scale": [2.338773250579834, 1.1841062307357788, 2.122703790664673]
       }
     },
     "e_cloud60": {
       "name": "Cloud bank",
       "order": "b10",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [319.861, -88.348, -270.568],
+        "position": [319.861, -72.846, -270.568],
         "rotation": [0, 139.96246337890625, 0],
-        "scale": [3.8637492656707764, 2.0115137100219727, 4.043037414550781]
+        "scale": [3.253124237060547, 0.6618356704711914, 3.4040780067443848]
       }
     },
     "e_cloud61": {
       "name": "Cloud bank",
       "order": "b11",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [-392.763, -68.33, 605.466],
+        "position": [-392.763, -65.567, 605.466],
         "rotation": [0, 242.32363891601562, 0],
-        "scale": [2.9736599922180176, 2.0361597537994385, 3.3593714237213135]
+        "scale": [2.511383295059204, 1.1541955471038818, 2.8371331691741943]
       }
     },
     "e_cloud62": {
       "name": "Cloud bank",
       "order": "b12",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [-459.561, -85.724, -531.07],
+        "position": [-459.561, -71.892, -531.07],
         "rotation": [0, 225.54176330566406, 0],
-        "scale": [2.032776355743408, 1.1135060787200928, 2.271197557449341]
+        "scale": [1.727313756942749, 0.7433280348777771, 1.9299077987670898]
       }
     },
     "e_cloud63": {
       "name": "Cloud bank",
       "order": "b13",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [363.955, -76.593, 268.245],
+        "position": [363.955, -68.571, 268.245],
         "rotation": [0, 228.21148681640625, 0],
-        "scale": [4.297825813293457, 2.844356060028076, 3.895390272140503]
+        "scale": [3.6148548126220703, 1.0854383707046509, 3.2763707637786865]
       }
     },
     "e_cloud64": {
       "name": "Cloud bank",
       "order": "b14",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [-792.277, -74.979, 234.842],
+        "position": [-792.277, -67.984, 234.842],
         "rotation": [0, 351.4085693359375, 0],
-        "scale": [3.8238682746887207, 2.060769557952881, 4.964493751525879]
+        "scale": [3.2198901176452637, 0.7167681455612183, 4.180354118347168]
       }
     },
     "e_cloud65": {
       "name": "Cloud bank",
       "order": "b15",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [89.684, -71.9, -527.417],
+        "position": [89.684, -66.865, -527.417],
         "rotation": [0, 235.1000213623047, 0],
-        "scale": [3.318342924118042, 2.2162845134735107, 2.660066843032837]
+        "scale": [2.798619270324707, 1.1036667823791504, 2.243443489074707]
       }
     },
     "e_cloud66": {
       "name": "Cloud bank",
       "order": "b16",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [-46.813, -68.078, 639.275],
+        "position": [-46.813, -65.475, 639.275],
         "rotation": [0, 356.27008056640625, 0],
-        "scale": [3.2769603729248047, 2.029985189437866, 4.224921226501465]
+        "scale": [2.7641336917877197, 0.9584161639213562, 3.563743829727173]
       }
     },
     "e_cloud67": {
       "name": "Cloud bank",
       "order": "b17",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [-739.42, -72.347, -320.414],
+        "position": [-739.42, -67.027, -320.414],
         "rotation": [0, 116.90729522705078, 0],
-        "scale": [2.75393009185791, 1.8894435167312622, 2.3127171993255615]
+        "scale": [2.328274965286255, 1.1582696437835693, 1.9552571773529053]
       }
     },
     "e_cloud68": {
       "name": "Cloud bank",
       "order": "b18",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [428.16, -78.839, -78.811],
+        "position": [428.16, -69.388, -78.811],
         "rotation": [0, 342.8720703125, 0],
-        "scale": [2.4253971576690674, 1.2822684049606323, 2.6359055042266846]
+        "scale": [2.054497718811035, 0.6860517263412476, 2.232814311981201]
       }
     },
     "e_cloud69": {
       "name": "Cloud bank",
       "order": "b19",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [-603.494, -87.218, 536.179],
+        "position": [-603.494, -72.435, 536.179],
         "rotation": [0, 223.77294921875, 0],
-        "scale": [3.359102725982666, 2.160072088241577, 3.987483263015747]
+        "scale": [2.8325858116149902, 1.0291508436203003, 3.36247181892395]
       }
     },
     "e_cloud7": {
       "name": "Cloud bank",
       "order": "b09",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [-302.977, -80.816, -161.666],
+        "position": [-302.977, -70.107, -161.666],
         "rotation": [0, 217.98855590820312, 0],
-        "scale": [3.247809648513794, 1.761112093925476, 3.936844825744629]
+        "scale": [2.7398414611816406, 0.7267383933067322, 3.3211092948913574]
       }
     },
     "e_cloud70": {
       "name": "Cloud bank",
       "order": "b1A",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [-255.688, -71.401, -622.466],
+        "position": [-255.688, -66.683, -622.466],
         "rotation": [0, 246.8665771484375, 0],
-        "scale": [3.7369651794433594, 2.6126596927642822, 3.0353612899780273]
+        "scale": [3.1474709510803223, 1.197418212890625, 2.5565426349639893]
       }
     },
     "e_cloud71": {
       "name": "Cloud bank",
       "order": "b1B",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [274.228, -86.796, 474.586],
+        "position": [274.228, -72.281, 474.586],
         "rotation": [0, 215.01670837402344, 0],
-        "scale": [4.117610454559326, 2.6304891109466553, 3.549055576324463]
+        "scale": [3.4646754264831543, 1.0165164470672607, 2.986276865005493]
       }
     },
     "e_cloud72": {
       "name": "Cloud bank",
       "order": "b1C",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [-865.497, -83.188, 20.42],
+        "position": [-865.497, -70.969, 20.42],
         "rotation": [0, 120.62074279785156, 0],
-        "scale": [2.721336841583252, 1.5627620220184326, 3.154836416244507]
+        "scale": [2.301114082336426, 0.822787880897522, 2.6676735877990723]
       }
     },
     "e_cloud73": {
       "name": "Cloud bank",
       "order": "b1D",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [289.633, -89.093, -417.554],
+        "position": [289.633, -73.117, -417.554],
         "rotation": [0, 248.1959228515625, 0],
-        "scale": [3.947319984436035, 2.4310154914855957, 3.6728415489196777]
+        "scale": [3.3227665424346924, 0.947594404220581, 3.091716766357422]
       }
     },
     "e_cloud74": {
       "name": "Cloud bank",
       "order": "b1E",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [-270.092, -86.035, 693.194],
+        "position": [-270.092, -72.005, 693.194],
         "rotation": [0, 205.1947784423828, 0],
-        "scale": [3.1505789756774902, 2.1246397495269775, 3.473881721496582]
+        "scale": [2.658815860748291, 1.1230945587158203, 2.9316554069519043]
       }
     },
     "e_cloud75": {
       "name": "Cloud bank",
       "order": "b1F",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [-609.92, -79.73, -511.993],
+        "position": [-609.92, -69.712, -511.993],
         "rotation": [0, 137.54544067382812, 0],
-        "scale": [3.698988437652588, 1.9111863374710083, 3.57662034034729]
+        "scale": [3.115823745727539, 0.6500343680381775, 3.0127475261688232]
       }
     },
     "e_cloud76": {
       "name": "Cloud bank",
       "order": "b1G",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [461.814, -79.093, 151.522],
+        "position": [461.814, -69.481, 151.522],
         "rotation": [0, 237.50057983398438, 0],
-        "scale": [4.35012149810791, 2.307406425476074, 3.7671515941619873]
+        "scale": [3.6584343910217285, 0.6912703514099121, 3.168159008026123]
       }
     },
     "e_cloud77": {
       "name": "Cloud bank",
       "order": "b1H",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [-784.773, -87.918, 387.731],
+        "position": [-784.773, -72.69, 387.731],
         "rotation": [0, 4.498970031738281, 0],
-        "scale": [4.181368827819824, 2.854745388031006, 4.695753574371338]
+        "scale": [3.5178074836730957, 1.1481895446777344, 3.950562000274658]
       }
     },
     "e_cloud78": {
       "name": "Cloud bank",
       "order": "b1I",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [-20.202, -87.788, -635.065],
+        "position": [-20.202, -72.642, -635.065],
         "rotation": [0, 151.11924743652344, 0],
-        "scale": [4.1911468505859375, 2.819007396697998, 3.5464706420898438]
+        "scale": [3.5259556770324707, 1.1178302764892578, 2.983598232269287]
       }
     },
     "e_cloud79": {
       "name": "Cloud bank",
       "order": "b1J",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [107.708, -68.768, 643.694],
+        "position": [107.708, -65.726, 643.694],
         "rotation": [0, 358.0608825683594, 0],
-        "scale": [3.3116044998168945, 1.9664114713668823, 2.890775442123413]
+        "scale": [2.793003797531128, 0.8813824653625488, 2.438076972961426]
       }
     },
     "e_cloud8": {
       "name": "Cloud bank",
       "order": "b0A",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [7.355, -76.903, 104.427],
+        "position": [7.355, -68.684, 104.427],
         "rotation": [0, 245.2790069580078, 0],
-        "scale": [2.0462896823883057, 1.3268581628799438, 2.620537281036377]
+        "scale": [1.7385748624801636, 1.0452643632888794, 2.226468801498413]
       }
     },
     "e_cloud80": {
       "name": "Cloud bank",
       "order": "b1K",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [-856.43, -74.539, -218.24],
+        "position": [-856.43, -67.824, -218.24],
         "rotation": [0, 31.338977813720703, 0],
-        "scale": [2.505781650543213, 1.4024080038070679, 3.0644829273223877]
+        "scale": [2.1214847564697266, 0.7790066599845886, 2.594501256942749]
       }
     },
     "e_cloud81": {
       "name": "Cloud bank",
       "order": "b1L",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [444.778, -68.609, -234.03],
+        "position": [444.778, -65.668, -234.03],
         "rotation": [0, 57.51430892944336, 0],
-        "scale": [2.746532440185547, 1.669942855834961, 3.2868282794952393]
+        "scale": [2.322110414505005, 0.9240558743476868, 2.778914213180542]
       }
     },
     "e_cloud82": {
       "name": "Cloud bank",
       "order": "b1M",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [-509.874, -72.767, 662.042],
+        "position": [-509.874, -67.18, 662.042],
         "rotation": [0, 355.0285949707031, 0],
-        "scale": [3.632007360458374, 2.1655099391937256, 4.251612663269043]
+        "scale": [3.0600061416625977, 0.8886885046958923, 3.5820305347442627]
       }
     },
     "e_cloud83": {
       "name": "Cloud bank",
       "order": "b1N",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [-410.614, -67.413, -651.487],
+        "position": [-410.614, -65.233, -651.487],
         "rotation": [0, 281.9848937988281, 0],
-        "scale": [3.8612589836120605, 2.6713833808898926, 3.598863124847412]
+        "scale": [3.251049041748047, 1.175527572631836, 3.030120611190796]
       }
     },
     "e_cloud84": {
       "name": "Cloud bank",
       "order": "b1O",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [408.346, -81.848, 390.35],
+        "position": [408.346, -70.482, 390.35],
         "rotation": [0, 160.1776123046875, 0],
-        "scale": [2.084669351577759, 1.0719115734100342, 2.3215267658233643]
+        "scale": [1.7705577611923218, 0.64256352186203, 1.9717262983322144]
       }
     },
     "e_cloud85": {
       "name": "Cloud bank",
       "order": "b1P",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [-907.038, -68.652, 174.036],
+        "position": [-907.038, -65.684, 174.036],
         "rotation": [0, 1.323872685432434, 0],
-        "scale": [3.9863219261169434, 2.3722007274627686, 3.6247944831848145]
+        "scale": [3.3552682399749756, 0.8852552175521851, 3.0509722232818604]
       }
     },
     "e_cloud86": {
       "name": "Cloud bank",
       "order": "b1Q",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [215.559, -79.753, -559.251],
+        "position": [215.559, -69.72, -559.251],
         "rotation": [0, 201.45936584472656, 0],
-        "scale": [4.289182662963867, 2.335466146469116, 5.052412986755371]
+        "scale": [3.607652425765991, 0.7335042953491211, 4.249609470367432]
       }
     },
     "e_cloud87": {
       "name": "Cloud bank",
       "order": "b1R",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [-118.825, -76.959, 747.282],
+        "position": [-118.825, -68.704, 747.282],
         "rotation": [0, 259.70977783203125, 0],
-        "scale": [4.358434677124023, 2.4139151573181152, 4.680055141448975]
+        "scale": [3.6653621196746826, 0.761547327041626, 3.9358391761779785]
       }
     },
     "e_cloud88": {
       "name": "Cloud bank",
       "order": "b1S",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [-758.44, -75.629, -448.811],
+        "position": [-758.44, -68.221, -448.811],
         "rotation": [0, 160.172119140625, 0],
-        "scale": [2.2774455547332764, 1.2376189231872559, 2.4886136054992676]
+        "scale": [1.9312047958374023, 0.7302724123001099, 2.1102688312530518]
       }
     },
     "e_cloud89": {
       "name": "Cloud bank",
       "order": "b1T",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [528.385, -85.496, 3.662],
+        "position": [528.385, -71.809, 3.662],
         "rotation": [0, 21.857633590698242, 0],
-        "scale": [2.7693843841552734, 1.6671875715255737, 2.41574764251709]
+        "scale": [2.341153621673584, 0.9060197472572327, 2.0421998500823975]
       }
     },
     "e_cloud9": {
       "name": "Cloud bank",
       "order": "b0B",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [-426.059, -70.735, 118.073],
+        "position": [-426.059, -66.441, 118.073],
         "rotation": [0, 325.46942138671875, 0],
-        "scale": [2.563753843307495, 1.4326155185699463, 3.3299262523651123]
+        "scale": [2.169794797897339, 0.7763882279396057, 2.8182334899902344]
       }
     },
     "e_cloud90": {
       "name": "Cloud bank",
       "order": "b1U",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [-733.156, -73.904, 542.246],
+        "position": [-733.156, -67.594, 542.246],
         "rotation": [0, 106.23941040039062, 0],
-        "scale": [2.398113965988159, 1.3248779773712158, 2.56386137008667]
+        "scale": [2.031761646270752, 0.7573999166488647, 2.1721882820129395]
       }
     },
     "e_cloud91": {
       "name": "Cloud bank",
       "order": "b1V",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [-163.589, -73.321, -713.963],
+        "position": [-163.589, -67.381, -713.963],
         "rotation": [0, 261.5335388183594, 0],
-        "scale": [2.8159303665161133, 1.7912083864212036, 2.2863240242004395]
+        "scale": [2.379941940307617, 1.0082948207855225, 1.9323341846466064]
       }
     },
     "e_cloud92": {
       "name": "Cloud bank",
       "order": "b1W",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [267.319, -69.043, 604.252],
+        "position": [267.319, -65.826, 604.252],
         "rotation": [0, 163.49005126953125, 0],
-        "scale": [2.247415781021118, 1.3697764873504639, 2.520030975341797]
+        "scale": [1.9061799049377441, 0.9284688234329224, 2.1374027729034424]
       }
     },
     "e_cloud93": {
       "name": "Cloud bank",
       "order": "b1X",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
       "Transform": {
-        "position": [-947.401, -70.835, -80.388],
+        "position": [-947.401, -66.477, -80.388],
         "rotation": [0, 338.6092834472656, 0],
-        "scale": [3.442124128341675, 2.3523519039154053, 3.4760279655456543]
+        "scale": [2.9017701148986816, 1.1502037048339844, 2.930351495742798]
       }
     },
     "e_cloud94": {
       "name": "Cloud bank",
       "order": "b1Y",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
       "Transform": {
-        "position": [418.05, -84.296, -397.765],
+        "position": [418.05, -71.372, -397.765],
         "rotation": [0, 256.194091796875, 0],
-        "scale": [3.3034744262695312, 1.987836241722107, 3.822800636291504]
+        "scale": [2.786228656768799, 0.9052231907844543, 3.224240779876709]
       }
     },
     "e_cloud95": {
       "name": "Cloud bank",
       "order": "b1Z",
       "MeshRenderer": {
-        "model": "@kit/glint_cloud.gltf#as_kitglintcloud"
+        "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
       "Transform": {
-        "position": [-378.623, -82.941, 764.733],
+        "position": [-378.623, -70.88, 764.733],
         "rotation": [0, 108.49164581298828, 0],
-        "scale": [3.438352108001709, 1.7263219356536865, 3.490398406982422]
+        "scale": [2.8986268043518066, 0.6062348484992981, 2.9425032138824463]
       }
     },
     "e_course": {
@@ -1338,8 +1338,8 @@
         "sky": [0.04, 0.17, 0.62, 1],
         "horizon": [0.62, 0.8, 1, 1],
         "skyFalloff": 5.5,
-        "glow": [1, 0.56, 0.3, 1],
-        "glowFalloff": 22,
+        "glow": [0.5, 0.3, 0.2, 1],
+        "glowFalloff": 34,
         "ground": [0.72, 0.84, 1, 1],
         "intensity": 7000
       },
@@ -2228,7 +2228,7 @@
       "order": "a1",
       "Light": {
         "kind": "directional",
-        "color": [1, 0.84, 0.64, 1],
+        "color": [1, 0.88, 0.72, 1],
         "intensity": 95000
       },
       "Transform": {

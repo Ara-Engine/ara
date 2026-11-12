@@ -5,7 +5,9 @@
 //! needs, so each is built from plain elements here:
 //! - an edge: every HUD text is two `text` nodes (a white twin offset behind a navy one), each
 //!   with the same binding, since there is no `text-shadow` or stroke;
-//! - zero-padded clock digits: a `labels` map per field, since there is no number format.
+//! - clock digits: the running clock is one fixed-width cell per digit (the font's figures are
+//!   not tabular), each bound to its own field; the other times use a `labels` map per field
+//!   for zero padding, since there is no number format.
 use super::sounds;
 use anyhow::Result;
 use serde_json::{Value, json};
@@ -54,6 +56,16 @@ fn outline(id: &str, class: &str, text: &str) -> String {
     )
 }
 
+/// One clock digit in a fixed-width cell, so the time does not shift as digits change (the
+/// font's figures are not tabular).
+fn digit(id: &str, class: &str, text: &str) -> String {
+    let cell = if class == "tm" { "dg" } else { "dgs" };
+    format!(
+        r#"<panel id="{id}-cell" class="{cell}">{}</panel>"#,
+        outline(id, class, text)
+    )
+}
+
 fn key(id: &str, label: &str, wide: bool) -> String {
     let class = if wide { "key keywide" } else { "key" };
     format!(
@@ -79,6 +91,13 @@ fn markup(medals: [u32; 3]) -> String {
             r#"<panel id="split-{n}" class="split row"><image id="split-{n}-icon" class="si" src="flag"/><text class="st" id="split-{n}-label" text="GATE {n}"/><panel id="split-{n}-time" class="row"><text class="st" id="s{n}-min" text="0:"/><text class="st" id="s{n}-sec" text="00."/><text class="st" id="s{n}-cs" text="00"/></panel></panel>"#
         )
     };
+    // One medal's time on the results; `tier-<id>-mark` shows under the one that was earned.
+    let tier = |id: &str, seconds: u32| {
+        format!(
+            r#"<panel id="tier-{id}" class="tier"><panel id="tier-{id}-row" class="row tierrow"><image id="tier-{id}-icon" class="ti" src="medal_{id}"/><text id="tier-{id}-time" class="tt" text="{}"/></panel><panel id="tier-{id}-mark" class="tiermark"/></panel>"#,
+            clock(seconds)
+        )
+    };
     let shades = |screen: &str| -> String {
         (1..=4)
             .map(|n| format!(r#"<panel id="{screen}-shade-{n}" class="shade s{n}"/>"#))
@@ -96,11 +115,18 @@ fn markup(medals: [u32; 3]) -> String {
         r#"<panel id="hud">"#.to_owned(),
         // The clock: the course name, the time, the next medal's time, the best time.
         format!(
-            r#"<panel id="clock">{}<panel id="time" class="row">{}{}{}</panel><panel id="target" class="row">{}</panel><panel id="best" class="row">{}{}{}{}</panel></panel>"#,
+            r#"<panel id="clock">{}<panel id="time" class="row">{}</panel><panel id="target" class="row">{}</panel><panel id="best" class="row">{}{}{}{}</panel></panel>"#,
             outline("tag", "tag", "SKYWARD"),
-            outline("t-min", "tm", "0:"),
-            outline("t-sec", "tm", "00."),
-            outline("t-cs", "tc", "00"),
+            [
+                digit("t-min", "tm", "0"),
+                outline("t-colon", "tm", ":"),
+                digit("t-s1", "tm", "0"),
+                digit("t-s2", "tm", "0"),
+                outline("t-dot", "tm", "."),
+                digit("t-c1", "tc", "0"),
+                digit("t-c2", "tc", "0"),
+            ]
+            .concat(),
             outline("goal-time", "tg", "GOLD"),
             outline("best-label", "tb", "BEST"),
             outline("b-min", "tb", "0:"),
@@ -127,9 +153,13 @@ fn markup(medals: [u32; 3]) -> String {
             outline("key-retry", "keylabel", "RETRY"),
         ),
         r#"<panel id="fade-full" class="fade full"/><panel id="fade-half" class="fade half"/><panel id="fade-light" class="fade light"/>"#.to_owned(),
-        // The results: the medal, the time, the splits, what to press.
+        // The results: the medal and the time are the headline; under them the three medal
+        // times with the earned one marked, the splits, and two equal actions.
         format!(
-            r#"<panel id="win" class="scrim"><panel id="win-content"><panel id="medal-box"><image class="wm" id="medal-gold" src="medal_gold"/><image class="wm" id="medal-silver" src="medal_silver"/><image class="wm" id="medal-bronze" src="medal_bronze"/></panel><text id="win-medal" text="GOLD"/><text id="win-title" text="COURSE CLEAR"/><panel id="win-time" class="row"><text id="w-min" text="0:"/><text id="w-sec" text="00."/><text id="w-cs" text="00"/></panel><panel id="splits">{}{}{}<panel id="split-orbs" class="split row"><image id="split-orbs-icon" class="si" src="orb"/><text class="st" id="orb-label" text="ORBS"/><text class="st" id="win-orbs" text="0 / 0"/></panel><panel id="split-falls" class="split row"><image id="split-falls-icon" class="si" src="fall"/><text class="st" id="fall-label" text="FALLS"/><text class="st" id="win-falls" text="0"/></panel></panel><panel id="again" class="row">{}<text id="again-label" class="againlabel" text="ROLL AGAIN"/><button id="win-leave" action="leave" text="TITLE"/></panel></panel></panel>"#,
+            r#"<panel id="win" class="scrim"><panel id="win-content"><panel id="medal-box"><image class="wm" id="medal-gold" src="medal_gold"/><image class="wm" id="medal-silver" src="medal_silver"/><image class="wm" id="medal-bronze" src="medal_bronze"/></panel><text id="win-medal" text="GOLD"/><panel id="win-time" class="row"><text id="w-min" text="0:"/><text id="w-sec" text="00."/><text id="w-cs" text="00"/></panel><text id="win-title" text="COURSE CLEAR"/><panel id="tiers" class="row">{}{}{}</panel><panel id="splits">{}{}{}<panel id="split-orbs" class="split row"><image id="split-orbs-icon" class="si" src="orb"/><text class="st" id="orb-label" text="ORBS"/><text class="st" id="win-orbs" text="0 / 0"/></panel><panel id="split-falls" class="split row"><image id="split-falls-icon" class="si" src="fall"/><text class="st" id="fall-label" text="FALLS"/><text class="st" id="win-falls" text="0"/></panel></panel><panel id="again" class="row"><panel id="again-roll" class="action row">{}<text id="again-label" class="actionlabel" text="ROLL AGAIN"/></panel><button id="win-leave" action="leave" text="TITLE"/></panel></panel></panel>"#,
+            tier("gold", medals[0]),
+            tier("silver", medals[1]),
+            tier("bronze", medals[2]),
             split(1),
             split(2),
             split(3),
@@ -168,9 +198,11 @@ pub fn write(dir: &Path, orbs: usize, gates: usize, medals: [u32; 3]) -> Result<
         "0": "NO MEDAL",
     });
     for binding in [
-        text("t-min", "min", "{value}:"),
-        padded("t-sec", "sec", 60, "."),
-        padded("t-cs", "cs", 100, ""),
+        text("t-min", "min", "{value}"),
+        text("t-s1", "secTens", "{value}"),
+        text("t-s2", "secOnes", "{value}"),
+        text("t-c1", "csTens", "{value}"),
+        text("t-c2", "csOnes", "{value}"),
         target,
         text("b-min", "bestMin", "{value}:"),
         padded("b-sec", "bestSec", 60, "."),
@@ -195,6 +227,9 @@ pub fn write(dir: &Path, orbs: usize, gates: usize, medals: [u32; 3]) -> Result<
         shown("medal-gold", "isGold"),
         shown("medal-silver", "isSilver"),
         shown("medal-bronze", "isBronze"),
+        shown("tier-gold-mark", "isGold"),
+        shown("tier-silver-mark", "isSilver"),
+        shown("tier-bronze-mark", "isBronze"),
         medal,
         text("w-min", "min", "{value}:"),
         padded("w-sec", "sec", 60, "."),

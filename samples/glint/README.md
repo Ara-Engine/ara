@@ -124,18 +124,26 @@ pins, so treat them as relative; the Mac GPU thread measures the branch head sep
 
 | View | GPU ms | Shading | Indirect cache |
 |---|---|---|---|
-| Start (follow camera) | 50.0 | 24.7 | 18.3 |
-| Overview | 36.0 | 13.6 | 18.0 |
-| Turn | 45.8 | 20.7 | 19.9 |
-| Sliders | 47.9 | 21.1 | 21.1 |
-| Cannon | 38.0 | 15.4 | 18.1 |
-| Goal | 42.8 | 19.2 | 18.4 |
+| Start (follow camera) | 32.2 | 23.6 | 1.6 |
+| Overview | 19.3 | 13.4 | 1.6 |
+| Turn | 27.6 | 20.9 | 1.7 |
+| Sliders | 28.0 | 20.7 | 1.7 |
+| Cannon | 20.3 | 14.4 | 1.4 |
+| Goal | 25.0 | 18.4 | 1.5 |
 
-What moved it since the empty-sky round (start 34 ms, mid-course 13.5, goal 10): the world.
-With a cloud deck, islands and pylons, nearly every pixel now lands on geometry, and the
-indirect cache costs about 18 ms in every view where it cost almost nothing over open sky.
+What moved it, round by round (same views, same binary):
+
+- Empty sky (round 1): start 34 ms, mid-course 13.5, goal 10.
+- A world of sphere-cluster clouds and thin poles (rounds 2 and 3): 36 to 50 ms; the indirect
+  cache was about 18 ms in every view.
+- Clouds as one closed mesh each and fewer, thicker pylons (this round): the table above; the
+  indirect cache is about 1.6 ms again. Two things changed at once (the clouds went from 21
+  intersecting spheres to one 7,700-triangle surface; the pylons from about 30 to about 20), so
+  which of them the cache was paying for is not isolated.
+
 Glossy surface on screen is small by design (the inlay, the pad discs, the ball, the goal's
-floor); the start view has the most, a 6 m polished disc under the camera.
+floor); the start view has the most, a 6 m polished disc under the camera, and it is the
+dearest view.
 The simulation with scripts is about 0.5 ms a tick.
 
 ## Files

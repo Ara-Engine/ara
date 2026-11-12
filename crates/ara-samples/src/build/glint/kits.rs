@@ -287,48 +287,121 @@ pub fn course(root: &Path, lock: &Lock, c: &Course) -> Result<String> {
     k.write(root, lock, "glint_course")
 }
 
-/// What holds the course up: a pylon under every pad and slim piers under the decks, all
-/// running down into the cloud.
-pub fn supports(root: &Path, lock: &Lock, c: &Course) -> Result<String> {
+/// A tapered pylon hanging down from `top`: `radius` at the top, wider toward the cloud, with
+/// a navy collar and a lit band under its head.
+fn pylon(k: &mut Kit, top: Vec3, radius: f32) {
     const PAINT: usize = 0;
     const CORAL: usize = 1;
     const BAND: usize = 2;
+    let base = Mat4::from_translation(top - Vec3::Y * DEPTH);
+    k.frustum(PAINT, radius * 2.2, radius, DEPTH, 28, base);
+    column(k, CORAL, top - Vec3::Y * 4.4, radius * 1.12, 0.7, 28);
+    column(k, BAND, top - Vec3::Y * 4.8, radius * 1.14, 0.16, 28);
+}
+
+/// What holds the course up, all of it running down into the cloud: a pylon with a flared
+/// head under every pad, one pier with a bracket under each long deck and two under the banked
+/// turn, and a mast under every ring (the beam rests in its two rings on cradles).
+pub fn supports(root: &Path, lock: &Lock, c: &Course) -> Result<String> {
+    const PAINT: usize = 0;
     const NAVY: usize = 3;
     let mut k = Kit::new(vec![paint(), coral(), cool("pylon band"), navy()]);
     let v = Vec3::new;
+    let banks: Vec<usize> = (0..c.pieces.len())
+        .filter(|i| c.pieces[*i].kind == Kind::Bank)
+        .collect();
     for (index, p) in c.pieces.iter().enumerate() {
         let h = p.half;
         let under = p.center - Vec3::Y * h.y;
-        if p.kind == Kind::Pad {
-            let r = (h.x.min(h.z) * 0.36).clamp(1.3, 4.2);
-            // A flared capital, the shaft, a coral collar and a lit band below it.
-            column(&mut k, PAINT, under - v(0.0, 0.6, 0.0), r * 2.0, 0.6, 32);
-            column(&mut k, NAVY, under - v(0.0, 1.5, 0.0), r * 1.45, 0.9, 32);
-            column(
-                &mut k,
-                PAINT,
-                under - v(0.0, DEPTH, 0.0),
-                r,
-                DEPTH - 1.5,
-                28,
-            );
-            column(&mut k, CORAL, under - v(0.0, 5.2, 0.0), r * 1.06, 0.7, 28);
-            column(&mut k, BAND, under - v(0.0, 5.6, 0.0), r * 1.07, 0.16, 28);
+        match p.kind {
+            Kind::Pad => {
+                // A flared head: two steps out to the pad, then the shaft.
+                let r = (h.x.min(h.z) * 0.4).clamp(1.6, 4.6);
+                k.frustum(
+                    PAINT,
+                    r * 1.25,
+                    r * 2.3,
+                    1.0,
+                    36,
+                    Mat4::from_translation(under - v(0.0, 1.0, 0.0)),
+                );
+                k.frustum(
+                    NAVY,
+                    r,
+                    r * 1.25,
+                    0.9,
+                    36,
+                    Mat4::from_translation(under - v(0.0, 1.9, 0.0)),
+                );
+                pylon(&mut k, under - v(0.0, 1.9, 0.0), r);
+            }
+            Kind::Beam => {}
+            _ => {
+                // One pier under a long deck, the kicker's run-up and the detour's middle;
+                // two under the banked turn.
+                let long =
+                    p.kind == Kind::Deck && (h.z >= 14.0 || matches!(p.name, "Run-up" | "Detour"));
+                let third = banks.len() / 3;
+                let bank = p.kind == Kind::Bank
+                    && (index == banks[third] || index == banks[banks.len() - 1 - third]);
+                if !long && !bank {
+                    continue;
+                }
+                let top = p.center + p.rot * v(0.0, -h.y - 0.75, 0.0);
+                // A bracket across the deck's underside, then the head and the shaft.
+                oriented(
+                    &mut k,
+                    NAVY,
+                    top + v(0.0, 0.2, 0.0),
+                    v(h.x * 0.8, 0.22, 0.9),
+                    Quat::from_rotation_y(p.rot.to_euler(glam::EulerRot::YXZ).0),
+                );
+                k.frustum(
+                    PAINT,
+                    0.9,
+                    1.7,
+                    0.9,
+                    28,
+                    Mat4::from_translation(top - v(0.0, 0.9, 0.0)),
+                );
+                pylon(&mut k, top - v(0.0, 0.9, 0.0), 0.9);
+            }
+        }
+    }
+    for r in &c.rings {
+        // Rings over the route stand on masts; the two on the cannon's arc float free.
+        if !c
+            .pieces
+            .iter()
+            .any(|p| (p.center - r.at).length() < p.half.z + 8.0)
+        {
             continue;
         }
-        // Decks and the beam: piers at two points; the banked turn: one under every third segment.
-        let spots: &[f32] = match p.kind {
-            Kind::Bank if index % 3 == 0 => &[0.0],
-            Kind::Bank => &[],
-            _ if h.z > 8.0 => &[-0.62, 0.62],
-            _ => &[0.0],
-        };
-        for along in spots {
-            let top = p.center + p.rot * v(0.0, -h.y - 0.7, along * h.z);
-            let r = if p.kind == Kind::Beam { 0.3 } else { 0.5 };
-            column(&mut k, NAVY, top - v(0.0, 0.5, 0.0), r * 1.7, 0.5, 20);
-            column(&mut k, PAINT, top - v(0.0, DEPTH, 0.0), r, DEPTH - 0.5, 16);
-            column(&mut k, CORAL, top - v(0.0, 3.4, 0.0), r * 1.08, 0.4, 16);
+        // The mast meets the ring at its lowest point; where the ring's bottom is under a
+        // piece (the beam), a cradle joins the two.
+        let foot = r.at - Vec3::Y * (r.radius * 1.03);
+        k.frustum(
+            NAVY,
+            0.8,
+            1.4,
+            0.8,
+            24,
+            Mat4::from_translation(foot - v(0.0, 0.8, 0.0)),
+        );
+        pylon(&mut k, foot - v(0.0, 0.8, 0.0), 0.8);
+        if let Some(beam) = c
+            .pieces
+            .iter()
+            .find(|p| p.kind == Kind::Beam && (p.center - r.at).length() < p.half.z)
+        {
+            let gap = (beam.center.y - beam.half.y) - (r.at.y - r.radius);
+            oriented(
+                &mut k,
+                PAINT,
+                foot + v(0.0, gap * 0.5, 0.0),
+                v(0.3, gap * 0.5, 0.5),
+                r.rot,
+            );
         }
     }
     k.write(root, lock, "glint_supports")
@@ -742,28 +815,58 @@ pub fn goal(root: &Path, lock: &Lock) -> Result<String> {
     k.write(root, lock, "glint_goal")
 }
 
-/// A cloud bank: one soft mound about 50 m across made of large, heavily overlapping matte
-/// white spheres, so only gentle billows stand out (the scene scales and flattens it).
-pub fn cloud(root: &Path, lock: &Lock) -> Result<String> {
-    let mut k = Kit::new(vec![Material::flat("cloud", [0.95, 0.96, 0.98], 1.0, 0.0)]);
-    k.sphere(0, Vec3::ZERO, 13.0, 20, Vec2::ONE);
-    for (count, radius, size, height) in [
-        (6u32, 9.0f32, 9.5f32, -1.0f32),
-        (8, 16.5, 7.5, -3.0),
-        (2, 3.5, 8.5, 6.0),
-    ] {
-        for i in 0..count {
-            let a = (i as f32 + 0.37 * count as f32) / count as f32 * TAU;
-            let wobble = (i as f32 * 2.7 + radius).sin();
-            let at = Vec3::new(
-                a.cos() * (radius + wobble),
-                height + wobble * 0.6,
-                a.sin() * (radius - wobble),
+/// A cloud bank: one smooth lump about 60 m across and 22 m tall, flat underneath, its top
+/// rolling in a few broad billows (`seed` moves them, so the banks differ). One closed surface
+/// with its own normals: no facets and no creases where billows meet.
+pub fn cloud(root: &Path, lock: &Lock, seed: u32) -> Result<String> {
+    let mut k = Kit::new(vec![Material::flat("cloud", [0.93, 0.95, 1.0], 1.0, 0.0)]);
+    let s = seed as f32 * 1.7;
+    k.blob(0, Vec3::ZERO, 44, |d| {
+        let billow = 0.2 * (3.0 * d.x + s).sin() * (2.6 * d.z + 0.4 * s).sin()
+            + 0.13 * (5.2 * d.x + 2.0 * d.z + 1.3 * s).sin()
+            + 0.09 * (7.0 * d.z - 3.0 * d.x + 0.7 * s).cos()
+            + 0.05 * (11.0 * d.x + 0.3 * s).sin() * (9.0 * d.z + s).cos();
+        // Billows only on top; the underside is a shallow, smooth dish.
+        let top = d.y.max(0.0);
+        let radius = 30.0 * (1.0 + billow * (0.35 + 0.65 * top));
+        let height = if d.y >= 0.0 { 0.62 } else { 0.18 };
+        Vec3::new(d.x * radius, d.y * radius * height, d.z * radius)
+    });
+    k.write(root, lock, &format!("glint_cloud{seed}"))
+}
+
+/// The ball's trail at speed: a tapering lit streak 1 m long from its origin back along -Z
+/// (the script stretches and turns it).
+pub fn trail(root: &Path, lock: &Lock) -> Result<String> {
+    let mut k = Kit::new(vec![
+        lit("trail core"),
+        Material::emitter("trail edge", [1.0, 0.72, 0.5]),
+    ]);
+    for (i, (width, from, to)) in [
+        (0.34f32, 0.0f32, 0.45f32),
+        (0.24, 0.45, 0.75),
+        (0.13, 0.75, 1.0),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let mid = -(from + to) * 0.5;
+        k.cuboid(
+            0,
+            Vec3::new(width, 0.012, to - from),
+            Mat4::from_translation(Vec3::new(0.0, 0.0, mid)),
+            Vec2::ONE,
+        );
+        if i < 2 {
+            k.cuboid(
+                1,
+                Vec3::new(width * 0.3, 0.014, to - from),
+                Mat4::from_translation(Vec3::new(0.0, 0.0, mid)),
+                Vec2::ONE,
             );
-            k.sphere(0, at, size + wobble * 0.8, 16, Vec2::ONE);
         }
     }
-    k.write(root, lock, "glint_cloud")
+    k.write(root, lock, "glint_trail")
 }
 
 /// A far island: a pale deck on stepped rock, three towers with lit bands and a halo.

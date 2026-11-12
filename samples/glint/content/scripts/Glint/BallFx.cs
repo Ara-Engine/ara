@@ -1,8 +1,8 @@
 namespace Glint;
 
 /// <summary>
-/// Presentation that rides the ball's speed: a spark trail that brightens above a walking pace,
-/// and the roll sound's pitch and volume. It reads the ball and writes only its own entity.
+/// Presentation that rides the ball's speed: a lit trail and sparks that grow above a walking
+/// pace, and the roll sound's pitch and volume. It reads the ball and writes only its own entity.
 /// </summary>
 public sealed partial class BallFx : Behaviour
 {
@@ -10,6 +10,9 @@ public sealed partial class BallFx : Behaviour
     [Property, Default(5f)] public partial float SparkStart { get; set; }
     /// <summary>Speed in m/s where sparks and the roll sound are at full strength.</summary>
     [Property, Default(9.5f)] public partial float SparkFull { get; set; }
+
+    /// <summary>The trail's length at full speed, metres.</summary>
+    [Property, Default(4.2f)] public partial float TrailLength { get; set; }
 
     /// <inheritdoc/>
     protected override void OnTick(in Tick tick)
@@ -20,7 +23,17 @@ public sealed partial class BallFx : Behaviour
         ref readonly var control = ref World.Read<Ball>(ball);
         var velocity = World.Read<Velocity>(ball).Linear;
         var speed = velocity.Length();
-        Get<Transform>().Position = World.Read<Transform>(ball).Position - new Vector3(0, 0.4f, 0);
+        // The trail lies on the surface behind the ball, stretched by its pace; off the ground
+        // or at a walking pace it has no length.
+        ref var transform = ref Get<Transform>();
+        var pace = control.Grounded ? Math.Clamp((control.Speed - SparkStart) / (SparkFull - SparkStart), 0f, 1f) : 0f;
+        transform.Position = World.Read<Transform>(ball).Position - new Vector3(0, 0.46f, 0);
+        if (pace > 0f && speed > 0.5f)
+        {
+            Course.Resting(World.Read<Transform>(ball).Position, 0.5f, out var up, out _);
+            transform.Rotation = Course.LookEuler(velocity / speed, up);
+        }
+        transform.Scale = new Vector3(1f, 1f, TrailLength * pace);
         if (World.Has<VisualEffect>(Entity))
         {
             var k = Math.Clamp((speed - SparkStart) / (SparkFull - SparkStart), 0f, 1f);

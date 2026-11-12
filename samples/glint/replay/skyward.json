@@ -4048,7 +4048,7 @@
       "name": "descent"
     },
     {
-      "tick": 785,
+      "tick": 765,
       "name": "kicker"
     },
     {
@@ -4087,6 +4087,6 @@
   "expect": {
     "finishTicks": 2996,
     "falls": 0,
-    "hash": "77c273fc462c3f25bb43c9c96255a4b90d86f0bef8146f4d3f26af79f2bc46ab"
+    "hash": "3aa4a5cf945102886604be2d583a7ad6eb232fa58d7e783b78e163e1a2a95c52"
   }
 }

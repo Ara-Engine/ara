@@ -61,6 +61,14 @@ public sealed partial class GlintRun : Behaviour
     [Property, Replicate] public partial int Sec { get; set; }
     /// <summary>Hundredths.</summary>
     [Property, Replicate] public partial int Cs { get; set; }
+    /// <summary>The running clock's single digits: tens and ones of the seconds and hundredths.</summary>
+    [Property, Replicate] public partial int SecTens { get; set; }
+    /// <summary>Ones of the seconds.</summary>
+    [Property, Replicate] public partial int SecOnes { get; set; }
+    /// <summary>Tens of the hundredths.</summary>
+    [Property, Replicate] public partial int CsTens { get; set; }
+    /// <summary>Ones of the hundredths.</summary>
+    [Property, Replicate] public partial int CsOnes { get; set; }
     /// <summary>Best time digits.</summary>
     [Property, Replicate] public partial int BestMin { get; set; }
     /// <summary>Best seconds.</summary>
@@ -224,6 +232,7 @@ public sealed partial class GlintRun : Behaviour
     {
         Parts(Ticks, out var m, out var s, out var c);
         Min = m; Sec = s; Cs = c;
+        SecTens = s / 10; SecOnes = s % 10; CsTens = c / 10; CsOnes = c % 10;
         Parts(BestTicks, out m, out s, out c);
         BestMin = m; BestSec = s; BestCs = c;
         Parts(Split1, out m, out s, out c);

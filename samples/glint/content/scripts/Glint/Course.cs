@@ -14,6 +14,21 @@ public static class Course
     /// <summary>Rotates <paramref name="v"/> by Euler degrees applied as Rx * Ry * Rz (the engine's order).</summary>
     public static Vector3 Rotate(Vector3 euler, Vector3 v) => RotX(RotY(RotZ(v, euler.Z * Rad), euler.Y * Rad), euler.X * Rad);
 
+    /// <summary>
+    /// Euler degrees (the engine's Rx * Ry * Rz) that turn local +Z onto <paramref name="forward"/>
+    /// and local +Y toward <paramref name="up"/>.
+    /// </summary>
+    public static Vector3 LookEuler(Vector3 forward, Vector3 up)
+    {
+        forward = Vector3.Normalize(forward);
+        var right = Vector3.Normalize(Vector3.Cross(up, forward));
+        up = Vector3.Cross(forward, right);
+        var y = MathF.Asin(Math.Clamp(forward.X, -1f, 1f));
+        var x = MathF.Atan2(-forward.Y, forward.Z);
+        var z = MathF.Atan2(-up.X, right.X);
+        return new Vector3(x, y, z) / Rad;
+    }
+
     /// <summary>The inverse of <see cref="Rotate"/>.</summary>
     public static Vector3 Unrotate(Vector3 euler, Vector3 v) => RotZ(RotY(RotX(v, -euler.X * Rad), -euler.Y * Rad), -euler.Z * Rad);
 

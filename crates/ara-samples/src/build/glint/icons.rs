@@ -67,7 +67,10 @@ fn triangle(a: (f32, f32), b: (f32, f32), c: (f32, f32), color: Color) -> Shape 
     }
 }
 
-fn paint(size: u32, shapes: &[Shape]) -> RgbaImage {
+/// Rasterises `shapes` (authored on a `size` pixel canvas) at `scale` times that size, so an
+/// icon is as sharp as it is shown.
+fn paint(size: u32, scale: f32, shapes: &[Shape]) -> RgbaImage {
+    let size = (size as f32 * scale) as u32;
     let mut image = RgbaImage::new(size, size);
     let samples = 4;
     for py in 0..size {
@@ -75,13 +78,13 @@ fn paint(size: u32, shapes: &[Shape]) -> RgbaImage {
             let mut accumulated = [0f32; 4];
             for sy in 0..samples {
                 for sx in 0..samples {
-                    let x = px as f32 + (sx as f32 + 0.5) / samples as f32;
-                    let y = py as f32 + (sy as f32 + 0.5) / samples as f32;
+                    let x = (px as f32 + (sx as f32 + 0.5) / samples as f32) / scale;
+                    let y = (py as f32 + (sy as f32 + 0.5) / samples as f32) / scale;
                     let mut out = [0f32; 4];
                     for shape in shapes {
                         // Half a pixel of feather keeps edges smooth after the supersample.
                         let coverage =
-                            ((0.5 - (shape.distance)(x, y)) / 1.0).clamp(0.0, 1.0) * shape.color[3];
+                            (0.5 - (shape.distance)(x, y) * scale).clamp(0.0, 1.0) * shape.color[3];
                         for (channel, color) in out.iter_mut().zip(&shape.color[..3]) {
                             *channel = color * coverage + *channel * (1.0 - coverage);
                         }
@@ -148,23 +151,35 @@ pub fn write(dir: &Path) -> Result<()> {
         ring(32.0, 32.0, 24.0, 3.0, NAVY),
         circle(24.0, 24.0, 6.0, [1.0, 1.0, 1.0, 0.8]),
     ];
-    paint(64, &orb).save(dir.join("orb.png"))?;
+    paint(64, 2.0, &orb).save(dir.join("orb.png"))?;
     let flag = vec![
         rect(18.0, 34.0, 3.0, 26.0, NAVY),
         triangle((21.0, 10.0), (21.0, 34.0), (52.0, 22.0), CORAL),
         circle(18.0, 8.0, 5.0, NAVY),
     ];
-    paint(64, &flag).save(dir.join("flag.png"))?;
+    paint(64, 2.0, &flag).save(dir.join("flag.png"))?;
     let fall = vec![
         rect(32.0, 22.0, 6.0, 14.0, NAVY),
         triangle((14.0, 34.0), (50.0, 34.0), (32.0, 58.0), NAVY),
     ];
-    paint(64, &fall).save(dir.join("fall.png"))?;
-    paint(96, &medal([0.98, 0.72, 0.1, 1.0], [1.0, 0.86, 0.35, 1.0]))
-        .save(dir.join("medal_gold.png"))?;
-    paint(96, &medal([0.62, 0.68, 0.76, 1.0], [0.86, 0.9, 0.96, 1.0]))
-        .save(dir.join("medal_silver.png"))?;
-    paint(96, &medal([0.62, 0.36, 0.18, 1.0], [0.86, 0.55, 0.3, 1.0]))
-        .save(dir.join("medal_bronze.png"))?;
+    paint(64, 2.0, &fall).save(dir.join("fall.png"))?;
+    paint(
+        96,
+        2.5,
+        &medal([0.98, 0.72, 0.1, 1.0], [1.0, 0.86, 0.35, 1.0]),
+    )
+    .save(dir.join("medal_gold.png"))?;
+    paint(
+        96,
+        2.5,
+        &medal([0.62, 0.68, 0.76, 1.0], [0.86, 0.9, 0.96, 1.0]),
+    )
+    .save(dir.join("medal_silver.png"))?;
+    paint(
+        96,
+        2.5,
+        &medal([0.62, 0.36, 0.18, 1.0], [0.86, 0.55, 0.3, 1.0]),
+    )
+    .save(dir.join("medal_bronze.png"))?;
     Ok(())
 }

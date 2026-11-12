@@ -197,7 +197,7 @@ def main():
               f"falls {st['GlintRun.falls']}, {len(events)} inputs, marks {marks}, missed {missed}")
         captures = [{"tick": 0, "name": "start"}]
         jump = marks.get("jump", 0)
-        for name, at in (("descent", jump + 330), ("kicker", jump + 445), ("split", jump + 745), ("beam", jump + 900), ("turn", jump + 1170),
+        for name, at in (("descent", jump + 330), ("kicker", jump + 425), ("split", jump + 745), ("beam", jump + 900), ("turn", jump + 1170),
                          ("sliders", marks.get("board", 0) + 40), ("bars", marks.get("leave", 0) + 130),
                          ("cannon", marks.get("fire", 0) + 40), ("flight", marks.get("fire", 0) + 150), ("goal", finish + 30)):
             captures.append({"tick": at, "name": name})

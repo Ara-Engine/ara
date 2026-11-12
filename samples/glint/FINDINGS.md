@@ -79,7 +79,8 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
 9. **CSS subset surprises.** `font-family` on the root does not reach `text` (only a rule on
    `text` applied the font); a hidden element still takes its place in the layout (three medal
    images pushed the results off screen until stacked absolutely); no grouped, descendant or
-   compound selectors; no negative offsets; every element needs an id. Each was found by a
+   compound selectors; no negative offsets; `text-align` is left or right only (no centre, and
+   that one is reported at play time, not by `ara check`); every element needs an id. Each was found by a
    failed `ara check` or a wrong picture. *Smallest change:* list the supported subset in
    `ara docs` and make a hidden element leave the flow (or add `display: none`).
 10. **Feedback sounds are heard at the entity that carries the counter, and cannot be
@@ -101,29 +102,35 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
     assembled`. Not needed in the end.
 14. **Strongly flattened spheres draw dark triangles.** High clouds scaled to a third of
     their height showed black facets where spheres meet; at 0.7 they are clean. Not chased.
-15. **Particles do not draw on the Mac** (`ARA_RENDERLAB_UNSUPPORTED particle emitters`), so
+15. **There is no local fog volume.** *Wanted:* a soft top layer on the cloud deck. `HeightFog`'s
+    doc speaks of local fog volumes, but the schema has no such component (*from reading* the
+    schema list), and particles do not draw here. The clouds are smooth lumps (one closed mesh
+    each) softened by a thick, low height fog.
+16. **The UI font's figures are not tabular and there is no way to ask for it.** The running
+    clock is one fixed-width cell per digit, each bound to its own field.
+17. **Particles do not draw on the Mac** (`ARA_RENDERLAB_UNSUPPORTED particle emitters`), so
     the spark trail exists in the scene and in no still. Known.
-16. **No debug views on Renderlab** (`ARA_VIEW_MODE_UNAVAILABLE`), and no way to ask what
+18. **No debug views on Renderlab** (`ARA_VIEW_MODE_UNAVAILABLE`), and no way to ask what
     occludes a point: the sun-disc shadow (item 5) was found by arithmetic on the scene file. *Smallest change:* `ara why <entity> in shadow`, listing the occluders of a
     point toward a light.
 
 ## P2: friction
 
-17. **The `--game` shell is Outpost-shaped.** It needs `levels/menu.scene` with two points
+19. **The `--game` shell is Outpost-shaped.** It needs `levels/menu.scene` with two points
     named `e_gamemenueye` and `e_gamemenutarget`; the loading label and window title say
     Outpost; a solo game passes through a co-op lobby page that needs a Ready click (restyled
     here as the course page); the UI actions and the input actions are fixed lists (restart is
     `Interact`). *Smallest change:* read the title and the menu scene from the project, and
     let a project skip the lobby.
-18. **The menu click must be an Ogg file** (`MediaDecoder::open(.., "ogg")`); a synthesised WAV
+20. **The menu click must be an Ogg file** (`MediaDecoder::open(.., "ogg")`); a synthesised WAV
     cannot be used and the tooling has no encoder, so Glint's menus are silent.
-19. **`clean` in the sample builder does not know mixers**, so a second build failed with
+21. **`clean` in the sample builder does not know mixers**, so a second build failed with
     `ARA1602` until the mixer was created once and updated after.
-20. **Gravity is not readable from a script** (*from reading*: nothing named gravity in
+22. **Gravity is not readable from a script** (*from reading*: nothing named gravity in
     `Ara.Runtime`), so the cannon's arc repeats 9.81 in the build and in C#.
-21. **`FollowCamera` has no "follow the route" mode.** A script turns its yaw toward a
+23. **`FollowCamera` has no "follow the route" mode.** A script turns its yaw toward a
     polyline of waypoint entities (`CourseCamera`); spline or path components would do this.
-22. **Small ones:** `ara_play read` takes `paths`, `status` takes no world, `events` takes no
+24. **Small ones:** `ara_play read` takes `paths`, `status` takes no world, `events` takes no
     limit (each rejected with a good message); entity ids must be `prefix_base32`;
     `HeightFog.falloff` has no stated unit in its range error; the capture JSON's pass list
     needs a script to read.
@@ -142,8 +149,10 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
 
 ## Renderer notes for the threads using this level
 
-- Cost by view and what moved it are in the README: the cloud deck and far world put geometry
-  under nearly every pixel, and the indirect cache went from about nothing to about 18 ms.
+- Cost by view and what moved it are in the README. The indirect cache cost about 18 ms a
+  frame while the clouds were clusters of 21 intersecting spheres (106 instances) and fell to
+  about 1.6 ms when each bank became one closed mesh; the pylons changed in the same round, so
+  the cause is not isolated. Worth a look: many overlapping closed meshes under the camera.
 - Glossy surface on screen: the start view about 15 percent (the pad's polished disc and the
   ball), the straights 5 to 8 percent (the 1.1 m inlay and the ball), the goal about 20 percent
   (its mirror floor). Estimated from the stills, not measured.

@@ -93,7 +93,10 @@ fn kits_written(root: &Path, lock: &Lock, c: &Course) -> Result<Vec<(&'static st
             kits::cannon(root, lock, cannon.muzzle - cannon.breech)?,
         ),
         ("glint_goal", kits::goal(root, lock)?),
-        ("glint_cloud", kits::cloud(root, lock)?),
+        ("glint_cloud0", kits::cloud(root, lock, 0)?),
+        ("glint_cloud1", kits::cloud(root, lock, 1)?),
+        ("glint_cloud2", kits::cloud(root, lock, 2)?),
+        ("glint_trail", kits::trail(root, lock)?),
         ("glint_isle", kits::isle(root, lock)?),
         ("glint_sun", kits::sun(root, lock)?),
     ])
@@ -151,11 +154,11 @@ fn decor(
     );
 }
 
-/// The sky: a deep blue zenith held low (high falloff), a pale band at the horizon with a warm
-/// glow, and a hazy blue below the horizon where the cloud opens.
+/// The sky: a deep blue zenith held low (high falloff), a pale band at the horizon with a thin
+/// warm glow (kept weak: it lights the clouds' shadow sides, which should stay cool), and a hazy blue below the horizon where the cloud opens.
 fn environment() -> Value {
     json!({"sky": [0.04, 0.17, 0.62, 1], "horizon": [0.62, 0.8, 1.0, 1], "skyFalloff": 5.5,
-        "glow": [1.0, 0.56, 0.3, 1], "glowFalloff": 22, "ground": [0.72, 0.84, 1.0, 1],
+        "glow": [0.5, 0.3, 0.2, 1], "glowFalloff": 34, "ground": [0.72, 0.84, 1.0, 1],
         "intensity": 7000, "skyLight": 1})
 }
 
@@ -233,7 +236,7 @@ fn art(s: &mut Scene, c: &Course, play: bool) {
         "e_sun",
         "Sun",
         Vec3::new(0.0, 60.0, 30.0),
-        json!({"kind": "directional", "color": [1.0, 0.84, 0.64, 1], "intensity": 95_000, "sourceAngle": 0.5357}),
+        json!({"kind": "directional", "color": [1.0, 0.88, 0.72, 1], "intensity": 95_000, "sourceAngle": 0.5357}),
         Some(SUN),
     ));
     // The sun's disc, far along its direction (the sky has no disc of its own). It must not
@@ -358,18 +361,19 @@ fn art(s: &mut Scene, c: &Course, play: bool) {
     for i in 0..banks {
         let radius = 760.0 * ((i as f32 + 0.5) / banks as f32).sqrt();
         let angle = i as f32 * 2.399_963;
-        let size = 2.0 + scatter(i, 1) * 2.4;
+        let size = 1.7 + scatter(i, 1) * 2.0;
         let at = centre + Vec3::new(angle.cos() * radius, 0.0, angle.sin() * radius);
         decor(
             s,
             &format!("e_cloud{i}"),
             "Cloud bank",
-            "glint_cloud",
-            Vec3::new(at.x, deck - 6.0 - scatter(i, 2) * 22.0, at.z),
+            ["glint_cloud0", "glint_cloud1", "glint_cloud2"][i as usize % 3],
+            Vec3::new(at.x, deck - 4.0 - scatter(i, 2) * 8.0, at.z),
             [0.0, scatter(i, 3) * 360.0, 0.0],
+            // Wide and low: the tops stay within about 20 m of the deck's level.
             Vec3::new(
                 size,
-                size * (0.5 + scatter(i, 4) * 0.2),
+                0.6 + scatter(i, 4) * 0.6,
                 size * (0.8 + scatter(i, 5) * 0.5),
             ),
             0.0,
@@ -388,24 +392,24 @@ fn art(s: &mut Scene, c: &Course, play: bool) {
     for i in 0..24u32 {
         let angle = i as f32 * 0.628 + 0.3;
         let radius = 620.0 + scatter(i, 6) * 420.0;
-        let size = 3.0 + scatter(i, 7) * 3.0;
+        let size = 1.6 + scatter(i, 7) * 1.8;
         let at = centre
             + Vec3::new(
                 angle.cos() * radius,
                 70.0 + scatter(i, 8) * 120.0,
                 angle.sin() * radius,
             );
-        if high >= 10 || shades(at, 60.0 * size) {
+        if high >= 10 || shades(at, 50.0 * size) {
             continue;
         }
         decor(
             s,
             &format!("e_cirrus{high}"),
             "High cloud",
-            "glint_cloud",
+            ["glint_cloud0", "glint_cloud1", "glint_cloud2"][i as usize % 3],
             at,
             [0.0, scatter(i, 9) * 360.0, 0.0],
-            Vec3::new(size * 1.3, size * 0.7, size),
+            Vec3::new(size * 1.2, size * 0.8, size),
             0.0,
         );
         high += 1;
@@ -586,12 +590,18 @@ fn game(ctx: &Ctx, c: &Course) -> Result<()> {
         }),
     );
     // The spark trail and the roll loop ride the ball (BallFx sets both from its speed).
+    let mut trail = models.get("glint_trail").renderer.clone();
+    trail["emissive"] = json!([LIT_ORB, LIT_ORB, LIT_ORB]);
+    trail["castShadows"] = json!(false);
     s.entity(
         "e_fx",
         "Ball sparks and roll",
         json!({
             "Transform": {"position": c.start.to_array()},
             "VisualEffect": {"effect": "sparks", "scale": 0.8, "intensity": 0.0},
+            // The trail: a lit streak BallFx stretches behind the ball at speed (particles do not
+            // draw on every backend; this does).
+            "MeshRenderer": trail,
             "AudioSource": {"clip": clip(sounds::CLIPS[0].0, sounds::CLIPS[0].1), "bus": "sfx", "looping": true, "spatial": false, "gain": 0.0},
             "BallFx": {},
         }),
@@ -616,7 +626,7 @@ fn game(ctx: &Ctx, c: &Course) -> Result<()> {
             "Transform": {"position": round3(c.start + Vec3::new(4.0, 3.0, -4.0))},
             "Camera": {"fov": 56},
             "FollowCamera": {"target": "e_ball", "distance": 5.4, "height": 2.2, "yaw": course::START_HEADING, "pitch": 16, "sensitivity": 0},
-            "CourseCamera": {},
+            "CourseCamera": {"fullSpeed": course::TOP_SPEED, "speedFov": 14.0},
             // The listener; RunFeedback carries the fall and finish counters where they are heard.
             "AudioListener": {},
             "RunFeedback": {},
