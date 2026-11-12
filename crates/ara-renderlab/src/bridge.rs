@@ -342,6 +342,8 @@ impl Bridge {
                 break;
             }
         }
+        // Measurement tooling: `ARA_UNITY_EXPORT=<dir>` writes this scene for the Unity comparison.
+        crate::unity_export::on_frame(view, self.terrain.foliage().0)?;
         // Terrain tiles follow the frame's draws in the editor's id numbering.
         self.terrain
             .tag(&mut self.engine, frame.draws.len() as u32 + 1)?;
