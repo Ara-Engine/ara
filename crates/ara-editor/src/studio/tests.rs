@@ -5685,7 +5685,13 @@ fn agents_capture_the_scene_with_entity_marks_on_this_gpu() {
     )
     .unwrap()
     .expect("the renderer starts on this GPU");
-    let view = crate::studio::viewport::SceneView::default();
+    let mut view = crate::studio::viewport::SceneView::default();
+    // The Scene draws through Renderlab, as the live view does, before an agent reads it.
+    rt.touch(|s| {
+        let document = s.editor.view().unwrap();
+        view.render_capture(&mut renderer, &s.editor, &document, 1)
+    })
+    .unwrap();
     let job = rt.touch(|s| {
         s.editor
             .action(
@@ -5748,7 +5754,12 @@ fn agents_capture_the_window_with_the_scene_in_it_on_this_gpu() {
     )
     .unwrap()
     .expect("the renderer starts on this GPU");
-    let view = crate::studio::viewport::SceneView::default();
+    let mut view = crate::studio::viewport::SceneView::default();
+    rt.touch(|s| {
+        let document = s.editor.view().unwrap();
+        view.render_capture(&mut renderer, &s.editor, &document, 1)
+    })
+    .unwrap();
     let job = rt.touch(|s| {
         s.editor
             .action(

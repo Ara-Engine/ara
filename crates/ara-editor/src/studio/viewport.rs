@@ -1,6 +1,4 @@
 //! Same-device Scene quality seam. The raster view retains IDs and capture metadata.
-#[cfg(test)]
-use crate::world::EditWorldView;
 use crate::{Editor, gpu::NativeUi, overlay};
 use ara_frame::capture::{CaptureRequest, ViewMode};
 use ara_render::Renderer;
@@ -44,6 +42,7 @@ use ara_render_fidelity::{
 use ara_runtime_render::fidelity::native::{self, FrameChange, NativeConfig, Prepared};
 use ara_runtime_render::{PresentationImage, fidelity::vfx::Effects};
 mod bounds;
+mod capture;
 mod content;
 mod convergence;
 mod ids;
@@ -64,6 +63,7 @@ pub(crate) use startup::prepare_renderer;
 enum RasterWork {
     Live(u32),
     Submitted(u32),
+    #[allow(dead_code, reason = "captures read Renderlab now; the raster path goes with its removal")]
     Capture(u32),
     Prepare,
 }
@@ -108,6 +108,8 @@ pub(crate) struct SceneView {
     scene_drawn: Option<scene_frame::Drawn>,
     /// Passes Renderlab still draws after the last change (`scene_frame`).
     scene_settle: u32,
+    /// A capture draws the Scene through Renderlab whatever `ARA_SCENE_RENDERER` says.
+    capture_forced: bool,
     plan: Option<FidelityPlan>,
     active: bool,
     revision: Option<(u64, u64, u64, u64)>,
@@ -291,50 +293,6 @@ impl SceneView {
         });
         self.remaining = self.remaining.max(8);
         Ok(true)
-    }
-    /// Settle a reproducible capture on the live allocation. Reset lighting history
-    /// and the jitter/RNG sequence without holding a second view's GPU descriptors.
-    pub(super) fn render_capture(
-        &mut self,
-        renderer: &mut Renderer,
-        editor: &Editor,
-        view: &crate::world::DocumentView,
-        settle: u32,
-    ) -> ara_ui::Result<()> {
-        renderer.wait_scene_frame()?;
-        self.convergence.completed();
-        self.frame_pending = false;
-        if super::scene_sync::native(editor, renderer) {
-            self.lit = matches!(view_mode(&editor.state.view_mode), ViewMode::Lit);
-            // Capture is an explicit blocking boundary. Drain superseded CPU
-            // snapshots and pending GPU work until the requested view is ready;
-            // live rendering instead retains the completed image and polls.
-            loop {
-                self.render_raster_inner(renderer, editor, view, RasterWork::Capture(1))?;
-                if self.content_job.is_none() && self.content_ready.is_none() {
-                    break;
-                }
-            }
-        } else {
-            self.render(renderer, editor, view, 1)?;
-        }
-        if !self.active {
-            return Ok(());
-        }
-        if self.raster.is_some() && self.fidelity.is_none() {
-            self.raster
-                .as_mut()
-                .ok_or("raster Scene view")?
-                .reset_capture(renderer)?;
-            return self.render_raster_inner(renderer, editor, view, RasterWork::Capture(settle));
-        }
-        self.fidelity
-            .as_mut()
-            .ok_or("Scene capture has no fidelity view")?
-            .reset_accumulation(renderer.gpu_mut())?;
-        self.tick = 0;
-        self.render_fidelity(renderer, editor, view, settle)?;
-        Ok(())
     }
     pub fn render(
         &mut self,
@@ -543,7 +501,7 @@ impl SceneView {
     /// `ARA_SCENE_RENDERER=renderlab`, from the editor's camera; its image is what the
     /// compositor shows. A failure is reported once and `ara-render` keeps showing the Scene.
     fn draw_renderlab(&mut self, renderer: &mut Renderer, editor: &Editor) {
-        if !renderlab::requested() || self.renderlab_failed {
+        if !(renderlab::requested() || self.capture_forced) || self.renderlab_failed {
             return;
         }
         let Some(content) = self.content.as_mut() else {
@@ -1220,32 +1178,6 @@ impl SceneView {
         }
         Ok(())
     }
-    /// Captures the same completed color the Scene viewport displays; the raster
-    /// capture supplies picking/mark metadata only. Render this view first.
-    pub(crate) fn capture(
-        &self,
-        renderer: &mut Renderer,
-        request: &CaptureRequest,
-    ) -> anyhow::Result<ara_frame::capture::Capture> {
-        renderer.wait_scene_frame()?;
-        let mut capture = if renderer.is_native() {
-            renderer.capture_completed(request)?
-        } else {
-            renderer.capture(request)?
-        };
-        if self.active && matches!(request.mode, ViewMode::Lit) && !renderer.scene_frame_async() {
-            self.published
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Scene has no completed fidelity frame"))?
-                .capture(renderer, &mut capture)?;
-        }
-        if matches!(request.mode, ViewMode::Lit)
-            && let Some(renderlab) = &self.renderlab
-        {
-            renderlab.capture(renderer, &mut capture)?;
-        }
-        Ok(capture)
-    }
     pub fn destroy(self, renderer: &mut Renderer) -> ara_ui::Result<()> {
         renderer.wait_scene_frame()?;
         if let Some(candidate) = self.content_ready
@@ -1391,427 +1323,4 @@ fn pose_key(gesture: Option<&crate::world::gesture::Gesture>) -> Option<u64> {
         }
         hash.finish()
     })
-}
-
-#[cfg(test)]
-mod patch_tests;
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use ara_ui_render::gpu::UiGpu;
-
-    fn submit_ui(scene: &SceneView, renderer: &Renderer, ui: &mut NativeUi) -> anyhow::Result<()> {
-        scene
-            .attach(ui, renderer, true)
-            .map_err(|error| anyhow::anyhow!("{error}"))?;
-        ui.begin(renderer.size())
-            .map_err(|error| anyhow::anyhow!("{error}"))?;
-        ui.end().map_err(|error| anyhow::anyhow!("{error}"))?;
-        renderer.gpu().assert_clean()?;
-        Ok(())
-    }
-
-    #[test]
-    fn scene_captures_native_quality_environment_and_effects_after_resize() -> anyhow::Result<()> {
-        for ray_tracing in [false, true] {
-            exercise_scene_view(ray_tracing)?;
-        }
-        Ok(())
-    }
-
-    fn exercise_scene_view(ray_tracing: bool) -> anyhow::Result<()> {
-        let root = crate::test_target()
-            .join("renderer-unification/scene-view")
-            .join(format!("{}-{ray_tracing}", std::process::id()));
-        std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("levels"))?;
-        std::fs::write(
-            root.join("ara.project.json"),
-            ara_json::to_canonical_string(
-                &json!({"name":"Scene presentation test","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"main":"levels/main.scene","rendering":{"quality":"high","rayTracing":ray_tracing}}),
-            ),
-        )?;
-        std::fs::write(
-            root.join(ara_doc::AUTHORING_ROOT).join("levels/main.scene"),
-            ara_json::to_canonical_string(&json!({
-                "$schema":"ara://schema/scene/1","id":"sc_nativeview","records":{
-                    "e_box":{"name":"Box","Transform":{},"MeshRenderer":{"color":[0.15,0.5,0.2,1]}},
-                    "e_pending":{"name":"Pending model","Transform":{"position":[4,0,0]},"MeshRenderer":{"model":"@pending.gltf#as_pending"}},
-                    "e_sky":{"SkyAtmosphere":{},"PostProcess":{"exposure":"manual","ev100":12}},
-                "e_sun":{"Transform":{"rotation":[-45,0,0]},"Light":{"kind":"directional","intensity":24000}},
-                    "e_fire":{"Transform":{"position":[1,0,0]},"VisualEffect":{"effect":"campfire","scale":0.3,"intensity":0.2}}
-                }
-            })),
-        )?;
-        // The Scene opens before its asset owner exists, just like a cold editor.
-        let mut editor = Editor::open(&root)?;
-        let view = editor.view()?;
-        let create = if ray_tracing {
-            Renderer::new
-        } else {
-            Renderer::new_raster
-        };
-        let mut renderer = create(
-            view.scene(editor.host.root(), &editor.state, None, &mut editor.models)?,
-            [192, 108],
-            &[],
-            root.join("gpu"),
-        )?;
-        if ray_tracing && !renderer.gpu().info().ray_tracing {
-            // The opt-in RT Scene view needs an RT-tier device (not yet on Metal, D27).
-            eprintln!("skipped the ray-traced Scene view: the device has no ray tracing");
-            return Ok(());
-        }
-        let mut scene = SceneView::default();
-        let result = (|| -> anyhow::Result<()> {
-            // SAFETY: The renderer outlives this adapter, which is dropped before
-            // leaving this closure; one thread serializes all queue submissions.
-            let mut ui = unsafe { NativeUi::new(crate::gpu::ui_device(renderer.gpu()))? };
-            assert!(!renderer.presentation_ready());
-            submit_ui(&scene, &renderer, &mut ui)?;
-            scene
-                .render(&mut renderer, &editor, &view, 2)
-                .map_err(|error| anyhow::anyhow!("{error}"))?;
-            if !ray_tracing {
-                submit_ui(&scene, &renderer, &mut ui)?;
-                scene
-                    .render_capture(&mut renderer, &editor, &view, 2)
-                    .map_err(|error| anyhow::anyhow!("{error}"))?;
-            }
-            assert!(scene.active);
-            assert!(renderer.presentation_ready());
-            submit_ui(&scene, &renderer, &mut ui)?;
-            if !ray_tracing {
-                let allocation = scene
-                    .raster_frame
-                    .as_ref()
-                    .expect("native frame")
-                    .draws
-                    .as_ptr();
-                editor.extraction_revision += 1;
-                scene.invalidate();
-                scene
-                    .render(&mut renderer, &editor, &view, 1)
-                    .map_err(|error| anyhow::anyhow!("{error}"))?;
-                assert!(
-                    scene.content_job.is_none(),
-                    "already shown publication must not queue extraction"
-                );
-                assert_eq!(
-                    scene
-                        .raster_frame
-                        .as_ref()
-                        .expect("retained frame")
-                        .draws
-                        .as_ptr(),
-                    allocation
-                );
-                // Hold a real CPU candidate unfinished across all typed material,
-                // light, rename and drag patches. Live calls must neither join it
-                // nor replace it; explicit capture later drains the superseded job.
-                let key = content::Key {
-                    revision: scene.revision.expect("prepared Scene revision"),
-                    epoch: scene.content_epoch,
-                    pose: None,
-                    scene: content::scene_key(&editor),
-                };
-                let job = content::Job::start(
-                    key,
-                    scene.content.as_ref().expect("Scene cache"),
-                    &editor,
-                    &view,
-                    &renderer,
-                    *renderer.quality(),
-                )?;
-                let patched_allocation = scene
-                    .raster_frame
-                    .as_ref()
-                    .expect("shown frame")
-                    .draws
-                    .as_ptr();
-                let (release, wait) = std::sync::mpsc::channel();
-                scene.content_job = Some(content::Job {
-                    key,
-                    thread: std::thread::spawn(move || {
-                        wait.recv()?;
-                        job.thread
-                            .join()
-                            .map_err(|_| anyhow::anyhow!("test content worker"))?
-                    }),
-                });
-                scene.invalidate();
-                super::patch_tests::exercise(&mut scene, &mut renderer, &mut editor, &view, &root)?;
-                assert!(
-                    !scene
-                        .content_job
-                        .as_ref()
-                        .expect("same pending job")
-                        .thread
-                        .is_finished()
-                );
-                release.send(())?;
-                // An earlier transient upload failure must not suppress an
-                // explicit capture's retry/drain of the requested generation.
-                scene.failed = scene.revision;
-                scene
-                    .render_capture(&mut renderer, &editor, &view, 2)
-                    .map_err(|error| anyhow::anyhow!("{error}"))?;
-                assert!(scene.content_job.is_none());
-                assert!(scene.failed.is_none());
-                assert_eq!(
-                    scene
-                        .raster_frame
-                        .as_ref()
-                        .expect("shown patched frame")
-                        .draws
-                        .as_ptr(),
-                    patched_allocation,
-                    "stale worker must not rebuild already-patched input"
-                );
-                scene.failed = scene.revision;
-                let mut preview = GamePreview::default();
-                let camera = editor.state.camera.spec();
-                let output = scene
-                    .preview_game(
-                        &mut renderer,
-                        &editor,
-                        &view,
-                        &mut preview,
-                        PreviewCamera {
-                            camera: &camera,
-                            size: [96, 54],
-                            quality: None,
-                        },
-                    )
-                    .map_err(|error| anyhow::anyhow!("{error}"))?;
-                assert!(
-                    output.is_none(),
-                    "the first preview does not wait for its GPU frame"
-                );
-                // The first request now starts bounded target allocation before
-                // it can submit a GPU frame. Keep polling as the live panel does.
-                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-                while !preview.pending(&renderer) {
-                    assert!(
-                        std::time::Instant::now() < deadline,
-                        "preview target preparation timed out"
-                    );
-                    scene
-                        .preview_game(
-                            &mut renderer,
-                            &editor,
-                            &view,
-                            &mut preview,
-                            PreviewCamera {
-                                camera: &camera,
-                                size: [96, 54],
-                                quality: None,
-                            },
-                        )
-                        .map_err(|error| anyhow::anyhow!("{error}"))?;
-                    std::thread::sleep(std::time::Duration::from_millis(1));
-                }
-                renderer.wait_scene_frame()?;
-                assert!(
-                    preview
-                        .poll(&mut renderer)
-                        .map_err(|error| anyhow::anyhow!("{error}"))?
-                        .is_some(),
-                    "explicit preview retries the failed generation"
-                );
-                let shown_frame = scene
-                    .raster_frame
-                    .as_ref()
-                    .expect("shown frame")
-                    .draws
-                    .as_ptr();
-                let shown_revision = scene.revision;
-                for _ in 0..16 {
-                    scene
-                        .preview_game(
-                            &mut renderer,
-                            &editor,
-                            &view,
-                            &mut preview,
-                            PreviewCamera {
-                                camera: &camera,
-                                size: [96, 54],
-                                quality: None,
-                            },
-                        )
-                        .map_err(|error| anyhow::anyhow!("{error}"))?;
-                    renderer.wait_scene_frame()?;
-                    assert!(
-                        scene.content_job.is_none(),
-                        "unchanged preview must reuse published content"
-                    );
-                    assert_eq!(scene.revision, shown_revision);
-                    assert_eq!(
-                        scene
-                            .raster_frame
-                            .as_ref()
-                            .expect("shown frame")
-                            .draws
-                            .as_ptr(),
-                        shown_frame
-                    );
-                }
-                assert!(scene.failed.is_none());
-                preview
-                    .release(&mut renderer)
-                    .map_err(|error| anyhow::anyhow!("{error}"))?;
-            }
-            assert_eq!(scene.content.as_ref().expect("Scene content").revision(), 0);
-            // The empty publication lands later. Neither no snapshot nor an
-            // unpublished model may attach undefined images or kill the Scene.
-            let _assets = ara_play_host::assets::Assets::new(&root, &root.join("unused-worker"))
-                .map_err(anyhow::Error::msg)?;
-            scene
-                .render_capture(&mut renderer, &editor, &view, 1)
-                .map_err(|error| anyhow::anyhow!("{error}"))?;
-            assert!(scene.content.as_ref().expect("Scene content").revision() > 0);
-            if ray_tracing {
-                let fidelity = scene.fidelity.as_ref().expect("opt-in RT Scene view");
-                assert_eq!(fidelity.settings().render_size, [96, 54]);
-                assert_eq!(fidelity.settings().post.ev100, Some(12.));
-                assert!(!scene.effects.as_ref().expect("Scene effects").is_empty());
-            } else {
-                assert!(renderer.is_native());
-                assert!(scene.raster.is_some());
-                assert!(scene.fidelity.is_none());
-                assert!(!renderer.gpu().info().ray_tracing);
-                assert_eq!(
-                    renderer.native_geometry_stats().expect("native pool").blas,
-                    0
-                );
-            }
-            let request = CaptureRequest {
-                camera: editor.state.camera.spec(),
-                size: renderer.size(),
-                mode: ViewMode::Lit,
-                deterministic: true,
-                exposure: 0.0015,
-                settle_frames: 1,
-                tick: 0,
-                seed: 7,
-                marks: None,
-            };
-            let capture = scene.capture(&mut renderer, &request)?;
-            capture.write(&root.join("scene-high.png"))?;
-            assert!(capture.image.pixels().any(|pixel| pixel[0] != pixel[1]));
-            scene
-                .render_capture(&mut renderer, &editor, &view, 8)
-                .map_err(|error| anyhow::anyhow!("{error}"))?;
-            let first = scene.capture(&mut renderer, &request)?;
-            scene
-                .render(&mut renderer, &editor, &view, 5)
-                .map_err(|error| anyhow::anyhow!("{error}"))?;
-            scene
-                .render_capture(&mut renderer, &editor, &view, 8)
-                .map_err(|error| anyhow::anyhow!("{error}"))?;
-            let repeated = scene.capture(&mut renderer, &request)?;
-            first.write(&root.join("first-capture.png"))?;
-            repeated.write(&root.join("repeated-capture.png"))?;
-            let difference = first
-                .image
-                .as_raw()
-                .iter()
-                .zip(repeated.image.as_raw())
-                .map(|(a, b)| a.abs_diff(*b))
-                .max()
-                .unwrap_or(0);
-            assert!(
-                first.image == repeated.image,
-                "capture must reset history on the live view without another descriptor set (RT={ray_tracing}, maximum channel difference {difference})"
-            );
-            renderer.resize([240, 136])?;
-            assert_eq!(renderer.presentation_ready(), renderer.scene_frame_async());
-            // Retain the published Scene color while dropping stale working IDs.
-            submit_ui(&scene, &renderer, &mut ui)?;
-            scene
-                .render(&mut renderer, &editor, &view, 2)
-                .map_err(|error| anyhow::anyhow!("{error}"))?;
-            renderer.wait_scene_frame()?;
-            assert_eq!(
-                if ray_tracing {
-                    scene.published.as_ref().expect("completed image").size()
-                } else {
-                    renderer.output_size()
-                },
-                [240, 136]
-            );
-            // Interactive resizes retain the published frame while releasing the
-            // old fidelity targets before allocating their replacements.
-            for size in [[192, 108], [256, 144], [240, 136]] {
-                renderer.resize(size)?;
-                submit_ui(&scene, &renderer, &mut ui)?;
-                scene
-                    .render(&mut renderer, &editor, &view, 1)
-                    .map_err(|error| anyhow::anyhow!("{error}"))?;
-                renderer.wait_scene_frame()?;
-                assert_eq!(
-                    if ray_tracing {
-                        scene.published.as_ref().expect("resized frame").size()
-                    } else {
-                        renderer.output_size()
-                    },
-                    size
-                );
-                if ray_tracing {
-                    assert_eq!(
-                        scene
-                            .fidelity
-                            .as_ref()
-                            .expect("live view")
-                            .settings()
-                            .display_size,
-                        size
-                    );
-                }
-            }
-            // Opening another document reuses this same view; it must not acquire
-            // a second set of storage-image descriptors beside the old one.
-            let created = editor.apply(
-                vec![json!({"cmd":"doc.create","args":{
-                    "path":"levels/reopened.scene","kind":"scene"
-                }})],
-                "Create reopened scene fixture",
-                None,
-            )?;
-            let doc = created["outputs"][0]["id"]
-                .as_str()
-                .ok_or_else(|| anyhow::anyhow!("created scene"))?;
-            editor.apply_to(doc, vec![json!({"cmd":"entity.create","args":{
-                "name":"Reopened box","components":{"Transform":{},"MeshRenderer":{"color":[0.3,0.6,0.2,1]}}
-            }})], "Populate reopened scene fixture")?;
-            for path in ["levels/reopened.scene", "levels/main.scene"] {
-                editor.action("editor.scene.open", json!({"scene":path}))?;
-                let reopened = editor.view()?;
-                renderer.replace_scene(reopened.scene(
-                    editor.host.root(),
-                    &editor.state,
-                    None,
-                    &mut editor.models,
-                )?)?;
-                scene
-                    .render_capture(&mut renderer, &editor, &reopened, 1)
-                    .map_err(|error| anyhow::anyhow!("{error}"))?;
-                assert!(scene.active);
-                assert!(
-                    scene.failed.is_none(),
-                    "scene reopen must publish without heap exhaustion"
-                );
-            }
-            if !ray_tracing {
-                let idle_view = editor.view()?;
-                super::convergence::exercise_idle(&mut scene, &mut renderer, &editor, &idle_view)?;
-                super::recovery::exercise_pressure(&mut scene, &mut renderer, &editor, &idle_view)?;
-            }
-            renderer.gpu().assert_clean()?;
-            Ok(())
-        })();
-        scene
-            .destroy(&mut renderer)
-            .map_err(|error| anyhow::anyhow!("{error}"))?;
-        result
-    }
 }

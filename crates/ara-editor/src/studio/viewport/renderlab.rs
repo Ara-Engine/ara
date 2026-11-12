@@ -119,19 +119,6 @@ impl RenderlabScene {
         self.published.as_ref().map(PresentationImage::output)
     }
 
-    /// Replaces the color of `capture` (entity IDs, legend and marks stay `ara-render`'s) with
-    /// the last Renderlab image, when there is one of the capture's size.
-    pub(super) fn capture(
-        &self,
-        renderer: &mut ara_render::Renderer,
-        capture: &mut ara_render::capture::Capture,
-    ) -> Result<()> {
-        match &self.published {
-            Some(image) if image.size() == renderer.size() => image.capture(renderer, capture),
-            _ => Ok(()),
-        }
-    }
-
     /// Releases what the engine and the published image hold on `gpu`.
     pub(super) fn release(mut self, gpu: &mut GpuDevice) -> Result<()> {
         if let Some(image) = self.published.take() {

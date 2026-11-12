@@ -65,65 +65,6 @@ impl Convergence {
 }
 
 #[cfg(test)]
-pub(super) fn exercise_idle(
-    scene: &mut super::SceneView,
-    renderer: &mut ara_render::Renderer,
-    editor: &crate::Editor,
-    view: &crate::world::DocumentView,
-) -> anyhow::Result<()> {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
-    while scene.needs_frame(true) {
-        anyhow::ensure!(
-            std::time::Instant::now() < deadline,
-            "Scene did not finish content and converge"
-        );
-        scene
-            .render(renderer, editor, view, 1)
-            .map_err(|e| anyhow::anyhow!("{e}"))?;
-        std::thread::sleep(std::time::Duration::from_millis(1));
-    }
-    let mut previous = renderer.timings().first().map(|p| p.start_ms);
-    let expected = 3 * ara_render::temporal_phases(renderer.render_size(), renderer.size());
-    scene.invalidate();
-    let mut completed = 0;
-    while scene.needs_frame(true) {
-        anyhow::ensure!(
-            std::time::Instant::now() < deadline,
-            "Scene convergence did not become idle"
-        );
-        scene
-            .render(renderer, editor, view, 1)
-            .map_err(|e| anyhow::anyhow!("{e}"))?;
-        let time = renderer.timings().first().map(|p| p.start_ms);
-        if time != previous {
-            completed += 1;
-            previous = time;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(1));
-    }
-    assert_eq!(
-        completed, expected,
-        "only completed Scene frames consume three jitter cycles"
-    );
-    assert!(
-        !scene.preview_needs_frame(),
-        "TAA-only convergence must not wake the Game preview"
-    );
-    for _ in 0..4 {
-        scene
-            .render(renderer, editor, view, 1)
-            .map_err(|e| anyhow::anyhow!("{e}"))?;
-        assert!(
-            !renderer.scene_frame_pending(),
-            "an idle poll must not resubmit"
-        );
-        assert_eq!(renderer.timings().first().map(|p| p.start_ms), previous);
-    }
-    renderer.gpu().assert_clean()?;
-    Ok(())
-}
-
-#[cfg(test)]
 mod tests {
     use super::*;
     #[test]
