@@ -338,7 +338,7 @@ pub struct EditorState {
     /// Effects turned off for diagnosis (View > Rendering Debug): the Scene view
     /// applies them at once, Play from its next start. Session only, never persisted.
     #[serde(skip)]
-    pub render_debug: ara_render::RenderDebug,
+    pub render_debug: ara_play::RenderDebug,
     /// Mesh Paint mode (`paint.*` commands, `editor.paint`): its brush and colours
     /// while on; presses in the Scene paint the selected meshes. Session only.
     #[serde(skip)]
@@ -464,7 +464,7 @@ impl Default for EditorState {
             reduce_motion: false,
             render_quality: None,
             detected_quality: None,
-            render_debug: ara_render::RenderDebug::default(),
+            render_debug: ara_play::RenderDebug::default(),
             quality: true,
             camera: Camera::default(),
             tool: Tool::Translate,

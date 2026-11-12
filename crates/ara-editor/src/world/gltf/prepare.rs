@@ -2,14 +2,12 @@
 use super::*;
 use std::{collections::BTreeSet, sync::Arc, thread::JoinHandle};
 
-/// What the content worker returns. With a renderer's seed the old raster path gets its GPU-ready
-/// `raster` content (which carries the frame). Without one the Scene view's own frame comes back
-/// directly: the extracted `frame` and the CPU `scene` picking, snapping and bounds read.
+/// What the content worker returns: the extracted frame and the CPU scene that picking,
+/// snapping and bounds read.
 pub(crate) struct PreparedScene {
     pub content: FidelityContent,
-    pub raster: Option<ara_runtime_render::RasterContent>,
-    pub frame: Option<ara_runtime::extract::RenderFrame>,
-    pub scene: Option<ara_runtime_render::fidelity::native::Prepared>,
+    pub frame: ara_runtime::extract::RenderFrame,
+    pub scene: ara_runtime_render::fidelity::native::Prepared,
 }
 
 /// What the content worker snapshots (the editor's state at the moment the job starts).
@@ -90,7 +88,6 @@ impl FidelityContent {
     pub(crate) fn prepare_async(
         &self,
         input: SnapshotInput<'_>,
-        native_seed: Option<ara_render::NativeSeed>,
     ) -> anyhow::Result<JoinHandle<anyhow::Result<PreparedScene>>> {
         let SnapshotInput {
             view,
@@ -148,32 +145,19 @@ impl FidelityContent {
                     },
                 )?;
                 let resolved = content.content(&frame, &workspace, &schema)?;
-                match native_seed {
-                    Some(seed) => Ok(PreparedScene {
-                        content,
-                        raster: Some(ara_runtime_render::RasterContent::new_reusing(
-                            frame, resolved, seed,
-                        )?),
-                        frame: None,
-                        scene: None,
-                    }),
-                    None => {
-                        let scene = ara_runtime_render::fidelity::native::prepare(
-                            &frame,
-                            resolved,
-                            ara_runtime_render::fidelity::native::NativeConfig {
-                                resident_bytes: 1 << 30,
-                                upload_bytes: 16 << 20,
-                            },
-                        )?;
-                        Ok(PreparedScene {
-                            content,
-                            raster: None,
-                            frame: Some(frame),
-                            scene: Some(scene),
-                        })
-                    }
-                }
+                let scene = ara_runtime_render::fidelity::native::prepare(
+                    &frame,
+                    resolved,
+                    ara_runtime_render::fidelity::native::NativeConfig {
+                        resident_bytes: 1 << 30,
+                        upload_bytes: 16 << 20,
+                    },
+                )?;
+                Ok(PreparedScene {
+                    content,
+                    frame,
+                    scene,
+                })
             })
             .context("Scene content worker")
     }

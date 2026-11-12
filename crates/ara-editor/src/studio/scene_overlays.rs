@@ -1206,8 +1206,8 @@ fn content(s: &Studio, id: &str, vertical: bool) -> El<Studio> {
 /// flip it.
 type Switch = (
     &'static str,
-    fn(&ara_render::RenderDebug) -> bool,
-    fn(&mut ara_render::RenderDebug),
+    fn(&ara_play::RenderDebug) -> bool,
+    fn(&mut ara_play::RenderDebug),
 );
 const EFFECTS: [Switch; 9] = [
     (
@@ -1251,7 +1251,7 @@ const EFFECTS: [Switch; 9] = [
 
 /// Flips one render debug switch: the Scene view reads it each frame, a running Play
 /// gets it at once, and each Play start carries it.
-pub(super) fn flip_effect(s: &mut Studio, flip: fn(&mut ara_render::RenderDebug)) {
+pub(super) fn flip_effect(s: &mut Studio, flip: fn(&mut ara_play::RenderDebug)) {
     flip(&mut s.editor.state.render_debug);
     if let Some(world) = s.editor.play_world.clone() {
         let debug = s.editor.state.render_debug;

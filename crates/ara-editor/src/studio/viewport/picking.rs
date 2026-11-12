@@ -25,16 +25,7 @@ impl SceneView {
     /// The retained geometry belongs to this document. A previous scene's
     /// last-good image may stay visible, but cannot accept authoring snap input.
     pub(crate) fn snap_ready(&self, doc: &str) -> bool {
-        if self
-            .raster
-            .as_ref()
-            .and_then(ara_runtime_render::RasterView::scene)
-            .is_some()
-        {
-            self.raster_scene.as_deref() == Some(doc)
-        } else {
-            self.prepared.is_some() && self.fidelity_scene.as_deref() == Some(doc)
-        }
+        self.prepared.is_some() && self.scene_doc.as_deref() == Some(doc)
     }
 
     /// Pick through selected geometry while retaining the presented target mesh.
@@ -83,10 +74,7 @@ impl SceneView {
     }
 
     fn presented_scene(&self) -> Option<&Scene> {
-        self.raster
-            .as_ref()
-            .and_then(ara_runtime_render::RasterView::scene)
-            .or_else(|| self.prepared.as_ref().map(|prepared| &prepared.scene))
+        self.prepared.as_ref().map(|prepared| &prepared.scene)
     }
 }
 

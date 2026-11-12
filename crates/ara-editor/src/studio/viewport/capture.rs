@@ -43,7 +43,7 @@ impl SceneView {
     /// ids rasterised beside the image). The Scene must have drawn a frame (`render_capture`).
     pub(crate) fn capture(
         &self,
-        renderer: &mut Renderer,
+        device: &mut SceneDevice,
         request: &CaptureRequest,
     ) -> anyhow::Result<Capture> {
         anyhow::ensure!(
@@ -54,15 +54,15 @@ impl SceneView {
         let scene = self
             .renderlab
             .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("the Scene has not drawn a Renderlab frame yet (ARA_SCENE_RENDERER=raster draws none)"))?;
+            .ok_or_else(|| anyhow::anyhow!("the Scene has not drawn a Renderlab frame yet"))?;
         let image = scene
             .image()
-            .ok_or_else(|| anyhow::anyhow!("the Scene has not drawn a Renderlab frame yet (ARA_SCENE_RENDERER=raster draws none)"))?;
+            .ok_or_else(|| anyhow::anyhow!("the Scene has not drawn a Renderlab frame yet"))?;
         anyhow::ensure!(
-            renderer.size() == request.size,
+            device.size() == request.size,
             "the capture is {:?} but the Scene view is {:?}",
             request.size,
-            renderer.size()
+            device.size()
         );
         let mut host = scene
             .id_host()
@@ -75,7 +75,7 @@ impl SceneView {
                 ids.push(host.id_at([x, y])?.id().unwrap_or(0));
             }
         }
-        let rgba = read_rgba8(renderer.gpu_mut(), image, request.size)?;
+        let rgba = read_rgba8(device.gpu_mut(), image, request.size)?;
         let hash = format!("{:?}", self.revision);
         let shaders = ShaderMetadata {
             content_key: "renderlab".into(),
@@ -89,7 +89,7 @@ impl SceneView {
             CaptureContext {
                 names: &names,
                 hash: &hash,
-                device: renderer.gpu().info(),
+                device: device.gpu().info(),
                 timings: &[],
                 shaders: &shaders,
             },
@@ -100,18 +100,17 @@ impl SceneView {
     /// adopted and drawn for the settle passes: the blocking boundary a capture reads at.
     pub(in crate::studio) fn render_capture(
         &mut self,
-        renderer: &mut Renderer,
+        device: &mut SceneDevice,
         editor: &Editor,
         view: &crate::world::DocumentView,
         _settle: u32,
     ) -> ara_ui::Result<()> {
-        self.capture_forced = true;
         loop {
-            self.render_scene_frame(renderer, editor, view)?;
+            self.render_scene_frame(device, editor, view)?;
             if let Some(error) = &self.renderlab_error {
                 return Err(format!("Renderlab could not draw the Scene: {error}").into());
             }
-            let drawn = self.raster_frame.is_some()
+            let drawn = self.frame.is_some()
                 && self.content_job.is_none()
                 && self.content_ready.is_none()
                 && self.scene_settle == 0

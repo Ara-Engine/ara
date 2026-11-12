@@ -4,7 +4,7 @@
 //! finish on a worker (`crate::capture::Work`). `--screenshot` takes the `window` picture
 //! through the same code ([`screenshot`]).
 use ara_frame::capture::{CaptureRequest, ViewMode};
-use ara_render::Renderer;
+use super::device::SceneDevice;
 use serde_json::{Value, json};
 use stillkit::el::Runtime;
 
@@ -16,7 +16,7 @@ use crate::world::EditWorldView as _;
 /// Serves the next queued capture job, if there is one. `scene` is the renderer and the
 /// Scene view it presents, for viewport captures; none while the Scene is not shown, which
 /// fails a `viewport` capture with a message saying so.
-pub(super) fn serve(rt: &mut Runtime<Studio>, scene: Option<(&mut Renderer, &SceneView)>) {
+pub(super) fn serve(rt: &mut Runtime<Studio>, scene: Option<(&mut SceneDevice, &SceneView)>) {
     let Ok(task) = rt.state().editor.captures.try_recv() else {
         return;
     };
@@ -29,7 +29,7 @@ pub(super) fn serve(rt: &mut Runtime<Studio>, scene: Option<(&mut Renderer, &Sce
 fn prepare(
     task: &CaptureTask,
     rt: &mut Runtime<Studio>,
-    scene: Option<(&mut Renderer, &SceneView)>,
+    scene: Option<(&mut SceneDevice, &SceneView)>,
 ) -> anyhow::Result<Work> {
     let editor = &rt.state().editor;
     let target = task.params.target.as_deref().unwrap_or("viewport");
@@ -83,7 +83,7 @@ fn not_shown() -> anyhow::Error {
 }
 
 /// The Scene capture the editor takes: its camera at the renderer's size, with `marks`.
-fn request(editor: &crate::Editor, renderer: &Renderer, marks: Option<usize>) -> CaptureRequest {
+fn request(editor: &crate::Editor, renderer: &SceneDevice, marks: Option<usize>) -> CaptureRequest {
     CaptureRequest {
         camera: editor.state.camera.spec(),
         size: renderer.size(),
@@ -99,37 +99,36 @@ fn request(editor: &crate::Editor, renderer: &Renderer, marks: Option<usize>) ->
 
 /// The editor window with its Scene in it: the Scene's capture laid into the Scene view's
 /// rectangle and the UI composited over it, as the window composites its native layer
-/// under the UI. The report is the window's layout.
+/// under the UI. When the Scene is not in front (the Game tab is, say) the window is the UI as
+/// laid out, its native layers empty. The report is the window's layout.
 fn window(
     rt: &mut Runtime<Studio>,
-    scene: Option<(&mut Renderer, &SceneView)>,
+    scene: Option<(&mut SceneDevice, &SceneView)>,
 ) -> anyhow::Result<(image::RgbaImage, Value)> {
     use image::imageops::{FilterType, overlay, replace, resize};
     let (renderer, scene) = scene.ok_or_else(not_shown)?;
     let ui = rt.snap()?;
     let report = layout(rt);
-    let view = rt
-        .tree()
-        .into_iter()
-        .find(|n| {
-            n.key
-                .as_ref()
-                .is_some_and(|k| k.to_string() == "scene/view")
-        })
-        .ok_or_else(not_shown)?;
-    let capture = scene.capture(renderer, &request(&rt.state().editor, renderer, None))?;
-    let (x, y) = (view.rect.left.round() as i64, view.rect.top.round() as i64);
-    let (w, h) = (
-        view.rect.width().round().max(1.0) as u32,
-        view.rect.height().round().max(1.0) as u32,
-    );
-    let scene_image = if capture.image.dimensions() == (w, h) {
-        capture.image
-    } else {
-        resize(&capture.image, w, h, FilterType::Triangle)
-    };
+    let view = rt.tree().into_iter().find(|n| {
+        n.key
+            .as_ref()
+            .is_some_and(|k| k.to_string() == "scene/view")
+    });
     let mut canvas = image::RgbaImage::from_pixel(ui.width, ui.height, image::Rgba([0, 0, 0, 255]));
-    replace(&mut canvas, &scene_image, x, y);
+    if let Some(view) = view {
+        let capture = scene.capture(renderer, &request(&rt.state().editor, renderer, None))?;
+        let (x, y) = (view.rect.left.round() as i64, view.rect.top.round() as i64);
+        let (w, h) = (
+            view.rect.width().round().max(1.0) as u32,
+            view.rect.height().round().max(1.0) as u32,
+        );
+        let scene_image = if capture.image.dimensions() == (w, h) {
+            capture.image
+        } else {
+            resize(&capture.image, w, h, FilterType::Triangle)
+        };
+        replace(&mut canvas, &scene_image, x, y);
+    }
     let ui = image::RgbaImage::from_raw(ui.width, ui.height, ara_kit::capture::rgba(&ui))
         .ok_or_else(|| anyhow::anyhow!("the window snapshot has the wrong size"))?;
     overlay(&mut canvas, &ui, 0, 0);
@@ -141,7 +140,7 @@ fn window(
 /// project-folder sandbox that gates an agent's output path.
 pub(super) fn screenshot(
     rt: &mut Runtime<Studio>,
-    scene: Option<(&mut Renderer, &SceneView)>,
+    scene: Option<(&mut SceneDevice, &SceneView)>,
     dir: &std::path::Path,
 ) -> anyhow::Result<std::path::PathBuf> {
     let (image, report) = window(rt, scene)?;

@@ -3,7 +3,7 @@
 //! The Scene's outlines, hover, grid occlusion and clicks read a packed id image
 //! (`ara_editor_gpu::IdSource::Packed`): one RGBA8 texel per output pixel holding the
 //! little-endian id of the object drawn there, 0 for nothing. The id of draw `n` of the
-//! frame is `n + 1`, the same compact channel `ara_render::Renderer::entities()` used, so
+//! frame is `n + 1`, the compact channel the Scene's entity list uses, so
 //! the editor's channel map, outline groups and click path are unchanged. This module
 //! rasterises the frame's own draws from the Scene camera into that image, depth tested,
 //! without a GPU: it matches the picture to the accuracy of the draws' triangles (cut-outs,

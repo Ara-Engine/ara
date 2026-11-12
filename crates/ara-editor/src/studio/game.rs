@@ -14,10 +14,8 @@ use ara_ui::style::Color;
 use crate::Editor;
 use crate::gpu::ui_device;
 use crate::state::Camera;
-use crate::studio::game_preview::{self, GameHost, Preview};
+use crate::studio::device::SceneDevice;
 use crate::studio::player::{PlayerView, player_texture};
-use crate::studio::viewport::SceneView;
-use crate::world::DocumentView;
 
 /// The Game view's native layer.
 pub(crate) const GAME_LAYER: &str = "game";
@@ -402,8 +400,6 @@ fn scale_control(s: &super::Studio) -> stillkit::el::El<super::Studio> {
 /// What the Game view shows, for its panel's notices.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Status {
-    /// The gameplay camera's picture is on screen (outside Play).
-    pub preview: bool,
     /// A player's frame is on screen (during Play).
     pub live: bool,
     /// The scene has a gameplay camera.
@@ -440,25 +436,20 @@ pub(super) fn tiles(count: usize, size: [f32; 2], gap: f32) -> Vec<[f32; 4]> {
         .collect()
 }
 
-/// The studio's answer to the Game preview: the Game view's size and the scene's camera.
+/// What the Game view reads from the editor: its size, whether a player shows, and the scene's
+/// gameplay camera.
 #[derive(Default)]
 struct Host {
     frame: Option<[u32; 2]>,
     live: bool,
-    preview: Option<[u32; 2]>,
     resolved: Arc<Resolved>,
     /// The gameplay camera, cached for the store revision it was found at.
     camera: Option<(u64, Option<Camera>)>,
     revision: u64,
 }
 
-impl GameHost for Host {
-    fn game_frame(&self) -> Option<[u32; 2]> {
-        self.frame
-    }
-    fn game_live(&self) -> bool {
-        self.live
-    }
+impl Host {
+    /// The camera Play starts with, if the scene has one.
     fn gameplay_camera(&mut self, _: &Editor) -> Option<Camera> {
         if let Some((at, camera)) = self.camera
             && at == self.revision
@@ -470,16 +461,12 @@ impl GameHost for Host {
         self.camera = Some((self.revision, camera));
         camera
     }
-    fn set_game_preview(&mut self, size: Option<[u32; 2]>) -> Option<[u32; 2]> {
-        std::mem::replace(&mut self.preview, size)
-    }
 }
 
 /// Draws the Game view into its layer on its own UI adapter. Create it with the renderer;
 /// [`Self::retire`] it before the renderer drops.
 pub(super) struct Game {
     layer: super::layer::Layer,
-    preview: Preview,
     /// The players shown (a host and its clients side by side, or the only one), by
     /// player number, with their world.
     players: Vec<(String, usize, PlayerView)>,
@@ -505,12 +492,11 @@ impl Game {
     /// An adapter on the renderer's GPU.
     /// # Safety
     /// The renderer outlives this; one thread submits for both.
-    pub unsafe fn new(renderer: &ara_render::Renderer) -> Result<Self> {
-        let images = std::iter::once(game_preview::texture()).chain((0..=16).map(player_texture));
+    pub unsafe fn new(device: &SceneDevice) -> Result<Self> {
+        let images = (0..=16).map(player_texture);
         Ok(Self {
             // SAFETY: forwarded caller contract.
-            layer: unsafe { super::layer::Layer::new(renderer, images)? },
-            preview: Preview::default(),
+            layer: unsafe { super::layer::Layer::new(device, images)? },
             players: Vec::new(),
             client: 0,
             zoom: 1.0,
@@ -529,32 +515,20 @@ impl Game {
         self.shown = None;
     }
 
-    /// Whether the next pass has Game work: Play frames to collect, or a preview to render,
-    /// settle or let go.
-    pub fn wants_frame(
-        &mut self,
-        editor: &Editor,
-        renderer: &ara_render::Renderer,
-        scene: &SceneView,
-    ) -> bool {
+    /// Whether the next pass has Game work: Play frames to collect.
+    pub fn wants_frame(&self, editor: &Editor) -> bool {
         editor.state.playing.is_some()
-            || self
-                .preview
-                .wants_frame(editor, &mut self.host, renderer, scene)
     }
 
-    /// One pass: collect the player's frame (during Play) or render the preview, then
-    /// present whichever is on screen into `layer` at `extent` physical pixels. `layer` is
+    /// One pass: collect the player's frame (during Play), then present it into `layer` at `extent` physical pixels. `layer` is
     /// None while the Game view is not laid out. `resolved` is the scene at `revision`.
     /// # Safety
     /// `layer` is the Game view's live native layer (`present::Target`).
     #[allow(clippy::too_many_arguments)]
     pub unsafe fn frame(
         &mut self,
-        renderer: &mut ara_render::Renderer,
-        scene: &mut SceneView,
+        device: &mut SceneDevice,
         editor: &mut Editor,
-        view: &DocumentView,
         resolved: &Arc<Resolved>,
         revision: u64,
         layer: Option<(super::present::Target, [u32; 2])>,
@@ -566,8 +540,8 @@ impl Game {
             self.host.resolved = Arc::clone(resolved);
         }
         // A frame still on the GPU: draw nothing new this pass.
-        let ready = self.layer.ready(renderer)?;
-        let gpu = ui_device(renderer.gpu());
+        let ready = self.layer.ready(device)?;
+        let gpu = ui_device(device.gpu());
         self.host.live = false;
         // What to draw: each live player's frame in its tile, else the preview.
         let mut images: Vec<(u32, [f32; 4])> = Vec::new();
@@ -630,26 +604,8 @@ impl Game {
             } else {
                 self.close_player(editor.play_surfaces.as_ref())?;
             }
-            self.preview
-                .update(
-                    renderer,
-                    scene,
-                    editor,
-                    view,
-                    &mut self.host,
-                    &mut self.layer.ui,
-                )
-                .map_err(|e| anyhow::anyhow!("{e}"))?;
-            if images.is_empty()
-                && self.host.preview.is_some()
-                && let Some(extent) = self.host.frame
-            {
-                let logical = [extent[0] as f32 / scale, extent[1] as f32 / scale];
-                images.push((game_preview::texture(), [0.0, 0.0, logical[0], logical[1]]));
-            }
         }
         let status = Status {
-            preview: self.host.preview.is_some() && !self.host.live,
             live: self.host.live,
             camera: self.host.gameplay_camera(editor).is_some(),
             phase: self.play.0.clone(),
@@ -667,7 +623,7 @@ impl Game {
         };
         // A player's frame changes every pass; a preview only when it re-attaches.
         let shown = (image, extent, self.zoom.to_bits());
-        if self.shown == Some(shown) && !self.host.live && !self.preview_changed() {
+        if self.shown == Some(shown) && !self.host.live {
             return Ok(status);
         }
         // The Scale slider zooms about the view's centre; the layer clips what spills.
@@ -699,7 +655,7 @@ impl Game {
         // SAFETY: forwarded caller contract.
         let landed = unsafe {
             self.layer
-                .draw(renderer, layer, extent, scale, &list, &[])?
+                .draw(device, layer, extent, scale, &list, &[])?
         };
         // One that didn't reach the screen draws again on the next pass.
         self.shown = landed.then_some(shown);
@@ -768,12 +724,6 @@ impl Game {
             });
         }
         self.play = (phase, fault);
-    }
-
-    /// The preview re-attaches its texture when a newer frame completes; the paint pass
-    /// samples it either way, so a settling preview is drawn every pass.
-    fn preview_changed(&self) -> bool {
-        self.host.preview.is_some()
     }
 
     /// The world and players Play shows in the Game view, while it plays there.
@@ -862,11 +812,10 @@ impl Game {
         }
     }
 
-    /// Releases the players and the preview; call before the renderer drops.
-    pub fn retire(&mut self, editor: &mut Editor, renderer: &mut ara_render::Renderer) {
+    /// Releases the players; call before the device drops.
+    pub fn retire(&mut self, editor: &mut Editor, device: &mut SceneDevice) {
         let _ = self.close_player(editor.play_surfaces.as_ref());
-        let _ = std::mem::take(&mut self.preview).destroy(renderer, &mut self.layer.ui);
-        self.layer.retire(renderer);
+        self.layer.retire(device);
     }
 }
 

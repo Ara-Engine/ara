@@ -122,6 +122,7 @@ struct Batch {
     material_slot: u64,
     /// Each member in mesh order: its draw's entity and its triangle count, so the batch's
     /// object ids can name each member's primitives (`Scene::tag`).
+    #[cfg_attr(target_vendor = "apple", allow(dead_code))]
     layout: Vec<(u64, u32)>,
 }
 
@@ -139,6 +140,7 @@ pub(crate) struct Scene {
     static_key: Option<u64>,
     /// The ids last set on Renderlab's objects, with the object they were set on: own
     /// objects by entity (`false`), batches by material key (`true`).
+    #[cfg_attr(target_vendor = "apple", allow(dead_code))]
     tags: Tags,
     palette: Vec<Mat4>,
     /// The emissive program once tried: `Some(None)` when Renderlab rejected it.

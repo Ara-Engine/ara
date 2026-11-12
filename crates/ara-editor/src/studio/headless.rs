@@ -1,12 +1,11 @@
 //! `--headless`: render the project's scene offscreen and write `editor-scene.png` to the
 //! output folder, with no window (release smoke tests, `ara hub open --headless`).
 use ara_frame::capture::{CaptureRequest, ViewMode};
-use ara_render::Renderer;
+use super::device::SceneDevice;
 
 use super::setup::{self, Options};
 use super::viewport::SceneView;
 use crate::Editor;
-use crate::world::EditWorldView as _;
 
 /// Opens the project, packages its scene, renders it settled and deterministic, and writes
 /// the capture; the window-free counterpart of the Scene view.
@@ -34,18 +33,10 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     })
     .map_err(anyhow::Error::msg)?;
     let view = editor.view()?;
-    let create_renderer =
-        if crate::world::gltf::render_settings(editor.host.store().workspace())?.ray_tracing {
-            Renderer::new
-        } else {
-            // Ray queries where the GPU has them, unused without the opt-in.
-            Renderer::new_hybrid
-        };
-    let mut renderer = create_renderer(
-        view.scene(editor.host.root(), &editor.state, None, &mut editor.models)?,
-        options.size,
+    let mut renderer = SceneDevice::new(
         &[],
         editor.host.root().join(".ara/gpu"),
+        options.size,
     )?;
     detect_quality(&mut editor, &renderer);
     let mut scene_view = SceneView::default();
@@ -73,7 +64,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
 }
 
 /// Picks the quality preset this GPU supports and applies it to the editor's settings.
-pub(crate) fn detect_quality(editor: &mut Editor, renderer: &Renderer) {
+pub(crate) fn detect_quality(editor: &mut Editor, renderer: &SceneDevice) {
     use ara_render_fidelity::presets::{Capabilities, QualityPreset};
     editor.state.detected_quality = Some(QualityPreset::detect(&Capabilities::of(renderer.gpu())));
     editor.state.apply_settings();

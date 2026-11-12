@@ -102,6 +102,64 @@ fn a_screenshot_run_saves_the_window_with_its_scene_in_it() {
     );
 }
 
+/// The saved layout has the Game tab in front of the Scene (`.ara/editor-layout.json`): the Scene
+/// layer is never shown, so only the Game view can be presented. A bounded run still counts
+/// frames and ends, and the picture is the window as laid out (without the Scene's image).
+#[test]
+#[ignore = "opens an unfocused window and needs a GPU: cargo test -p ara-editor --test bounded_runs -- --ignored"]
+fn a_screenshot_run_ends_with_the_game_tab_in_front() {
+    let root = common::project("bounded-game-tab");
+    let area = |id: &str, tabs: Value, active: u32| json!({"Area": {"id": id, "tabs": tabs, "active": active}});
+    let split = |axis: &str, ratio: f64, first: Value, second: Value| json!({"Split": {"axis": axis, "ratio": ratio, "first": first, "second": second}});
+    let layout = json!({
+        "version": 2,
+        "layout": {
+            "main": split(
+                "Horizontal",
+                0.16,
+                area("outline", json!(["hierarchy"]), 0),
+                split(
+                    "Horizontal",
+                    0.69,
+                    split(
+                        "Vertical",
+                        0.72,
+                        area("view", json!(["scene", "game"]), 1),
+                        area("bottom", json!(["assets", "console"]), 0),
+                    ),
+                    area("right", json!(["inspector"]), 0),
+                ),
+            ),
+            "floating": [],
+        },
+        "assets": {"sidebarWidth": 168, "expandedFolders": []},
+    });
+    std::fs::create_dir_all(root.join(".ara")).unwrap();
+    std::fs::write(root.join(".ara/editor-layout.json"), layout.to_string()).unwrap();
+    let output = root.join("native");
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ara-editor"))
+        .arg(&root)
+        .args([
+            "--frames",
+            "4",
+            "--screenshot",
+            "--size",
+            "1280x800",
+            "--output",
+        ])
+        .arg(&output)
+        .stdout(std::fs::File::create(root.join("editor.out.log")).unwrap())
+        .stderr(std::fs::File::create(root.join("editor.err.log")).unwrap())
+        .spawn()
+        .unwrap();
+    let status = finishes(&mut child, &root, Duration::from_secs(180));
+    assert!(status.success(), "{status}");
+    assert!(
+        output.join("editor.png").is_file(),
+        "the window picture is written"
+    );
+}
+
 #[test]
 #[ignore = "starts the editor with a hidden window and needs a GPU: cargo test -p ara-editor --test bounded_runs -- --ignored"]
 fn a_long_frame_run_is_a_protocol_server_with_no_window() {

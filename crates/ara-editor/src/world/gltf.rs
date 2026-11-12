@@ -5,10 +5,9 @@ use ara_runtime::assets::AssetSource;
 use glam::Vec3;
 use std::collections::BTreeMap;
 use std::path::Path;
-mod patch;
 mod pending;
 mod prepare;
-pub(crate) use prepare::{PreparedScene, SnapshotInput};
+pub(crate) use prepare::{PreparedScene, SnapshotInput, camera_view};
 #[cfg(test)]
 pub(crate) use prepare::{FrameInputs, extract_frame};
 
@@ -104,27 +103,6 @@ impl DecodedModels {
     }
 }
 
-/// Reads the transactional project default, including unsaved typed settings edits.
-pub(crate) fn render_quality(
-    workspace: &ara_doc::Workspace,
-) -> anyhow::Result<ara_runtime_render::QualityChoice> {
-    Ok(render_settings(workspace)?.quality.into())
-}
-
-/// Project rendering policy, read without discovering or importing any assets.
-pub(crate) fn render_settings(
-    workspace: &ara_doc::Workspace,
-) -> anyhow::Result<ara_components::render::RenderSettings> {
-    Ok(workspace
-        .doc("pj_project")
-        .and_then(|doc| doc.record("p_settings"))
-        .and_then(|record| record.get("settings"))
-        .and_then(|settings| settings.get("rendering"))
-        .map(serde::Deserialize::deserialize)
-        .transpose()?
-        .unwrap_or_default())
-}
-
 fn mesh(
     model: Option<&ara_runtime::model::Model>,
     renderer: &ara_runtime::components::MeshRenderer,
@@ -206,16 +184,6 @@ impl FidelityContent {
     }
     pub(crate) fn revision(&self) -> u64 {
         self.reader.revision()
-    }
-    pub(crate) fn frame(
-        &mut self,
-        view: &super::DocumentView,
-        workspace: &ara_doc::Workspace,
-        schema: &ara_schema::SchemaDb,
-        preview: Option<&super::gesture::Gesture>,
-        hidden: &std::collections::BTreeSet<String>,
-    ) -> anyhow::Result<ara_runtime::extract::RenderFrame> {
-        self.frame_with_poses(view, workspace, schema, preview.map(|p| &p.current), hidden)
     }
     pub(crate) fn frame_with_poses(
         &mut self,
