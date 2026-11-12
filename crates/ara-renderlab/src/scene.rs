@@ -63,6 +63,52 @@ struct Object {
     skin: Option<(MeshId, usize)>,
 }
 
+/// A draw's transform with its last row made exactly (0, 0, 0, 1) when it is within 1e-3 of it:
+/// transforms composed in `f32` (the editor's extraction) end in 0.99999994, which Renderlab
+/// rejects as not affine. A matrix further from affine is left as it is.
+fn cleaned(world: &glam34::Mat4) -> glam34::Mat4 {
+    let mut m = *world;
+    if m.x_axis.w.abs() < 1e-3
+        && m.y_axis.w.abs() < 1e-3
+        && m.z_axis.w.abs() < 1e-3
+        && (m.w_axis.w - 1.).abs() < 1e-3
+    {
+        (m.x_axis.w, m.y_axis.w, m.z_axis.w, m.w_axis.w) = (0., 0., 0., 1.);
+    }
+    m
+}
+
+/// Whether a draw's transform is one Renderlab can light (`NormalTransform::valid`): an exactly
+/// affine matrix whose 3x3 part is invertible with max|A| * max|A^-1| within 1e4, so its normals
+/// are defined. Renderlab refuses the whole frame for a draw that is not, and Ara's renderer
+/// culls such draws (an entity at zero scale, a hidden one), so the bridge leaves them out.
+fn drawable(world: &glam34::Mat4) -> bool {
+    if !world.is_finite() {
+        return false;
+    }
+    let m = cleaned(world).to_cols_array_2d();
+    if m[0][3] != 0. || m[1][3] != 0. || m[2][3] != 0. || m[3][3] != 1. {
+        return false;
+    }
+    let a = glam34::DMat3::from_cols(
+        glam34::DVec3::new(m[0][0].into(), m[0][1].into(), m[0][2].into()),
+        glam34::DVec3::new(m[1][0].into(), m[1][1].into(), m[1][2].into()),
+        glam34::DVec3::new(m[2][0].into(), m[2][1].into(), m[2][2].into()),
+    );
+    let det = a.determinant();
+    if det == 0. || !det.is_finite() {
+        return false;
+    }
+    let inverse = a.inverse();
+    let max = |a: glam34::DMat3| {
+        a.to_cols_array()
+            .into_iter()
+            .map(f64::abs)
+            .fold(0., f64::max)
+    };
+    inverse.is_finite() && max(a) * max(inverse) <= 1e4
+}
+
 /// One material's static batch: its members' triangles merged in world space.
 struct Batch {
     /// The members' geometry and transforms the mesh was built from.
@@ -533,11 +579,17 @@ impl Scene {
         let mut keyed = Vec::with_capacity(frame.draws.len() + static_draws.len());
         let mut index: HashMap<(MeshKey, u64), usize> = HashMap::new();
         let mut groups: Vec<Group> = Vec::new();
+        let mut singular = 0usize;
         let draws = frame
             .draws
             .iter()
             .map(|draw| (draw, false))
-            .chain(static_draws.iter().map(|draw| (draw, true)));
+            .chain(static_draws.iter().map(|draw| (draw, true)))
+            .filter(|(draw, _)| {
+                let drawable = drawable(&draw.world);
+                singular += usize::from(!drawable);
+                drawable
+            });
         for (draw, fixed) in draws {
             let placed = self
                 .objects
@@ -595,6 +647,12 @@ impl Scene {
             self.place(engine, frame, draw, mesh, material, gaps)?;
         }
         self.static_key = Some(static_key);
+        if singular > 0 {
+            gaps.unsupported(
+                "draws with a singular transform",
+                &format!("{singular} draws (a zero or squashed scale) are not drawn, as in Ara's renderer"),
+            );
+        }
         if !merged.is_empty() {
             gaps.limit(
                 "mesh-material groups per frame",
@@ -648,7 +706,7 @@ impl Scene {
                 .iter()
                 .fold(fnv(FNV, &material.to_le_bytes()), |h, draw| {
                     let h = fnv(h, &geometry_key(draw, &mut self.coverage).to_le_bytes());
-                    draw.world
+                    cleaned(&draw.world)
                         .to_cols_array()
                         .iter()
                         .fold(h, |h, v| fnv(h, &v.to_bits().to_le_bytes()))
@@ -670,7 +728,7 @@ impl Scene {
                     split_handedness(source.to_mut(), triangles.to_mut());
                 }
                 batch::append_world(
-                    &draw.world,
+                    &cleaned(&draw.world),
                     &source,
                     &triangles,
                     &mut vertices,
@@ -720,7 +778,7 @@ impl Scene {
         material: u64,
         gaps: &mut Gaps,
     ) -> Result<()> {
-        let world = draw.world.to_cols_array();
+        let world = cleaned(&draw.world).to_cols_array();
         let joints = draw.skin.as_ref().map(|range| range.len());
         let reusable = self.objects.get(&draw.entity).is_some_and(|o| {
             o.mesh == mesh && o.material == material && o.skin.map(|s| s.1) == joints
@@ -1349,6 +1407,39 @@ fn skinned_mesh(
 
 #[cfg(test)]
 mod tests {
+    /// Transforms Renderlab can light draw; a zero or squashed scale, a non-finite one or axes
+    /// collapsed onto a plane do not.
+    #[test]
+    fn singular_transforms_are_not_drawn() {
+        use glam34::{Mat4, Vec3};
+        assert!(drawable(&Mat4::IDENTITY));
+        assert!(drawable(&Mat4::from_scale(Vec3::new(24., 0.01, 24.))));
+        assert!(!drawable(&Mat4::from_scale(Vec3::ZERO)));
+        assert!(!drawable(&Mat4::from_scale(Vec3::new(1., 1., 0.))));
+        assert!(!drawable(&Mat4::from_scale(Vec3::new(1., 1., 1e-5))));
+        assert!(drawable(&Mat4::from_scale(Vec3::new(1e4, 1., 1.))));
+        assert!(!drawable(&Mat4::from_scale(Vec3::new(1e4 + 1., 1., 1.))));
+        let mut rounded = Mat4::from_translation(Vec3::new(61., 0., 77.));
+        rounded.w_axis.w = 0.999_999_94;
+        assert!(
+            drawable(&rounded),
+            "an f32 composition error in the last row is repaired"
+        );
+        assert_eq!(cleaned(&rounded).w_axis.w, 1.);
+        let mut projective = Mat4::IDENTITY;
+        projective.z_axis.w = 0.5;
+        assert!(!drawable(&projective), "a real projective part is not");
+        assert!(!drawable(&Mat4::from_translation(Vec3::new(
+            f32::NAN,
+            0.,
+            0.
+        ))));
+        let flat = Mat4::from_cols_array(&[
+            1., 0., 0., 0., 2., 0., 0., 0., 3., 0., 0., 0., 0., 0., 0., 1.,
+        ]);
+        assert!(!drawable(&flat));
+    }
+
     use super::*;
     use ara_asset_format::{TextureFormat, write_ktx2};
     use ara_runtime::{model::Model, model::Primitive, model::TextureUsage};

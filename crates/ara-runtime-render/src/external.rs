@@ -54,6 +54,11 @@ pub struct ExternalFrame {
     /// size on the presenter's device, in `CopySource`. The external renderer keeps
     /// ownership; the presenter copies it before the next `render`.
     pub image: Image,
+    /// Packed object ids for this frame, RGBA8 UNORM of `image`'s size, in
+    /// `CopySource`, when the handoff delivered one (little-endian ids, 0 nothing,
+    /// 0xFFFF_FFFF a hit without an id). `None` when the renderer has no id image:
+    /// the host rasterises its own.
+    pub id: Option<Image>,
     /// GPU milliseconds the external renderer measured for a recent frame, when it
     /// has timestamps (it may lag the presented frame).
     pub gpu_ms: Option<f64>,

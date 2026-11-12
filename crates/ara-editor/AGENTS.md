@@ -60,6 +60,19 @@ Polish assets: Lucide SVGs (ISC), Inter, JetBrains Mono (OFL; THIRD_PARTY_NOTICE
 Raster IDs drive picking and hover through `world/channels.rs` (channel → entity; terrain is
 one object). A raster Scene draws selection outlines into its frames (`Outlines::in_scene`);
 overlays draw with the shown frame's camera and drag pose (`SceneView::shown_frame`).
+The overlays read ids through `gpu::IdSource` (`overlay::IdMode`, debug switch
+`ARA_SCENE_IDS`: unset = today; `direct` = ara-render ids with shader outlines, the control;
+`repacked` = the same ids repacked to Renderlab's packed RGBA8 form, Metal only): the two
+modes' Scene frames must match pixel for pixel. `ARA_SCENE_DUMP=<file.png>` writes each composed
+Scene frame (image + overlays, the compositor's target) to a PNG: window captures and `--headless`
+never include the overlays, so use it to see them.
+`ARA_SCENE_RENDERER=renderlab` (off by default) draws the Scene with an engine hosted in the
+editor (`viewport/renderlab.rs`, `ara-renderlab`'s bridge). Its ids are made beside the image:
+`viewport/ids.rs` rasterises the frame's draws (draw `n` = id `n + 1`, depth tested, skinned on
+the CPU; terrain has none yet) into the packed RGBA8 image the overlays sample
+(`IdSource::Packed`) and the click reads bit-exact from the same CPU texels (`IdHost`); an
+engine that delivers ids (`ExternalFrame::id`) replaces the overlays' copy. A bounded run
+(`--frames`, `--screenshot`) whose Scene fails and presents nothing for 10 s ends with the error.
 
 Panel authoring: asset_tools owns isolated import jobs, cached off-thread thumbnails
 (models, material spheres, VFX) and material node previews (`node_preview.rs`). authoring

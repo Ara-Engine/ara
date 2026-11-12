@@ -6,23 +6,6 @@
 //! The GPU test (`id_slot_matches_across_resize`) is one command and uses the
 //! shared GPU. Do not run it outside the lease.
 
-/// Packed id at one texel. `R` is bits 0–7, `G` 8–15, `B` 16–23, `A` 24–31.
-fn id_texel(x: u32, y: u32, width: u32, frame: u32) -> [u8; 4] {
-    if x == 0 && y == 0 {
-        return [0; 4];
-    }
-    if x == 1 && y == 0 {
-        return [0xff; 4];
-    }
-    let n = x + y * width;
-    [
-        n.wrapping_mul(17).wrapping_add(3) as u8,
-        n.wrapping_mul(29).wrapping_add(5) as u8,
-        n.wrapping_mul(41).wrapping_add(7) as u8,
-        frame as u8,
-    ]
-}
-
 /// Colour bytes for the same frame: red carries the frame number.
 fn colour_texel(x: u32, y: u32, frame: u32) -> [u8; 4] {
     [frame as u8, (x & 255) as u8, (y & 255) as u8, 0x5a]
@@ -31,14 +14,12 @@ fn colour_texel(x: u32, y: u32, frame: u32) -> [u8; 4] {
 fn pattern(size: [u32; 2], frame: u32) -> (Vec<u8>, Vec<u8>) {
     let (width, height) = (size[0], size[1]);
     let mut colour = Vec::with_capacity((width * height * 4) as usize);
-    let mut id = Vec::with_capacity((width * height * 4) as usize);
     for y in 0..height {
         for x in 0..width {
             colour.extend(colour_texel(x, y, frame));
-            id.extend(id_texel(x, y, width, frame));
         }
     }
-    (colour, id)
+    (colour, crate::shared::id_pattern(size, frame))
 }
 
 #[test]
@@ -61,12 +42,15 @@ fn id_pattern_uses_all_channels_and_the_reserved_values() {
     let (_, other) = pattern(size, 8);
     assert_ne!(id, other);
     assert_ne!(pattern([17, 13], 7).1.len(), id.len());
+    let enabled = std::env::var("ARA_RENDERLAB_SCENE_IDS").ok().as_deref()
+        == Some(crate::shared::SCENE_IDS_PATTERN);
+    assert_eq!(crate::shared::scene_ids_pattern(), enabled);
 }
 
 #[cfg(windows)]
 mod gpu {
     use super::pattern;
-    use crate::shared::SharedHandoff;
+    use crate::shared::{PresentedId, SharedHandoff};
     use ara_gpu::{
         Access, Barrier, Device, GpuDevice, Image, Queue, Resource, commands::Command, vk,
     };
@@ -210,19 +194,22 @@ mod gpu {
         gpu: &mut GpuDevice,
         size: [u32; 2],
         colour_dst: Image,
-        id_dst: Image,
     ) -> anyhow::Result<()> {
         let colour = source(device, size, "synthetic colour");
         let id = source(device, size, "synthetic id");
         // The real id texture replaces `id` here and nowhere else.
         handoff.set_id(id.clone());
+        let mut presented = None;
         for frame in 1..=3 {
             let (colour_bytes, id_bytes) = pattern(size, frame);
             upload(queue, &colour, &colour_bytes, size);
             upload(queue, &id, &id_bytes, size);
             handoff.publish_textures(device, queue, &colour)?;
+            assert!(handoff.id_pending());
             handoff.deliver(gpu, colour_dst)?;
-            handoff.deliver_id(gpu, id_dst)?;
+            let id_image = PresentedId::copy_from(&mut presented, handoff, gpu, size)?;
+            assert_eq!(presented.as_ref().expect("retained").output(), id_image);
+            assert!(!handoff.id_pending());
             let _ = device.poll(wgpu::PollType::wait_indefinitely());
             assert_exact(
                 &read_image(gpu, colour_dst, size)?,
@@ -231,11 +218,14 @@ mod gpu {
                 size,
             );
             assert_exact(
-                &read_image(gpu, id_dst, size)?,
+                &read_image(gpu, id_image, size)?,
                 &id_bytes,
                 &format!("id frame {frame}"),
                 size,
             );
+        }
+        if let Some(presented) = presented {
+            presented.destroy(gpu)?;
         }
         Ok(())
     }
@@ -260,35 +250,14 @@ mod gpu {
         let large = [64, 40];
         let mut handoff = SharedHandoff::on_device(&device, &gpu, small).expect("shared rings");
         let mut colour_dst = destination(&mut gpu, small).expect("colour target");
-        let mut id_dst = destination(&mut gpu, small).expect("id target");
-        frames(
-            &mut handoff,
-            &device,
-            &queue,
-            &mut gpu,
-            small,
-            colour_dst,
-            id_dst,
-        )
-        .expect("small frames");
+        frames(&mut handoff, &device, &queue, &mut gpu, small, colour_dst).expect("small frames");
 
         gpu.retire(Resource::Image(colour_dst))
             .expect("retire colour");
-        gpu.retire(Resource::Image(id_dst)).expect("retire id");
         gpu.collect().expect("collect");
         handoff = SharedHandoff::on_device(&device, &gpu, large).expect("resized rings");
         colour_dst = destination(&mut gpu, large).expect("resized colour target");
-        id_dst = destination(&mut gpu, large).expect("resized id target");
-        frames(
-            &mut handoff,
-            &device,
-            &queue,
-            &mut gpu,
-            large,
-            colour_dst,
-            id_dst,
-        )
-        .expect("large frames");
+        frames(&mut handoff, &device, &queue, &mut gpu, large, colour_dst).expect("large frames");
         drop(handoff);
         let _ = device.poll(wgpu::PollType::wait_indefinitely());
     }

@@ -25,7 +25,7 @@
 //! the image in the layout wgpu expects.
 use anyhow::{Context as _, Result, bail};
 use ara_gpu::{
-    GpuDevice, Image,
+    Access, Barrier, Device, GpuDevice, Image, Queue, Resource,
     shared::{DeviceIdentity, SLOTS, SharedSurface, SlotDesc, SurfaceDesc, SurfaceFormat},
     vulkan::external::ImportedSurface,
 };
@@ -100,6 +100,10 @@ pub(crate) struct SharedHandoff {
     id_handed_over: bool,
     /// A release was submitted and not yet waited for.
     in_flight: bool,
+    /// The synthetic id texture [`Self::stage_pattern`] rewrites, when that switch is on.
+    synthetic: Option<wgpu::Texture>,
+    /// Frame number in the synthetic pattern's alpha, 1 to 255.
+    pattern_frame: u32,
     /// The release fence was waited; a copy-out may still be owed.
     frame_latched: bool,
     /// The waited frame's colour has not been copied out.
@@ -383,6 +387,8 @@ impl SharedHandoff {
             frame_latched: false,
             colour_owed: false,
             id_owed: false,
+            synthetic: None,
+            pattern_frame: 0,
         };
         // SAFETY: Live device; `Drop` destroys whatever was created if a later step fails.
         unsafe {
@@ -458,7 +464,7 @@ impl SharedHandoff {
         self.id_source = Some(id);
     }
 
-    /// Queues the copy of the engine's output into the shared slot behind the frame
+    /// Queues the copy of the view's output into the shared slot behind the frame
     /// just rendered, and the slot's release to the presenter's device. When
     /// [`Self::set_id`] was called, that texture is copied and released in the same
     /// submissions, on the same fence. Returns at once; [`Self::deliver`] waits.
@@ -467,6 +473,30 @@ impl SharedHandoff {
             .view_output(view)
             .context("Renderlab has no output yet")?;
         self.copy_frame(engine.device(), engine.queue(), output)
+    }
+
+    /// Whether this frame's id image is still owed to [`Self::deliver_id`].
+    #[allow(dead_code)]
+    pub fn id_pending(&self) -> bool {
+        self.id_owed
+    }
+
+    /// Writes the id-slot test pattern for the next frame (alpha is the frame
+    /// number, 1 to 255) into an RGBA8 UNORM texture and [`Self::set_id`]s it.
+    ///
+    /// `ARA_RENDERLAB_SCENE_IDS=pattern` is the debug switch the bridge checks
+    /// before calling this, until Renderlab's real id texture replaces it.
+    #[allow(dead_code)]
+    pub fn stage_pattern(&mut self, engine: &Engine) -> Result<()> {
+        self.pattern_frame = self.pattern_frame % 255 + 1;
+        if self.synthetic.is_none() {
+            self.synthetic = Some(pattern_texture(engine.device(), self.extent));
+        }
+        let texture = self.synthetic.clone().context("pattern texture")?;
+        let bytes = id_pattern([self.extent.width, self.extent.height], self.pattern_frame);
+        write_rgba(engine.queue(), &texture, &bytes);
+        self.set_id(texture);
+        Ok(())
     }
 
     /// [`Self::publish`] with an explicit colour texture. The id slot still comes
@@ -666,6 +696,152 @@ impl Drop for SharedHandoff {
             }
         }
     }
+}
+
+/// `ARA_RENDERLAB_SCENE_IDS=pattern` asks the bridge to stage the synthetic id image.
+#[allow(dead_code)]
+pub const SCENE_IDS_PATTERN: &str = "pattern";
+
+/// Whether the debug switch is the synthetic packed-id pattern.
+#[allow(dead_code)]
+pub fn scene_ids_pattern() -> bool {
+    std::env::var("ARA_RENDERLAB_SCENE_IDS").ok().as_deref() == Some(SCENE_IDS_PATTERN)
+}
+
+/// Packed id bytes for one frame: texel (0, 0) is 0, texel (1, 0) is `0xFFFF_FFFF`,
+/// and every other texel's alpha is `frame` (1 to 255).
+pub(crate) fn id_pattern(size: [u32; 2], frame: u32) -> Vec<u8> {
+    let (width, height) = (size[0], size[1]);
+    let mut bytes = Vec::with_capacity((width * height * 4) as usize);
+    for y in 0..height {
+        for x in 0..width {
+            bytes.extend(id_texel(x, y, width, frame));
+        }
+    }
+    bytes
+}
+
+fn id_texel(x: u32, y: u32, width: u32, frame: u32) -> [u8; 4] {
+    if x == 0 && y == 0 {
+        return [0; 4];
+    }
+    if x == 1 && y == 0 {
+        return [0xff; 4];
+    }
+    let n = x + y * width;
+    [
+        n.wrapping_mul(17).wrapping_add(3) as u8,
+        n.wrapping_mul(29).wrapping_add(5) as u8,
+        n.wrapping_mul(41).wrapping_add(7) as u8,
+        frame as u8,
+    ]
+}
+
+fn pattern_texture(device: &wgpu::Device, extent: wgpu::Extent3d) -> wgpu::Texture {
+    device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("ara synthetic id"),
+        size: extent,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    })
+}
+
+fn write_rgba(queue: &wgpu::Queue, texture: &wgpu::Texture, tight: &[u8]) {
+    let size = texture.size();
+    let row = size.width * 4;
+    let stride = row.next_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT);
+    let mut padded = vec![0u8; (stride * size.height) as usize];
+    for y in 0..size.height as usize {
+        let from = y * row as usize;
+        let to = y * stride as usize;
+        padded[to..to + row as usize].copy_from_slice(&tight[from..from + row as usize]);
+    }
+    queue.write_texture(
+        texture.as_image_copy(),
+        &padded,
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(stride),
+            rows_per_image: Some(size.height),
+        },
+        size,
+    );
+}
+
+/// The id image retained on the compositor's device: RGBA8 UNORM, `CopySource`,
+/// sampled with an exact texel fetch (`IdSource::Packed`).
+pub struct PresentedId {
+    image: Image,
+    size: [u32; 2],
+}
+
+#[allow(dead_code)]
+impl PresentedId {
+    /// The retained image.
+    pub fn output(&self) -> Image {
+        self.image
+    }
+
+    /// Copies this frame's id out of `handoff` into a retained image of `size`.
+    /// Call it after [`SharedHandoff::deliver`] and before the next publish.
+    #[allow(dead_code)]
+    pub fn copy_from(
+        slot: &mut Option<Self>,
+        handoff: &mut SharedHandoff,
+        gpu: &mut GpuDevice,
+        size: [u32; 2],
+    ) -> Result<Image> {
+        if slot.as_ref().is_none_or(|kept| kept.size != size) {
+            if let Some(old) = slot.take() {
+                old.destroy(gpu)?;
+            }
+            let image = gpu.create_image(
+                size[0],
+                size[1],
+                ara_gpu::vk::Format::R8G8B8A8_UNORM,
+                ara_gpu::vk::ImageUsageFlags::TRANSFER_SRC
+                    | ara_gpu::vk::ImageUsageFlags::TRANSFER_DST
+                    | ara_gpu::vk::ImageUsageFlags::SAMPLED,
+            )?;
+            settle_copy_source(gpu, image)?;
+            *slot = Some(Self { image, size });
+        }
+        let Some(kept) = slot.as_ref() else {
+            bail!("the id image was not retained");
+        };
+        let image = kept.image;
+        handoff.deliver_id(gpu, image)?;
+        Ok(image)
+    }
+
+    /// Releases the retained image before its device is destroyed.
+    pub fn destroy(self, gpu: &mut GpuDevice) -> Result<()> {
+        gpu.retire(Resource::Image(self.image))?;
+        gpu.collect()?;
+        Ok(())
+    }
+}
+
+fn settle_copy_source(gpu: &mut GpuDevice, image: Image) -> Result<()> {
+    let mut commands = gpu.begin(Queue::Graphics);
+    for (before, after) in [
+        (Access::Undefined, Access::CopyDestination),
+        (Access::CopyDestination, Access::CopySource),
+    ] {
+        commands.barriers([Barrier {
+            resource: Resource::Image(image),
+            before,
+            after,
+            handoff: None,
+        }]);
+    }
+    let point = gpu.submit(commands.finish(), &[])?;
+    gpu.wait(point)?;
+    Ok(())
 }
 
 /// Takes ownership of an NT handle the driver returned, closing it on drop.

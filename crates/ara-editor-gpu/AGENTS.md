@@ -46,6 +46,18 @@ empty VK_IMPLICIT_LAYER_PATH.
 
 Scene overlays are inserted immediately after the viewport image, before later
 UI controls/popovers. Grid and hover execute on the GPU against the scene ID map.
+The ID map comes from an `IdSource` (`ids.rs`) given to `NativeUi::overlays`: `Direct`
+(ara-render's R32F image, the id as a float) or `Packed` (Renderlab's RGBA8 UNORM
+image, the output's size, 32-bit id little-endian across R, G, B, A, read by exact texel
+fetch; 0 nothing, `NO_ID_HIT` 0xFFFF_FFFF a hit with no id: it occludes the grid and never
+outlines or hovers). Ids are the compact index + 1 either way. The shader decodes both in
+`readId` (mode 5 flag bit 1 and the grid axes record's `parameters.x` say packed; the
+group table slot is `flags >> 2`). Overlays read only ids: gizmos and icons are not
+occluded and nothing reads scene depth. `Repacked` (debug, Metal only; Vulkan refuses
+it) rewrites a Direct image as Packed on the GPU first (shader mode 12), so a Direct
+frame and a Repacked frame must match pixel for pixel: `tests/packed_ids_scene.rs`;
+`tests/packed_ids.rs` feeds chosen packed bytes (any backend). Packed images must be
+UNORM, never sRGB views, and are only ever fetched, never sampled or blended.
 The grid uses derivatives for antialiasing and distance fade, with theme axis tints.
 The editor draws mode-5 outlines only when the Scene is not raster (a raster Scene draws its own: ara-render `Outlines`). Outlines and hover (mode 5) group channels through an optional table
 (`outline_groups`): a group outlines as one shape; ground (terrain) only against sky,
