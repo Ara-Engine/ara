@@ -54,8 +54,6 @@ the presentation device and the completed output; no simulation, window or proce
 - `PresentStats.gpu_span_ms` measures the device span of the last work; `gpu_ms` is the
   renderer's own figure plus publication, not a whole-frame gate.
 - `fidelity::native` needs `ara-texture-stream`'s native sampling source to match.
-- Cook the 2D compositor offline: `cargo run -p ara-shader-cook --
-  crates/ara-runtime-render/shaders/pipelines.json crates/ara-runtime-render/cooked`.
 
 ## Testing
 `cargo test -p ara-runtime-render` (content resolution, readiness, graphics plans, geometry);

@@ -73,7 +73,8 @@ impl Default for Atmosphere {
     }
 }
 impl Atmosphere {
-    pub(crate) fn validate(self) -> Result<()> {
+    /// Whether every field is finite and inside the range a renderer accepts.
+    pub fn validate(self) -> Result<()> {
         ensure!(
             self.sea_level.is_finite()
                 && self.fog_extinction.is_finite()
@@ -93,19 +94,5 @@ impl Atmosphere {
             "Invalid atmosphere"
         );
         self.model.validate()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    /// Both renderers cook the same atmosphere: the copy in this shader root is
-    /// byte-identical to ara-frame's (`shaders/atmosphere-model.slangh`).
-    #[test]
-    fn the_atmosphere_shader_is_the_raster_copy() {
-        assert_eq!(
-            include_str!("../shaders/atmosphere-model.slangh"),
-            ara_frame::look::atmosphere::shader_source(),
-            "copy crates/ara-frame/shaders/atmosphere-model.slangh into crates/ara-render-fidelity/shaders/"
-        );
     }
 }

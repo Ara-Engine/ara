@@ -358,21 +358,6 @@ mod tests {
             .shape
     }
     #[test]
-    fn real_fidelity_recording_body_is_live_with_its_literal_macros_and_local_closures() {
-        let path = Path::new("crates/ara-render-fidelity/src/render.rs");
-        let source = include_str!("../../ara-render-fidelity/src/render.rs");
-        let anchor = "let (frame, vp, camera) = self.frame(input)?;";
-        assert!(source.contains(anchor));
-        let edited = source.replace(
-            anchor,
-            "let (frame, vp, camera) = self.frame(input)?; let _proof = 7;",
-        );
-        assert_eq!(
-            fingerprint_bytes(path, source.as_bytes()).unwrap().shape,
-            fingerprint_bytes(path, edited.as_bytes()).unwrap().shape,
-        );
-    }
-    #[test]
     fn reviewed_recording_locals_can_change_but_persisted_layouts_cannot() {
         let path = Path::new("crates/ara-render-fidelity/src/render.rs");
         let shape = |text: &str| fingerprint_bytes(path, text.as_bytes()).unwrap().shape;

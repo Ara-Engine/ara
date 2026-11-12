@@ -70,15 +70,13 @@ pub(crate) fn inventory(player: &Path, engine: &Path) -> Result<Inventory> {
     }
     let packages: &[&str] = if metal {
         &[
-            "ara-render-fidelity",
-            "ara-runtime-render",
             "ara-render2d",
             "ara-texture-gpu",
             "ara-gpu",
             "ara-editor-gpu",
         ]
     } else {
-        &["ara-render-fidelity", "ara-runtime-render", "ara-render2d"]
+        &["ara-render2d"]
     };
     for package in packages {
         let installed = engine.join("resources").join(package);
@@ -298,7 +296,8 @@ mod tests {
         std::fs::write(&player, b"prebuilt player").unwrap();
         let key = "a".repeat(64);
         let stale = "b".repeat(64);
-        for package in ["ara-render-fidelity", "ara-runtime-render", "ara-render2d"] {
+        {
+            let package = "ara-render2d";
             let root = scratch.path().join("crates").join(package).join("cooked");
             for cohort in [&key, &stale] {
                 std::fs::create_dir_all(root.join(cohort)).unwrap();
@@ -334,12 +333,12 @@ mod tests {
         let mut archive = zip::ZipArchive::new(std::fs::File::open(&first).unwrap()).unwrap();
         assert!(
             archive
-                .by_name(&format!("resources/ara-render-fidelity/{key}/main.spv"))
+                .by_name(&format!("resources/ara-render2d/{key}/main.spv"))
                 .is_ok()
         );
         assert!(
             archive
-                .by_name(&format!("resources/ara-render-fidelity/{stale}/main.spv"))
+                .by_name(&format!("resources/ara-render2d/{stale}/main.spv"))
                 .is_err()
         );
         assert!(
@@ -355,7 +354,7 @@ mod tests {
         ] {
             assert!(
                 archive
-                    .by_name(&format!("resources/ara-render-fidelity/{file}"))
+                    .by_name(&format!("resources/ara-render2d/{file}"))
                     .is_err(),
                 "offline {file} must stay outside the runtime payload"
             );
@@ -373,8 +372,6 @@ mod tests {
         std::fs::write(&player, [0xcf, 0xfa, 0xed, 0xfe, 1, 2, 3, 4]).unwrap();
         let key = "a".repeat(64);
         for package in [
-            "ara-render-fidelity",
-            "ara-runtime-render",
             "ara-render2d",
             "ara-texture-gpu",
             "ara-gpu",
@@ -413,7 +410,7 @@ mod tests {
         }
         assert!(
             archive
-                .by_name(&format!("resources/ara-render-fidelity/{key}/main.spv"))
+                .by_name(&format!("resources/ara-render2d/{key}/main.spv"))
                 .is_err()
         );
         let unpacked = scratch.path().join("game");

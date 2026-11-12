@@ -1,12 +1,6 @@
 //! Optional material layers over the unchanged `ara_frame::scene::Material` ABI.
 use anyhow::{Result, ensure};
 
-pub(crate) fn has_layers(materials: &[ara_frame::scene::Material]) -> bool {
-    materials.iter().any(|m| {
-        m.flags[3] == 0x4152_4132 && ((m.flags[1] & 0xff00ff) != 0 || (m.flags[2] & 0xffffff) != 0)
-    })
-}
-
 /// Typed extraction of coat, cloth and thin-leaf parameters. The reserved flag
 /// words carry a version tag; untagged materials retain the original BRDF exactly.
 /// This adapter is for extracted snapshots, never an authoring side-channel write.

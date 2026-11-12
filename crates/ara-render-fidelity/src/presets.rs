@@ -5,7 +5,6 @@
 //! Hardware ray tracing is off on every preset unless the project or game opts in
 //! ([`RenderOptions::ray_tracing`]), as in Unreal: by default every preset is raster
 //! ([`RasterPlan`], `ara_frame::look::Quality`) and traces no rays.
-use crate::{FidelityView, Mode, PostSettings, Settings, Tier, Upscaler};
 use anyhow::{Result, bail};
 use ara_frame::look::{
     AmbientOcclusion, DepthOfFieldQuality, FarShadows, LocalShadows, MotionBlurQuality, Quality,
@@ -186,84 +185,6 @@ impl Capabilities {
     }
 }
 
-/// When ReSTIR direct/indirect reservoirs run.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Reservoirs {
-    /// Never; lights use streaming RIS and diffuse paths end in DDGI.
-    Off,
-    /// Only for scenes with emissive triangles or many local lights.
-    ManyLights,
-    /// Always.
-    On,
-}
-
-/// Fidelity work budgets selected by a preset. Apply with [`FidelityPlan::settings`]
-/// at view creation and [`FidelityPlan::configure`] after `new` or `resize`.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct FidelityPlan {
-    /// Transport resolution.
-    pub render_size: [u32; 2],
-    /// Display resolution.
-    pub display_size: [u32; 2],
-    /// Temporal reconstruction (always TAAU: the spatial FSR1 path has no history).
-    pub upscaler: Upscaler,
-    /// DDGI probe paths per frame.
-    pub probe_ray_budget: u32,
-    /// Roughness above which reflections use only the probe field.
-    pub reflection_cutoff: f32,
-    /// Traced secondary surfaces before the DDGI terminal.
-    pub gather_events: u32,
-    /// Pixels per incident sample per frame (2 or 4).
-    pub transport_stride: u32,
-    /// ReSTIR policy.
-    pub reservoirs: Reservoirs,
-    /// Bounded reservoir budgets: paths end in the DDGI terminal after
-    /// `gather_events` and glossy specular traces at half rate (see
-    /// [`FidelityView::set_bounded_reservoirs`]); Epic keeps full budgets.
-    pub bounded_reservoirs: bool,
-    /// (samples, bounces): render the undenoised path-traced reference
-    /// ([`Mode::Reference`]) instead of hybrid transport, for diagnosis.
-    pub reference: Option<(u32, u32)>,
-}
-
-impl FidelityPlan {
-    /// View settings for [`FidelityView::new`] with the scene's post settings.
-    pub fn settings(&self, post: PostSettings) -> Settings {
-        Settings {
-            render_size: self.render_size,
-            display_size: self.display_size,
-            tier: Tier::Rt,
-            mode: self
-                .reference
-                .map_or(Mode::Hybrid, |(samples, bounces)| Mode::Reference {
-                    samples,
-                    bounces,
-                }),
-            upscaler: self.upscaler,
-            probe_ray_budget: self.probe_ray_budget,
-            reflection_cutoff: self.reflection_cutoff,
-            post,
-        }
-    }
-
-    /// Applies the per-view budgets at a frame boundary. ReSTIR under `ManyLights`
-    /// follows the view's current scene, so call again after replacing content.
-    pub fn configure(&self, gpu: &mut GpuDevice, view: &mut FidelityView) -> Result<()> {
-        view.set_lighting_budget(self.probe_ray_budget, self.reflection_cutoff)?;
-        view.set_gather_events(self.gather_events)?;
-        view.set_transport_stride(self.transport_stride)?;
-        view.set_bounded_reservoirs(self.bounded_reservoirs);
-        // The reference samples every path independently: no reservoir reuse.
-        let reservoirs = match self.reservoirs {
-            _ if self.reference.is_some() => false,
-            Reservoirs::Off => false,
-            Reservoirs::On => true,
-            Reservoirs::ManyLights => view.scene.has_emitters || view.scene.many_local_lights,
-        };
-        view.set_reservoir_sampling(gpu, reservoirs)
-    }
-}
-
 /// Raster work budgets selected by a preset: the look's per-preset quality and
 /// resolutions. Apply with `Renderer::set_quality`.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -294,15 +215,6 @@ pub struct RenderOptions {
     /// ray-traced fidelity renderer for Medium and above. Off (the default), every
     /// preset is raster and traces no rays, whatever the GPU.
     pub ray_tracing: bool,
-}
-
-/// Which renderer draws a view.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum RenderPath {
-    /// The standard renderer path with the look, probe GI and TAA.
-    Raster(RasterPlan),
-    /// The ray-traced fidelity renderer (opt-in).
-    Fidelity(FidelityPlan),
 }
 
 /// The display the preset budgets were set at (D26/D27: 2560x1440); smaller
@@ -539,11 +451,11 @@ pub struct Plan {
     pub preset: QualityPreset,
     /// The preset that was asked for, before any device downgrade.
     pub requested: QualityPreset,
-    /// Renderer and budgets.
-    pub path: RenderPath,
+    /// Resolutions and work budgets.
+    pub raster: RasterPlan,
     /// Ray tracing was requested on a device without verified ray queries
-    /// ([`verified_ray_tracing`]), so the path is raster; hosts report ARA6008 so
-    /// the declined opt-in is never silent.
+    /// ([`verified_ray_tracing`]); hosts report ARA6008 so the declined opt-in is
+    /// never silent.
     pub rt_fallback: bool,
 }
 
@@ -560,10 +472,9 @@ fn reflection_captures(captures: u32) -> Option<ReflectionCaptures> {
 }
 
 impl Plan {
-    /// Resolves a choice for a device and display size. Every preset is raster, with
-    /// no ray queries, unless `options` opts in to ray tracing on a capable device;
-    /// then Medium and above use the fidelity renderer (Low stays raster). Raster runs every preset
-    /// on every device, so nothing is downgraded.
+    /// Resolves a choice for a device and display size. Every preset runs on every
+    /// device, so nothing is downgraded; ray queries stay off unless `options` opts in
+    /// to ray tracing on a capable device.
     pub fn resolve(
         choice: QualityChoice,
         capabilities: &Capabilities,
@@ -586,55 +497,15 @@ impl Plan {
             ray_queries: preset.raster_quality().ray_queries.filter(|_| traced),
             ..preset.raster_quality()
         };
-        let raster = RenderPath::Raster(RasterPlan {
+        let raster = RasterPlan {
             render_size: scaled(preset.raster_scale()),
             display_size,
             quality,
-        });
-        let path = match preset {
-            _ if !traced => raster,
-            QualityPreset::Low => raster,
-            QualityPreset::Medium => RenderPath::Fidelity(FidelityPlan {
-                render_size: scaled(0.4),
-                display_size,
-                upscaler: Upscaler::Taau,
-                probe_ray_budget: 8192,
-                reflection_cutoff: 0.35,
-                gather_events: 1,
-                transport_stride: 4,
-                reservoirs: Reservoirs::On,
-                bounded_reservoirs: true,
-                reference: None,
-            }),
-            QualityPreset::High => RenderPath::Fidelity(FidelityPlan {
-                render_size: scaled(0.5),
-                display_size,
-                upscaler: Upscaler::Taau,
-                probe_ray_budget: 16384,
-                reflection_cutoff: 0.6,
-                gather_events: 1,
-                transport_stride: 4,
-                reservoirs: Reservoirs::On,
-                bounded_reservoirs: true,
-                reference: None,
-            }),
-            QualityPreset::Epic => RenderPath::Fidelity(FidelityPlan {
-                render_size: scaled(2.0 / 3.0),
-                display_size,
-                upscaler: Upscaler::Taau,
-                probe_ray_budget: 32768,
-                reflection_cutoff: 0.8,
-                gather_events: 2,
-                transport_stride: 4,
-                reservoirs: Reservoirs::On,
-                bounded_reservoirs: true,
-                reference: None,
-            }),
         };
         Ok(Self {
             preset,
             requested,
-            path,
+            raster,
             rt_fallback: options.ray_tracing && !capabilities.ray_tracing,
         })
     }
@@ -684,7 +555,6 @@ mod tests {
                 )
                 .unwrap();
                 assert_eq!(plan.preset, expected);
-                assert!(matches!(plan.path, RenderPath::Raster(_)));
             }
         }
     }
@@ -720,8 +590,7 @@ mod tests {
                 assert_eq!(plan.preset, preset);
                 let scale = preset.raster_scale();
                 let render = display.map(|v| (v as f32 * scale).round() as u32);
-                assert!(matches!(plan.path,
-                    RenderPath::Raster(r) if r.render_size == render && r.display_size == display));
+                assert!(plan.raster.render_size == render && plan.raster.display_size == display);
                 assert!(!plan.rt_fallback);
             }
         }
@@ -730,21 +599,11 @@ mod tests {
         let choice = QualityChoice::Preset(QualityPreset::Epic);
         let epic = Plan::resolve(choice, &raster, display, traced).unwrap();
         assert_eq!(epic.preset, QualityPreset::Epic);
-        assert!(matches!(epic.path, RenderPath::Raster(_)) && epic.rt_fallback);
+        assert!(epic.rt_fallback);
         for preset in QualityPreset::ALL {
             let plan = Plan::resolve(QualityChoice::Preset(preset), &RT, display, traced).unwrap();
             assert!(!plan.rt_fallback);
-            match plan.path {
-                RenderPath::Fidelity(f) => {
-                    assert_ne!(preset, QualityPreset::Low);
-                    assert_eq!(f.upscaler, Upscaler::Taau);
-                    f.settings(PostSettings::default()).validate().unwrap();
-                }
-                RenderPath::Raster(_) => assert_eq!(preset, QualityPreset::Low),
-            }
         }
-        let high = Plan::resolve(QualityChoice::Auto, &RT, display, traced).unwrap();
-        assert!(matches!(high.path, RenderPath::Fidelity(f) if f.render_size == [1280, 720]));
         let auto = Plan::resolve(
             QualityChoice::Auto,
             &raster,
@@ -773,7 +632,6 @@ mod tests {
         )
         .unwrap();
         assert_eq!(plan.preset, QualityPreset::High);
-        assert!(matches!(plan.path, RenderPath::Raster(_)));
     }
 
     #[test]
@@ -784,15 +642,12 @@ mod tests {
         };
         for preset in QualityPreset::ALL {
             let choice = QualityChoice::Preset(preset);
-            let hybrid = |caps| match Plan::resolve(choice, caps, [2560, 1440], Default::default())
-                .unwrap()
-                .path
-            {
-                RenderPath::Raster(plan) => {
-                    plan.quality.validate().unwrap();
-                    plan.hybrid()
-                }
-                RenderPath::Fidelity(_) => unreachable!("raster by default"),
+            let hybrid = |caps| {
+                let plan = Plan::resolve(choice, caps, [2560, 1440], Default::default())
+                    .unwrap()
+                    .raster;
+                plan.quality.validate().unwrap();
+                plan.hybrid()
             };
             assert!(!hybrid(&RT), "{preset}");
             assert!(!hybrid(&raster), "{preset}");

@@ -1794,21 +1794,12 @@ name = "ara-render-fidelity"
 version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
- "ara-asset-format",
  "ara-components",
  "ara-frame",
  "ara-gpu",
- "ara-hotpatch",
- "ara-render2d",
  "ara-schema",
- "ara-texture-stream",
- "blake3",
- "bytemuck",
  "glam 0.30.10",
- "image",
  "serde",
- "serde_json",
- "sha2 0.10.9",
 ]
 
 [[package]]

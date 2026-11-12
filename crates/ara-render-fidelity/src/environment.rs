@@ -1,18 +1,14 @@
 //! The scene's authored look (`ara_components::render`: `SkyAtmosphere`, `HeightFog`,
-//! and the post-process volumes blended for the camera) mapped onto fidelity view
-//! inputs, and the matching approximation for the raster renderer
-//! (`ara_frame::look::Look`): the same GPU sky, fog, exposure, grading and tone mapper.
+//! and the post-process volumes blended for the camera) mapped onto the numbers a renderer
+//! consumes: sky, fog, exposure, grading and tone mapper.
 //!
 //! Hosts call [`FrameEnvironment::resolve`] each frame with the position of the camera
-//! they draw from (volumes blend by it), then [`FidelityView::set_environment`]
-//! (fidelity) or [`FrameEnvironment::raster`] (raster) at the frame boundary.
+//! they draw from (volumes blend by it) and hand the result to their renderer.
 use crate::{
-    FidelityView,
     atmosphere::Atmosphere,
     colour::{AutoExposure, Grading, ToneMapper},
     settings::PostSettings,
 };
-use anyhow::Result;
 use ara_components::render::{ExposureMode, SceneLook, SkyAtmosphere, ToneMapping};
 use ara_frame::look::atmosphere::{Atmosphere as SkyModel, AtmosphereLight, LightAtmosphere};
 use glam::Vec3;
@@ -343,15 +339,6 @@ impl FrameEnvironment {
         self.ev100.map_or(fallback, |ev| {
             crate::settings::exposure_from_ev100(ev, self.compensation)
         })
-    }
-}
-
-impl FidelityView {
-    /// Applies an authored environment at a frame boundary: atmosphere and fog
-    /// (resetting temporal transport when they change) and exposure/display controls.
-    pub fn set_environment(&mut self, environment: &FrameEnvironment) -> Result<()> {
-        self.set_atmosphere(environment.atmosphere)?;
-        self.set_post(environment.post(self.settings.post))
     }
 }
 
