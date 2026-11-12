@@ -133,16 +133,9 @@ impl Bridge {
         let (tiles, _) =
             self.terrain
                 .sync(&mut self.engine, view, MAX_GROUPS / 2, None, &mut self.gaps)?;
-        let (foliage, lods, foliage_key) = self.terrain.foliage();
-        self.scene.sync(
-            &mut self.engine,
-            frame,
-            foliage,
-            lods,
-            foliage_key,
-            tiles,
-            &mut self.gaps,
-        )?;
+        let foliage = self.terrain.foliage();
+        self.scene
+            .sync(&mut self.engine, frame, foliage, tiles, &mut self.gaps)?;
         // Terrain tiles follow the frame's draws in the editor's id numbering.
         self.terrain
             .tag(&mut self.engine, frame.draws.len() as u32 + 1)?;
@@ -267,8 +260,8 @@ impl Bridge {
         let frame = view.frame;
         if frame.terrain.is_some() {
             self.gaps.unsupported(
-                "terrain and foliage levels of detail and foliage wind",
-                "resident tiles draw at full resolution; foliage stands still at its nearest level of detail",
+                "terrain levels of detail and foliage wind",
+                "resident tiles draw at full resolution; foliage stands still",
             );
         }
         if view.look.ev100.is_none() {

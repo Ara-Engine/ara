@@ -71,6 +71,16 @@ struct Tile {
     texture: Option<TextureId>,
 }
 
+/// The draws the bridge derives from the terrain's foliage (`Terrain::foliage`).
+pub(crate) struct Foliage<'a> {
+    pub draws: &'a [Draw],
+    /// Each draw's cooked level of detail, or `scene::CULLED`.
+    pub lods: &'a [u8],
+    /// What the draws and their levels were built from: while it is unchanged, draws already
+    /// placed are not looked at again.
+    pub key: u64,
+}
+
 /// What a foliage draw needs to pick its level of detail: where it is and how big it is.
 struct Instance {
     /// World position of the foliage instance.
@@ -350,14 +360,13 @@ impl Terrain {
         Ok(())
     }
 
-    /// The foliage draws, each one's cooked level of detail (or `scene::CULLED`), and the
-    /// key of what they and their levels were built from.
-    pub fn foliage(&self) -> (&[Draw], &[u8], u64) {
-        (
-            &self.foliage,
-            &self.foliage_lods,
-            fnv(self.foliage_key, &self.lod_epoch.to_le_bytes()),
-        )
+    /// The foliage draws for `Scene::sync`.
+    pub fn foliage(&self) -> Foliage<'_> {
+        Foliage {
+            draws: &self.foliage,
+            lods: &self.foliage_lods,
+            key: fnv(self.foliage_key, &self.lod_epoch.to_le_bytes()),
+        }
     }
 
     /// Chooses each foliage draw's level of detail for the frame's camera, as Ara's renderer

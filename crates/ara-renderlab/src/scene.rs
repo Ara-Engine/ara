@@ -10,6 +10,7 @@ use crate::{
     batch::{self, Fate, Group},
     cutout,
     gaps::Gaps,
+    terrain::Foliage,
     texture,
 };
 use anyhow::{Context, Result};
@@ -587,12 +588,15 @@ impl Scene {
         &mut self,
         engine: &mut Engine,
         frame: &RenderFrame,
-        static_draws: &[Draw],
-        static_lods: &[u8],
-        static_key: u64,
+        foliage: Foliage<'_>,
         reserved: usize,
         gaps: &mut Gaps,
     ) -> Result<()> {
+        let Foliage {
+            draws: static_draws,
+            lods: static_lods,
+            key: static_key,
+        } = foliage;
         let budget = MAX_GROUPS.saturating_sub(reserved);
         let settled = self.static_key == Some(static_key);
         self.coverage.prune();
@@ -671,7 +675,7 @@ impl Scene {
                     "the mesh keeps its own colours",
                 );
             }
-            self.place(engine, frame, draw, lod, mesh, material, gaps)?;
+            self.place(engine, frame, (draw, lod), mesh, material, gaps)?;
         }
         self.static_key = Some(static_key);
         if singular > 0 {
@@ -849,8 +853,7 @@ impl Scene {
         &mut self,
         engine: &mut Engine,
         frame: &RenderFrame,
-        draw: &Draw,
-        lod: u8,
+        (draw, lod): (&Draw, u8),
         mesh: MeshKey,
         material: u64,
         gaps: &mut Gaps,
