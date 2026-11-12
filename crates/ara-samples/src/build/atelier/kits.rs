@@ -292,5 +292,11 @@ pub fn courtyard(root: &Path, lock: &Lock) -> Result<String> {
     block(&mut k, STEEL, l + v(0.0, 0.0, 0.08), v(0.04, 0.5, 0.04));
     block(&mut k, STEEL, l + v(0.0, 0.0, 0.18), v(0.2, 0.34, 0.2));
     block(&mut k, LANTERN, l + v(0.0, 0.0, 0.18), v(0.17, 0.3, 0.17));
+    // Cap and foot of the lantern, and two steel bands round the glass.
+    block(&mut k, STEEL, l + v(0.0, 0.18, 0.18), v(0.24, 0.03, 0.24));
+    block(&mut k, STEEL, l + v(0.0, -0.18, 0.18), v(0.22, 0.03, 0.22));
+    for y in [-0.08, 0.08] {
+        block(&mut k, STEEL, l + v(0.0, y, 0.18), v(0.2, 0.012, 0.2));
+    }
     k.write(root, lock, "atelier_courtyard")
 }

@@ -428,6 +428,13 @@ pub fn build(ctx: &Ctx) -> Result<()> {
         ("shrub", Vec3::new(2.6, 0.62, 1.3), 0.0, 0.9),
         ("pot_a", Vec3::new(3.3, 0.0, -8.4), 200.0, 1.0),
         ("pot_b", Vec3::new(-3.4, 0.0, -0.9), 30.0, 1.0),
+        // Courtyard dressing: a second plant in each doorway planter, terracotta pots at
+        // the building's front corners and one by the bench.
+        ("shrub", Vec3::new(-3.05, 0.62, 1.3), 60.0, 0.8),
+        ("fern", Vec3::new(3.05, 0.62, 1.3), 200.0, 0.9),
+        ("pot_a", Vec3::new(4.3, 0.0, 1.2), 140.0, 1.1),
+        ("pot_b", Vec3::new(-4.3, 0.0, 1.2), 310.0, 1.0),
+        ("pot_a", Vec3::new(-6.0, 0.0, 5.3), 20.0, 1.0),
     ]
     .into_iter()
     .enumerate()

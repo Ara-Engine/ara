@@ -7,7 +7,7 @@
   "records": {
     "e_camcut0": {
       "name": "Camera cut 0",
-      "order": "aS",
+      "order": "aX",
       "Camera": {
         "fov": 46
       },
@@ -18,7 +18,7 @@
     },
     "e_camcut1": {
       "name": "Camera cut 1",
-      "order": "aT",
+      "order": "aY",
       "Camera": {
         "fov": 46
       },
@@ -29,7 +29,7 @@
     },
     "e_camcut2": {
       "name": "Camera cut 2",
-      "order": "aU",
+      "order": "aZ",
       "Camera": {
         "fov": 40
       },
@@ -40,7 +40,7 @@
     },
     "e_camcut3": {
       "name": "Camera cut 3",
-      "order": "aV",
+      "order": "aa",
       "Camera": {
         "fov": 40
       },
@@ -51,7 +51,7 @@
     },
     "e_camdolly0": {
       "name": "Camera dolly 0",
-      "order": "aQ",
+      "order": "aV",
       "Camera": {
         "fov": 50
       },
@@ -62,7 +62,7 @@
     },
     "e_camdolly1": {
       "name": "Camera dolly 1",
-      "order": "aR",
+      "order": "aW",
       "Camera": {
         "fov": 50
       },
@@ -85,7 +85,7 @@
     },
     "e_camstill0": {
       "name": "Camera still 0",
-      "order": "aP",
+      "order": "aU",
       "Camera": {
         "fov": 56
       },
@@ -105,7 +105,7 @@
     },
     "e_dust": {
       "name": "Dust motes in the sun shaft",
-      "order": "aO",
+      "order": "aT",
       "Transform": {
         "position": [-1, 0.8, -1.6]
       },
@@ -259,7 +259,7 @@
     },
     "e_mannequin": {
       "name": "Mannequin (idle)",
-      "order": "aN",
+      "order": "aS",
       "Animator": {
         "idle": "Idle_Talking"
       },
@@ -295,6 +295,40 @@
       "Transform": {
         "position": [5.066, 0.651, 3.357],
         "rotation": [0, 40, 0]
+      }
+    },
+    "e_plant10": {
+      "name": "Plant",
+      "order": "aP",
+      "MeshRenderer": {
+        "model": "@third_party/potted_plant_01/potted_plant_01_1k.gltf#as_pottedplant01"
+      },
+      "Transform": {
+        "position": [4.296, 0.015, 1.129],
+        "rotation": [0, 140, 0],
+        "scale": [1.1, 1.1, 1.1]
+      }
+    },
+    "e_plant11": {
+      "name": "Plant",
+      "order": "aQ",
+      "MeshRenderer": {
+        "model": "@third_party/potted_plant_02/potted_plant_02_1k.gltf#as_pottedplant02"
+      },
+      "Transform": {
+        "position": [-4.341, 0, 1.294],
+        "rotation": [0, 310, 0]
+      }
+    },
+    "e_plant12": {
+      "name": "Plant",
+      "order": "aR",
+      "MeshRenderer": {
+        "model": "@third_party/potted_plant_01/potted_plant_01_1k.gltf#as_pottedplant01"
+      },
+      "Transform": {
+        "position": [-5.942, 0.014, 5.329],
+        "rotation": [0, 20, 0]
       }
     },
     "e_plant2": {
@@ -362,6 +396,30 @@
       "Transform": {
         "position": [-3.314, 0, -0.844],
         "rotation": [0, 30, 0]
+      }
+    },
+    "e_plant8": {
+      "name": "Plant",
+      "order": "aN",
+      "MeshRenderer": {
+        "model": "@third_party/shrub_04/shrub_04_1k.gltf#as_shrub04"
+      },
+      "Transform": {
+        "position": [-3.156, 0.625, 1.486],
+        "rotation": [0, 60, 0],
+        "scale": [0.8, 0.8, 0.8]
+      }
+    },
+    "e_plant9": {
+      "name": "Plant",
+      "order": "aO",
+      "MeshRenderer": {
+        "model": "@third_party/fern_02/fern_02_1k.gltf#as_fern02"
+      },
+      "Transform": {
+        "position": [3.573, 0.647, 1.531],
+        "rotation": [0, 200, 0],
+        "scale": [0.9, 0.9, 0.9]
       }
     },
     "e_radio": {
