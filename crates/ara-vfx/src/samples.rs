@@ -386,7 +386,7 @@ pub fn all() -> Vec<(Effect, u32)> {
     ]
 }
 /// Every effect a scene's `VisualEffect.effect` can name: the six visual baselines,
-/// `depth_sparks` and `dust`. Cooked artifacts live in `ara-vfx-gpu/cooked/<name>`.
+/// `depth_sparks` and `dust`.
 pub fn library() -> Vec<Effect> {
     let mut effects: Vec<Effect> = all().into_iter().map(|(e, _)| e).collect();
     effects.extend(

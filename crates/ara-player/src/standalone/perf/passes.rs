@@ -25,13 +25,13 @@ impl Window {
         frame: Option<Frame>,
     ) -> Result<bool, PassError> {
         if self.pass_guard.is_none() {
-            let (Some(preset), Some(renderer)) = (presenter.quality(), presenter.renderer()) else {
+            let (Some(preset), Some(gpu)) = (presenter.quality(), presenter.gpu()) else {
                 return Ok(false);
             };
             self.pass_guard = Some(Guard::configured(
                 Expected::resolve(
                     self.requested_preset.unwrap_or(preset).name(),
-                    renderer.gpu().info().ray_tracing,
+                    gpu.info().ray_tracing,
                     self.fidelity_rt,
                 ),
                 Duration::from_millis(self.options.perf_ready_timeout_ms),

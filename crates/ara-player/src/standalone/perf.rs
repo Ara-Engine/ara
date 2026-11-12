@@ -34,7 +34,7 @@ pub(super) struct PerfOptions {
     perf_frames: u32,
     #[arg(long, default_value_t = 30)]
     perf_warmup: u32,
-    /// Wait for settled raster content, texture residency and converged GI before warmup.
+    /// Wait for the renderer's content to settle before warmup.
     #[arg(long, requires = "perf_output")]
     perf_wait_ready: bool,
     /// Fail the measurement if readiness has not arrived within this many milliseconds.
@@ -56,10 +56,6 @@ struct Control {
     frames: Option<u32>,
     camera: Option<lab::Camera>,
     capture: Option<lab::Capture>,
-    #[cfg(feature = "fidelity-lab")]
-    params: Option<Value>,
-    #[cfg(feature = "fidelity-lab")]
-    temporal: Option<lab::TemporalRequest>,
     quality: Option<String>,
     #[serde(default)]
     reload_shaders: bool,
@@ -222,12 +218,6 @@ impl Window {
                 std::fs::create_dir_all(parent)?;
             }
             let status = json!({"quality":presenter.quality().map(|q|q.name()),"collecting":self.collecting,"shaders":shaders,"readiness":presenter.readiness()});
-            #[cfg(feature = "fidelity-lab")]
-            let status = {
-                let mut status = status;
-                status["shader_reload"] = json!(self.lab.shader_reload);
-                status
-            };
             let status = serde_json::to_vec_pretty(&status)?;
             if status != self.live_status {
                 let path = output.with_file_name("status.json");
@@ -268,79 +258,16 @@ impl Window {
             if let Some(capture) = command.capture {
                 self.lab.capture = Some(capture);
             }
-            #[cfg(feature = "fidelity-lab")]
-            if let Some(request) = command.temporal {
-                self.lab.temporal = Some(request);
-            }
-            #[cfg(not(feature = "fidelity-lab"))]
-            let changing_params = false;
-            #[cfg(feature = "fidelity-lab")]
-            let changing_params = command.params.is_some();
-            #[cfg(feature = "fidelity-lab")]
-            let live_params = changing_params
-                && self.options.lab_idle
-                && !self.collecting
-                && !command.measure
-                && !command.reload_shaders
-                && command.quality.is_none()
-                && self.lab.capture.is_none()
-                && self.lab.temporal.is_none();
-            #[cfg(feature = "fidelity-lab")]
-            let repaint = command.camera.is_some()
-                || command
-                    .params
-                    .as_ref()
-                    .is_some_and(|v| v.as_object().is_none_or(|o| !o.is_empty()));
-            #[cfg(feature = "fidelity-lab")]
-            if let Some(params) = command.params {
-                let applied = self.lab.set_params(presenter, params);
-                match applied {
-                    Ok(report) => self.lab.param_report = Some(report),
-                    Err(error) => {
-                        self.lab.respond(&json!({"error":format!("{error:#}")}))?;
-                        std::fs::rename(&request, request.with_extension("done"))?;
-                        continue;
-                    }
-                }
-                self.options.perf_frames = 1;
-            }
             if let Some(camera) = command.camera {
                 self.lab.camera = Some(camera.view()?);
-            }
-            #[cfg(feature = "fidelity-lab")]
-            if live_params {
-                self.lab.repaint = repaint;
-                if !repaint {
-                    let params = self.lab.param_report.take();
-                    self.lab.respond(&json!({"applied":true,"params":params}))?;
-                }
-                std::fs::rename(&request, request.with_extension("done"))?;
-                continue;
-            }
-            let visual_reload = cfg!(feature = "fidelity-lab")
-                && self.options.lab_idle
-                && command.reload_shaders
-                && !command.measure;
-            #[cfg(feature = "fidelity-lab")]
-            if visual_reload {
-                self.lab.reloading = true;
             }
             if command.reload_shaders {
                 let epoch = presenter.shader_status().epoch;
                 self.waiting_for_shader_epoch = Some(epoch);
-                #[cfg(feature = "fidelity-lab")]
-                {
-                    self.lab.shader_reload = Some(lab::ShaderReload {
-                        requested_epoch: epoch,
-                        request_unix_ms: lab::unix_ms(),
-                        first_new_frame_unix_ms: None,
-                    });
-                }
                 presenter.reload_shaders();
             }
             if command.measure
-                || changing_params
-                || (command.reload_shaders && !visual_reload)
+                || command.reload_shaders
                 || (!self.options.lab_idle && command.quality.is_some())
             {
                 self.reset();
@@ -362,11 +289,6 @@ impl Window {
         camera: Value,
         frame: CpuFrame,
     ) -> Result<bool> {
-        #[cfg(feature = "fidelity-lab")]
-        if std::mem::take(&mut self.lab.repaint) {
-            let params = self.lab.param_report.take();
-            self.lab.respond(&json!({"applied":true,"repainted":true,"params":params,"shaders":presenter.shader_status()}))?;
-        }
         if self.enabled() {
             self.run_cpu
                 .record(frame.total_ms, frame.wait_ms, frame.first_presented);
@@ -385,34 +307,16 @@ impl Window {
                 eprintln!("Shader reload failed; previous result retained: {error}");
                 self.collecting = false;
                 self.waiting_for_shader_epoch = None;
-                #[cfg(feature = "fidelity-lab")]
-                {
-                    self.lab.reloading = false;
-                }
                 self.lab.respond(
                     &json!({"error":format!("shader reload failed; last good retained: {error}")}),
                 )?;
                 return Ok(false);
-            }
-            #[cfg(feature = "fidelity-lab")]
-            if !status.pending
-                && let Some(reload) = &mut self.lab.shader_reload
-                && status.epoch > reload.requested_epoch
-                && reload.first_new_frame_unix_ms.is_none()
-            {
-                reload.first_new_frame_unix_ms = Some(lab::unix_ms());
             }
             // An unchanged cohort completes without advancing the epoch.
             if status.pending {
                 shaders_ready = false;
             } else {
                 self.waiting_for_shader_epoch = None;
-                #[cfg(feature = "fidelity-lab")]
-                if self.lab.reloading {
-                    self.lab.reloading = false;
-                    self.lab.respond(&json!({"reloaded":true,"shaders":status,"shader_reload":self.lab.shader_reload}))?;
-                    return Ok(false);
-                }
             }
         }
         if !self.collecting {
@@ -433,11 +337,10 @@ impl Window {
         };
         if self.options.perf_wait_ready {
             let status = presenter.readiness();
-            if self.boundary.confirmed() && (status.failed || !status.raster || !status.gi_enabled)
-            {
+            if self.boundary.confirmed() && (status.failed || !status.renderer) {
                 self.publish(presenter, phases, camera, report::Outcome::Failed)?;
                 bail!(
-                    "{}: perf presentation lost its eligible raster/GI path: {:?}; {:?}",
+                    "{}: perf presentation lost its renderer: {:?}; {:?}",
                     ara_bench::passes::INVALID_PASS_SET,
                     status,
                     presenter.presentation_error()
@@ -449,11 +352,7 @@ impl Window {
                 }
                 return Ok(false);
             }
-            let ready = shaders_ready
-                && status.raster
-                && status.gi_enabled
-                && status.is_ready()
-                && pass_ready;
+            let ready = shaders_ready && status.is_ready() && pass_ready;
             if ready && !self.boundary.confirmed() {
                 self.ready_status = Some(status);
             }
@@ -546,12 +445,6 @@ impl Window {
         }
         self.publish(presenter, phases, camera, report::Outcome::Ready)?;
         if let Some(report) = &self.last_report {
-            #[cfg(feature = "fidelity-lab")]
-            let params = self.lab.param_report.take();
-            #[cfg(feature = "fidelity-lab")]
-            self.lab
-                .respond(&json!({"player":report,"params":params}))?;
-            #[cfg(not(feature = "fidelity-lab"))]
             self.lab.respond(&json!({"player":report}))?;
         }
         self.collecting = false;

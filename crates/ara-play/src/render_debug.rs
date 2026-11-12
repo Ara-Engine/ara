@@ -58,7 +58,7 @@ pub struct RenderDebug {
 }
 
 /// The renderer's debug views (`ara_frame::capture::ViewMode`): camelCase names, and
-/// its snake_case names (the editor sends `ara_render::RenderDebug`) as aliases.
+/// its snake_case names (the editor sends `ara_runtime_render::RenderDebug`) as aliases.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Schema, Serialize, Deserialize)]
 #[ara(module = "play")]
 #[serde(rename_all = "camelCase")]

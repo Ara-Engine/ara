@@ -343,8 +343,8 @@ pub struct EditorState {
     /// while on; presses in the Scene paint the selected meshes. Session only.
     #[serde(skip)]
     pub paint: Option<crate::paint::PaintSettings>,
-    /// Use the same-device fidelity view for Scene lighting: false only when the
-    /// effective quality resolves to Low. Derived from `render_quality` (and the
+    /// Whether the effective quality is above Low (the Scene's quality toggle reads it):
+    /// false only when it resolves to Low. Derived from `render_quality` (and the
     /// project's default) in `apply_settings`; never set it directly.
     pub quality: bool,
     /// View pose.
@@ -608,7 +608,7 @@ impl EditorState {
                 other => other.parse().ok(),
             };
         }
-        // The one place `quality` is derived: only Low is the raster view.
+        // The one place `quality` is derived.
         self.quality = self.resolve_quality(self.render_choice()) != Some(QualityPreset::Low);
 
         if let Some(v) = self
@@ -1205,7 +1205,7 @@ mod tests {
         assert_eq!(state.render_quality, None);
         assert!(state.quality, "an undetected Auto is not Low");
         assert_eq!(state.quality_label(state.render_choice()), "Auto");
-        // Auto on a GPU without ray tracing resolves to Low: the raster view.
+        // Auto on a GPU without ray tracing resolves to Low.
         state.detected_quality = Some(QualityPreset::Low);
         state.apply_settings();
         assert!(!state.quality);

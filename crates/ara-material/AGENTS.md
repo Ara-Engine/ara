@@ -62,7 +62,7 @@ compilation runs externally and only checked programs can generate shaders.
   estimates, runtime layout and variant identity. ShaderCompiler spawns slangc
   below normal priority with no console, retaining compiler identity/diagnostics.
 
-## ara-render adoption (after the renderer merges)
+## Renderer adoption
 
 1. Register schemas and commands in the engine's shared SchemaDb/Registry. For a
    new material, parse with its asset ID. For edits, load its .graph, reconstruct

@@ -20,7 +20,6 @@ image = { workspace = true, features = ["png"] }
 
 [dev-dependencies]
 ara-frame = { path = "../ara-frame" }
-ara-render = { path = "../ara-render" }
 ara-ui-text = { path = "../ara-ui-text" }
 glam = { workspace = true }
 

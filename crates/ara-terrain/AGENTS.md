@@ -35,7 +35,7 @@ triangle. Dirty tile bounds plus profile-radius halos drive incremental baking.
 GI/RT/shadow consumers use the same hole-aware mesh and tile content keys.
 
 CDLOD uses fixed tile patches and coarse-neighbor edge collapse, not skirts. The
-GPU implementation is in ara-landscape. Tests compare the CPU edge rule and
+The renderer draws terrain as tile meshes (`ara-runtime-render::terrain_mesh`). Tests compare the CPU edge rule and
 independently evaluated adjacent tiles.
 
 Set CARGO_BUILD_JOBS=2. Gates:

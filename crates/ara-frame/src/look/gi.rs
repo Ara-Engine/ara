@@ -1,7 +1,7 @@
-//! Probe-volume records. Relighting and the atlases stay in `ara-render`.
+//! Probe-volume records. Relighting and the atlases need a renderer.
 use anyhow::{Result, ensure};
 mod layout;
-pub use layout::{ProbeLattice, ProbeLayout, MAX_LATTICES};
+pub use layout::{MAX_LATTICES, ProbeLattice, ProbeLayout};
 
 /// Cache texels per probe (8x8 octahedral directions).
 pub const SURFACE_TEXELS: usize = 64;
@@ -209,4 +209,3 @@ impl ProbeUpdate {
         Ok(())
     }
 }
-

@@ -1,75 +1,51 @@
-//! Native raster presentation shared by Scene, Play and installed players.
-//! [`RasterView`] consumes local shared geometry, compressed textures and moving
-//! instances; terrain and foliage enter the same G-buffer and authored look.
-//! [`Presenter`] owns a [`PresentationDevice`] and completed last-good output. The
-//! bootstrap renderer holds a lease on that device. Experimental RT
-//! is explicitly enabled through [`RenderOptions`], before device creation.
+//! What the Renderlab players and the editor's Game view draw with: [`Presenter`] owns a
+//! [`PresentationDevice`], the external renderer installed on it ([`ExternalRenderer`], in
+//! practice Renderlab) and the completed last-good output ([`PresentationImage`]). The crate
+//! also resolves a frame's content (`fidelity`: models, materials, terrain, foliage and
+//! decals), its look ([`environment_at`]) and its camera.
 #![warn(missing_docs)]
 
 extern crate glam34 as glam;
 
-mod captures;
-mod composite;
+mod debug;
+pub use debug::{ReferenceTrace, ReflectionView, RenderDebug};
 mod device;
 pub use device::PresentationDevice;
-mod emitters;
 mod external;
 pub use external::{EXTERNAL_PASSES, ExternalFrame, ExternalRenderer, ExternalView};
 pub mod fidelity;
 pub mod geometry;
-mod gi;
-mod gi_cpu;
 mod gpu_costs;
 pub mod graphics;
 pub use gpu_costs::GpuFrameCosts;
-pub mod landscape;
-#[cfg(test)]
-mod landscape_tests;
 mod lights;
 mod material;
 mod placeholders;
 mod presentation;
-pub mod probes;
 pub use placeholders::{ModelPlaceholders, PENDING_MODEL_COLOR};
 pub use presentation::{PresentationImage, QualityChoice, QualityPreset, RenderOptions};
-mod raster;
-pub use raster::{RasterContent, RasterUpdate, RasterView};
 mod readback;
 mod readiness;
 pub use readiness::PresentationReadiness;
 pub mod terrain_mesh;
 pub mod two_d;
-pub mod vfx;
 
 use anyhow::{Context, Result, ensure};
 use ara_frame::{
     capture::{Capture, CaptureRequest, ViewMode},
-    scene::{self, CameraSpec, Scene, Vertex},
+    scene::{self, CameraSpec},
 };
-use ara_render::Renderer;
 use ara_runtime::{
     components::Environment,
-    extract::{Draw, Geometry, RenderFrame},
+    extract::{Geometry, RenderFrame},
 };
-use geometry::Source;
 use glam::Vec3;
-use std::{
-    collections::BTreeMap,
-    ffi::CString,
-    path::PathBuf,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{ffi::CString, path::PathBuf, time::Duration};
 
-/// Scene textures (model maps, terrain tiles and the two defaults) the presenter
-/// uploads at most: the device's bindless heap holds 128 sampled images in total
-/// (the cooked binding ABI), shared with render targets and capture composites.
-pub const SCENE_TEXTURE_BUDGET: usize = 32;
-
-/// Per-frame CPU cost of the last `present`, for profiling.
+/// Per-frame cost of the last `present`, for profiling.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct PresentStats {
-    /// Native GPU milliseconds, including scene updates and output publication.
+    /// GPU milliseconds the renderer reported, including output publication.
     pub gpu_ms: f64,
     /// Whole presenter device span, from its first submission to completed output
     /// publication. Includes inter-submission gaps; None means no comparable clock.
@@ -77,102 +53,48 @@ pub struct PresentStats {
     /// Gaps between the frame's submission intervals, merging overlapping queues.
     /// This excludes waits inside a submission; unavailable clocks stay None.
     pub gpu_submission_gap_ms: Option<f64>,
-    /// Native timestamp components and residency counters, on every raster tier
-    /// and experimental RT. The legacy diagnostic fallback has incomplete coverage.
+    /// GPU components of the frame: the renderer's span and the output publication.
     pub gpu: Option<GpuFrameCosts>,
     /// Whether the scene was rebuilt (structural change).
     pub rebuilt: bool,
-    /// Meshes whose vertices were re-uploaded.
-    pub updated: usize,
-    /// CPU time spent preparing and uploading (excludes GPU rendering).
+    /// CPU time spent opening the device and resolving content (excludes rendering).
     pub prepare: Duration,
-    /// Time inside `Renderer::render`: records and submits, and waits for the GPU
-    /// unless frames are in flight (`Presenter::set_frames_in_flight`).
+    /// Time inside the external renderer's `render`, including the wait for its image.
     pub render: Duration,
-    /// Time this present waited for the previous frame in flight to complete.
-    pub in_flight_wait: Duration,
-    /// This present has no new completed image: an earlier frame (with frames in
-    /// flight) or, synchronously, its own did not complete within
-    /// `Presenter::STALL_WAIT` (a stalled present path: minimized, occluded or
-    /// undisplayed window). Hosts skip the UI, the blit or the publish for it and
-    /// keep pumping events.
+    /// This present has no new completed image; hosts skip the UI, the blit or the
+    /// publish for it and keep pumping events.
     pub skipped: bool,
-    /// Wall milliseconds an external renderer (`Presenter::set_external_renderer`)
-    /// spent moving its image onto the presenter's device; None for Ara's renderer.
+    /// Wall milliseconds the external renderer spent moving its image onto the
+    /// presenter's device.
     pub external_handoff_ms: Option<f64>,
 }
 
-/// Owns the presentation device and the per-draw upload state.
+/// Owns the presentation device, the external renderer drawing on it and the completed
+/// output.
 pub struct Presenter {
     graphics: Option<ara_graphics_settings::Settings>,
-    graphics_plan_key: Option<([u32; 2], bool, bool, Option<u64>)>,
-    live: Option<presentation::Live>,
-    raster: Option<RasterView>,
-    published: Option<presentation::Published>,
     choice: QualityChoice,
-    plan: Option<ara_render_fidelity::presets::Plan>,
-    published_quality: Option<QualityPreset>,
+    /// The quality preset the device's capabilities resolve `choice` to.
+    preset: Option<QualityPreset>,
+    published: Option<PresentationImage>,
     failure: Option<String>,
-    renderer: Option<Renderer>,
-    /// The device `renderer` holds a lease on. External renderers draw on it too.
+    /// The device external renderers draw on, opened on the first present.
     device: Option<PresentationDevice>,
     initial_device: Option<ara_gpu::GpuDevice>,
-    effects: vfx::Effects,
-    landscapes: landscape::Landscapes,
-    terrain: terrain_mesh::TerrainMeshes,
-    /// Whether to use terrain mesh fallback instead of the landscape renderer.
-    draw_terrain: bool,
     size: [u32; 2],
     extensions: Vec<CString>,
     cache: PathBuf,
-    /// (entity, geometry key, material key) of the uploaded scene, in order.
-    layout: Vec<(u64, u64, u64)>,
-    next_layout: Vec<(u64, u64, u64)>,
-    sources: BTreeMap<u64, Arc<Source>>,
-    textures: BTreeMap<(String, usize), Arc<scene::Texture>>,
-    /// Last uploaded world matrix per draw entity (skinned draws always update).
-    uploaded: BTreeMap<u64, [f32; 16]>,
-    lights: Vec<scene::Light>,
-    sun: ([f32; 3], [f32; 3]),
-    scratch: Vec<Vertex>,
     stats: PresentStats,
-    composite: Option<composite::Composite>,
-    output: Option<ara_gpu::Image>,
-    /// Whether the over-budget texture note was printed.
-    warned_budget: bool,
-    /// Background probe GI acquisition for raster content (`set_probe_gi`).
-    probe_gi: bool,
-    /// The scene document and project cache that reflection-probe captures bind to
-    /// (`set_probe_scene`).
-    probe_scene: Option<(String, PathBuf)>,
-    /// GPU pass timestamps on the presentation device (`set_pass_timing`).
-    pass_timing: bool,
     /// Renderer selection (`set_render_options`).
     options: ara_render_fidelity::presets::RenderOptions,
     /// The content's authored environment map (HDRI), replacing the sky gradient.
     environment: Option<fidelity::EnvironmentMap>,
     /// Host look override (`set_look_override`), replacing the frame's authored look.
     look_override: Option<ara_render_fidelity::environment::FrameEnvironment>,
-    /// Raster render scale per display axis replacing the preset's (`set_render_scale`).
-    render_scale: Option<f32>,
-    /// Below 1440p, render the preset's 1440p pixel budget (`set_pixel_budget`).
-    pixel_budget: bool,
-    /// Effects a debug view turned off (`set_debug`), applied to every raster frame.
-    debug: ara_render::RenderDebug,
-    /// Hybrid ray queries on High/Epic where the device has them (`set_ray_queries`;
-    /// `ARA_RAY_QUERIES=0` at creation starts with them off, for A/B captures).
-    ray_queries: bool,
-    /// The colour lookup table the baseline renderer holds (`apply_lut`).
-    lut: Option<std::sync::Arc<ara_components::post::ColorLut>>,
-    /// Raster frames return once submitted (`set_frames_in_flight`).
-    frames_in_flight: bool,
-    /// Submitted raster frames not yet waited, oldest first (at most two).
-    in_flight: std::collections::VecDeque<raster::Submitted>,
-    /// Private recorder identity for the next submission, independent of simulation.
-    profile_next: Option<u64>,
-    /// Timestamp samples paired with their actual submitting CPU frame.
-    profile_completed: std::collections::VecDeque<(u64, Vec<ara_gpu::commands::PassTiming>)>,
-    /// The renderer drawing in place of `ara-render` (`set_external_renderer`).
+    /// Diagnosis switches (`set_debug`): the exposure lock, the debug view and what an
+    /// external renderer must report it cannot honour.
+    debug: RenderDebug,
+    /// The renderer drawing every frame (`set_external_renderer`).
     external: Option<Box<dyn ExternalRenderer>>,
     /// Draw count the external path last resolved content for (its environment map).
     external_draws: Option<usize>,
@@ -180,11 +102,16 @@ pub struct Presenter {
     external_foliage: std::collections::BTreeMap<String, Vec<ara_runtime::extract::Draw>>,
     /// Terrain layer materials by reference from that same content.
     external_terrain_materials:
-        std::collections::BTreeMap<String, Arc<ara_runtime::material::MaterialAsset>>,
+        std::collections::BTreeMap<String, std::sync::Arc<ara_runtime::material::MaterialAsset>>,
     /// The external renderer's own pass timings for its last frame (`ExternalFrame::passes`).
     external_passes: [(&'static str, f64); EXTERNAL_PASSES],
+    /// The last frame's pass timings (`pass_timings`).
+    timings: Vec<ara_gpu::commands::PassTiming>,
+    /// Private recorder identity for the next frame, independent of simulation.
+    profile_next: Option<u64>,
+    /// Timings paired with the CPU frame that submitted them (`take_profile_timings`).
+    profile_completed: std::collections::VecDeque<(u64, Vec<ara_gpu::commands::PassTiming>)>,
 }
-
 fn fnv(hash: u64, bytes: &[u8]) -> u64 {
     bytes.iter().fold(hash, |h, b| {
         (h ^ u64::from(*b)).wrapping_mul(0x0000_0100_0000_01b3)
@@ -208,150 +135,82 @@ fn geometry_key(geometry: &Geometry) -> u64 {
     }
 }
 
-fn material_key(draw: &Draw) -> u64 {
-    let mut h = FNV;
-    for v in draw
-        .color
-        .iter()
-        .chain([draw.roughness, draw.metallic].iter())
-        .chain(draw.emissive.iter())
-    {
-        h = fnv(h, &v.to_bits().to_le_bytes());
-    }
-    h = fnv(h, &[u8::from(draw.emissive_factor.is_some())]);
-    if let Some(factor) = draw.emissive_factor {
-        for value in factor {
-            h = fnv(h, &value.to_bits().to_le_bytes());
-        }
-    }
-    h = fnv(h, &[u8::from(draw.material.is_some())]);
-    if let Some(material) = &draw.material {
-        h = fnv(h, &material.digest.0);
-    }
-    h
-}
-
 impl Presenter {
-    /// Update loading/failed bounds at an import-status boundary. This changes
-    /// only existing native material rows and retains geometry and last-good models.
-    pub fn update_model_placeholders(&mut self, is_pending: impl Fn(&str) -> bool) -> Result<()> {
-        if let (Some(raster), Some(renderer)) = (&mut self.raster, &mut self.renderer) {
-            raster.style_unpublished(renderer, is_pending)?;
-        }
-        Ok(())
-    }
     /// A presenter for `size` pixels. `extensions` are the window's Vulkan instance
     /// extensions (empty for headless); `cache` holds the pipeline cache.
     pub fn new(size: [u32; 2], extensions: Vec<CString>, cache: impl Into<PathBuf>) -> Self {
         Self {
-            live: None,
-            raster: None,
             published: None,
             choice: QualityChoice::Auto,
-            plan: None,
-            published_quality: None,
+            preset: None,
             graphics: None,
-            graphics_plan_key: None,
             failure: None,
-            renderer: None,
             device: None,
             initial_device: None,
-            effects: vfx::Effects::default(),
-            landscapes: landscape::Landscapes::default(),
-            terrain: terrain_mesh::TerrainMeshes::default(),
-            draw_terrain: false,
             size,
             extensions,
             cache: cache.into(),
-            layout: Vec::new(),
-            next_layout: Vec::new(),
-            sources: BTreeMap::new(),
-            textures: BTreeMap::new(),
-            uploaded: BTreeMap::new(),
-            lights: Vec::new(),
-            sun: ([0.0; 3], [0.0; 3]),
-            scratch: Vec::new(),
             stats: PresentStats::default(),
-            composite: None,
-            output: None,
-            warned_budget: false,
-            probe_gi: true,
-            probe_scene: None,
-            pass_timing: true,
             options: ara_render_fidelity::presets::RenderOptions::default(),
             environment: None,
             look_override: None,
-            render_scale: None,
-            pixel_budget: false,
-            debug: ara_render::RenderDebug::default(),
-            ray_queries: std::env::var_os("ARA_RAY_QUERIES").is_none_or(|v| v != "0"),
-            lut: None,
-            frames_in_flight: false,
-            in_flight: std::collections::VecDeque::new(),
-            profile_next: None,
-            profile_completed: std::collections::VecDeque::new(),
+            debug: RenderDebug::default(),
             external: None,
             external_draws: None,
             external_foliage: Default::default(),
             external_terrain_materials: Default::default(),
             external_passes: [("", 0.); EXTERNAL_PASSES],
+            timings: Vec::new(),
+            profile_next: None,
+            profile_completed: std::collections::VecDeque::new(),
         }
     }
 
-    /// Adopt an unused GPU owner before preparation. It may share its native
-    /// lifetime with a shaderless loading owner; it retains its own arenas/queues.
+    /// Adopt an unused GPU owner before the first present.
     pub fn with_device(size: [u32; 2], cache: impl Into<PathBuf>, gpu: ara_gpu::GpuDevice) -> Self {
         let mut presenter = Self::new(size, Vec::new(), cache);
         presenter.initial_device = Some(gpu);
         presenter
     }
 
-    /// The renderer, once the first frame was presented.
-    pub fn renderer(&self) -> Option<&Renderer> {
-        self.renderer.as_ref()
+    /// The device external renderers draw on, once the first frame was presented.
+    pub fn gpu(&self) -> Option<&ara_gpu::GpuDevice> {
+        self.device.as_ref().map(PresentationDevice::gpu)
     }
 
-    /// The renderer, mutably: development tools read live frames through
-    /// `Renderer::capture_completed` without a capture reset.
-    /// Callers that submit or read back through it first `drain` a frame in flight.
-    pub fn renderer_mut(&mut self) -> Option<&mut Renderer> {
-        self.renderer.as_mut()
+    /// The device, mutably. Callers that submit or read back through it first finish
+    /// the frame they present (presents are synchronous, so nothing is in flight).
+    pub fn gpu_mut(&mut self) -> Option<&mut ara_gpu::GpuDevice> {
+        self.device.as_mut().map(PresentationDevice::gpu_mut)
     }
 
-    /// The linear exposure multiplier `frame` was last rendered with: the adapted
-    /// multiplier under automatic metering (read between completed frames, so call it
-    /// after a capture), else the manual or `--ev100`-locked value. `None` before the
-    /// first metered frame.
+    /// The linear exposure multiplier `frame` renders with when it is manual or locked
+    /// (`--ev100`, the exposure debug lock); `None` under automatic metering, which the
+    /// external renderer owns.
     pub fn applied_exposure(&self, frame: &RenderFrame) -> Option<f32> {
         let look = self.frame_look(frame);
-        match look.ev100 {
-            Some(_) => Some(look.manual_exposure(frame.environment.exposure)),
-            None => self.renderer.as_ref()?.exposure().ok().flatten(),
-        }
+        look.ev100
+            .map(|_| look.manual_exposure(frame.environment.exposure))
     }
 
     /// Final GPU-composited window image, in CopySource state.
     pub fn output(&self) -> Option<ara_gpu::Image> {
-        self.published
-            .as_ref()
-            .map(|image| image.image)
-            .or(self.output)
-            .or_else(|| self.renderer.as_ref().map(Renderer::output))
+        self.published.as_ref().map(PresentationImage::output)
     }
 
-    /// Cost of the last `present`/`prepare`.
+    /// Cost of the last `present`.
     pub fn stats(&self) -> PresentStats {
         self.stats
     }
 
     /// Cumulative host time in this device's explicit GPU/presentation waits.
     /// Snapshot around a whole windowed frame, including swapchain presentation.
-    /// No counter exists until the renderer's device has been created.
+    /// No counter exists until the device has been created.
     pub fn host_wait_stats(&self) -> Option<ara_gpu::vulkan::HostWaitStats> {
-        self.renderer.as_ref().map(|r| r.gpu().host_wait_stats())
+        self.gpu().map(ara_gpu::GpuDevice::host_wait_stats)
     }
 
-    /// Resizes the output (history resets).
+    /// Resizes the output.
     pub fn resize(&mut self, size: [u32; 2]) -> Result<()> {
         ensure!(!size.contains(&0), "presentation extent must be nonzero");
         self.size = size;
@@ -380,599 +239,6 @@ impl Presenter {
         }
         look
     }
-
-    /// Uploads `frame`'s content (rebuilding only on structural change). A rebuild
-    /// resolves `content` once (its environment map lights and backs the scene)
-    /// and returns it for probe GI acquisition.
-    fn prepare_baseline(
-        &mut self,
-        frame: &RenderFrame,
-        content: impl FnOnce() -> Result<fidelity::native::Content>,
-    ) -> Result<Option<fidelity::native::Content>> {
-        let started = Instant::now();
-        ensure!(!frame.draws.is_empty(), "nothing to draw");
-        self.next_layout.clear();
-        for draw in &frame.draws {
-            self.next_layout.push((
-                draw.entity,
-                geometry_key(&draw.geometry),
-                material_key(draw),
-            ));
-        }
-        let tiles = self.terrain_tiles(frame);
-        for tile in &tiles {
-            self.next_layout.push((tile.entity, tile.key, 0));
-        }
-        let rebuild = self.renderer.is_none() || self.next_layout != self.layout;
-        self.stats = PresentStats {
-            rebuilt: rebuild,
-            ..Default::default()
-        };
-        let mut resolved = None;
-        if rebuild {
-            let content = content()?;
-            self.environment = content
-                .environment
-                .as_ref()
-                .map(|map| fidelity::EnvironmentMap {
-                    size: map.size,
-                    pixels: map.pixels.clone(),
-                });
-            resolved = Some(content);
-            let scene = self.scene(frame, &tiles)?;
-            match &mut self.renderer {
-                Some(renderer) => renderer.replace_scene(scene)?,
-                None => {
-                    self.renderer = Some(Renderer::new(
-                        scene,
-                        self.size,
-                        &self.extensions,
-                        &self.cache,
-                    ).context("ARA_GPU_BACKEND: cannot initialize rendering; run `ara doctor` to check the Vulkan loader and GPU driver")?);
-                }
-            }
-            std::mem::swap(&mut self.layout, &mut self.next_layout);
-        } else {
-            self.update(frame)?;
-        }
-        let environment = self.frame_look(frame);
-        let look = environment.raster();
-        let renderer = self
-            .renderer
-            .as_mut()
-            .context("renderer missing after prepare")?;
-        if *renderer.look() != look {
-            renderer.set_look(look)?;
-        }
-        apply_lut(renderer, frame, &environment, &mut self.lut)?;
-        apply_fog_volumes(renderer, frame)?;
-        self.stats.prepare = started.elapsed();
-        Ok(resolved)
-    }
-
-    /// Renders the scene, landscape/foliage and particles to one GPU window image.
-    fn present_baseline(&mut self, frame: &RenderFrame) -> Result<()> {
-        self.draw_terrain = frame.terrain.is_none();
-        let camera = camera(frame)?;
-        let exposure = self
-            .frame_look(frame)
-            .manual_exposure(frame.environment.exposure);
-        let started = Instant::now();
-        let renderer = self
-            .renderer
-            .as_mut()
-            .context("renderer missing after prepare")?;
-        // Landscape and particles composite into the lit HDR before it is graded.
-        let native = renderer.is_native();
-        let compositing = (!native && frame.terrain.is_some()) || !frame.effects.is_empty();
-        renderer.set_deferred_post(compositing);
-        renderer.render(&camera, exposure)?;
-        let terrain = if native {
-            None
-        } else {
-            self.landscapes.present(renderer, frame, &camera)?
-        };
-        let (image, sampled_index, state) = renderer.feature_color();
-        let mut color = ara_vfx_gpu::SceneColor {
-            image,
-            sampled_index,
-            state,
-        };
-        let (image, sampled_index, state) = renderer.feature_depth();
-        let mut depth = ara_vfx_gpu::SceneDepth {
-            image,
-            sampled_index,
-            state,
-        };
-        if compositing {
-            if self
-                .composite
-                .as_ref()
-                .is_none_or(|c| c.size != renderer.render_size())
-            {
-                if let Some(old) = self.composite.take() {
-                    old.retire(renderer.gpu_mut())?;
-                }
-                let size = renderer.render_size();
-                self.composite = Some(composite::Composite::new(renderer.gpu_mut(), size)?);
-            }
-            let composite = self.composite.as_mut().context("compositor initialized")?;
-            if let Some(terrain) = terrain {
-                let state = Some(renderer.hdr_exposure().state);
-                (color, depth) =
-                    composite.merge(renderer.gpu_mut(), color, depth, terrain, exposure, state)?;
-            }
-            color = self
-                .effects
-                .present(renderer, frame, &camera, color, depth)?;
-            self.output = Some(renderer.finish(color.image, color.sampled_index, color.state)?);
-        } else {
-            self.output = Some(renderer.output());
-        }
-        if native {
-            let textures = renderer
-                .native_texture_stats()
-                .context("native texture statistics")?;
-            let costs = GpuFrameCosts {
-                scene_update_ms: renderer.native_update_gpu_ms().unwrap_or(0.),
-                texture_upload_ms: textures.upload_gpu_ms,
-                texture_uploaded_bytes: textures.uploaded_bytes,
-                texture_pending: textures.pending_textures,
-                texture_resident_bytes: textures.resident_bytes,
-                effects_ms: if frame.effects.is_empty() {
-                    0.
-                } else {
-                    self.effects.gpu_ms()
-                },
-                raster_ms: renderer
-                    .timings()
-                    .iter()
-                    .map(|pass| pass.milliseconds)
-                    .sum(),
-                ..Default::default()
-            };
-            self.stats.gpu_ms = costs.accounted_ms();
-            self.stats.gpu = Some(costs);
-        }
-        self.stats.render = started.elapsed();
-        Ok(())
-    }
-
-    /// A deterministic capture of `frame` at `size` with up to `marks` numbered marks.
-    fn capture_baseline(
-        &mut self,
-        frame: &RenderFrame,
-        size: [u32; 2],
-        mode: ViewMode,
-        marks: Option<usize>,
-        seed: u64,
-    ) -> Result<Capture> {
-        // Terrain comes from the landscape composite below.
-        self.draw_terrain = false;
-        if self.raster.is_none() {
-            self.prepare_baseline(frame, || Ok(fidelity::native::Content::default()))?;
-        }
-        self.wait_probe_gi()?;
-        let request = CaptureRequest {
-            camera: camera(frame)?,
-            size,
-            mode,
-            // Renderer::capture resets the jitter sequence and history itself;
-            // live TAA can remain enabled in a reproducible Low capture.
-            deterministic: false,
-            exposure: self
-                .frame_look(frame)
-                .manual_exposure(frame.environment.exposure),
-            settle_frames: 4,
-            tick: frame.tick,
-            seed,
-            marks,
-        };
-        let renderer = self
-            .renderer
-            .as_mut()
-            .context("renderer missing after prepare")?;
-        let mut capture = renderer.capture(&request)?;
-        let base =
-            (!renderer.is_native() && frame.terrain.is_some()).then(|| capture.image.clone());
-        // GPU particles replay over the captured frame before it is resized away.
-        self.effects
-            .composite(renderer, frame, &request, &mut capture)?;
-        // Terrain and foliage by depth, last: VFX deltas carry onto terrain.
-        if let Some(base) = base {
-            self.landscapes
-                .composite(renderer, frame, &request, &base, &mut capture)?;
-        }
-        // Captures resize to the request; return to the presentation size.
-        renderer.resize(self.size)?;
-        Ok(capture)
-    }
-
-    /// Captures the window presentation path, including landscape/foliage and VFX.
-    fn capture_presented_baseline(
-        &mut self,
-        frame: &RenderFrame,
-        size: [u32; 2],
-        marks: Option<usize>,
-        seed: u64,
-    ) -> Result<Capture> {
-        self.draw_terrain = true;
-        self.prepare(frame)?;
-        self.wait_probe_gi()?;
-        let request = CaptureRequest {
-            camera: camera(frame)?,
-            size,
-            mode: ViewMode::Lit,
-            deterministic: true,
-            exposure: self
-                .frame_look(frame)
-                .manual_exposure(frame.environment.exposure),
-            settle_frames: 4,
-            tick: frame.tick,
-            seed,
-            marks,
-        };
-        let renderer = self
-            .renderer
-            .as_mut()
-            .context("renderer missing after prepare")?;
-        let mut capture = renderer.capture(&request)?;
-        let original_size = self.size;
-        self.size = size;
-        self.present(frame)?;
-        let output = self.output.context("composited output missing")?;
-        let extent = self.renderer.as_ref().context("renderer missing")?.size();
-        readback::replace(
-            self.renderer
-                .as_mut()
-                .context("renderer missing")?
-                .gpu_mut(),
-            output,
-            extent,
-            &mut capture,
-        )?;
-        self.resize(original_size)?;
-        Ok(capture)
-    }
-
-    fn source(&mut self, geometry: &Geometry) -> Result<Arc<Source>> {
-        let key = geometry_key(geometry);
-        if let Some(s) = self.sources.get(&key) {
-            return Ok(Arc::clone(s));
-        }
-        let source = Arc::new(match geometry {
-            Geometry::Shape { shape, size } => geometry::shape(*shape, *size),
-            Geometry::Model { model, primitive } => {
-                let p = model
-                    .primitives
-                    .get(*primitive)
-                    .context("primitive out of range")?;
-                Source {
-                    vertices: p.vertices.clone(),
-                    indices: p.indices.clone(),
-                }
-            }
-        });
-        self.sources.insert(key, Arc::clone(&source));
-        Ok(source)
-    }
-
-    fn texture(
-        &mut self,
-        source: material::Source<'_>,
-        index: usize,
-    ) -> Result<Arc<scene::Texture>> {
-        let key = source.key(index);
-        if let Some(t) = self.textures.get(&key) {
-            return Ok(Arc::clone(t));
-        }
-        let mut texture = decode_texture(&source.texture(index).ktx2)?;
-        if source.raw() {
-            texture.srgb = false;
-        }
-        let texture = Arc::new(texture);
-        self.textures.insert(key, Arc::clone(&texture));
-        Ok(texture)
-    }
-
-    /// Meshes of the frame's resident terrain chunks, when this frame draws them.
-    fn terrain_tiles(&mut self, frame: &RenderFrame) -> Vec<Arc<terrain_mesh::TileMesh>> {
-        let Some(view) = frame.terrain.as_ref().filter(|_| self.draw_terrain) else {
-            return Vec::new();
-        };
-        let mut coords = view.tiles.clone();
-        coords.sort();
-        coords.dedup();
-        coords
-            .into_iter()
-            .filter_map(|c| self.terrain.tile(&view.data, c))
-            .collect()
-    }
-
-    fn scene(
-        &mut self,
-        frame: &RenderFrame,
-        tiles: &[Arc<terrain_mesh::TileMesh>],
-    ) -> Result<Scene> {
-        let mut scene = Scene {
-            meshes: Vec::new(),
-            materials: Vec::new(),
-            textures: vec![
-                scene::Texture {
-                    size: [1, 1],
-                    rgba: vec![255; 4],
-                    srgb: false,
-                },
-                scene::Texture {
-                    size: [1, 1],
-                    rgba: vec![128, 128, 255, 255],
-                    srgb: false,
-                },
-            ],
-            lights: lights(frame),
-            sun_direction: glam30::Vec3::from_array(sun(frame).0),
-            sun_lux: glam30::Vec3::from_array(sun(frame).1),
-            environment: Vec::new(),
-            environment_size: [0; 2],
-        };
-        let (size, sky) = match &self.environment {
-            Some(map) => (map.size, map.pixels.clone()),
-            None => sky(&frame.environment),
-        };
-        scene.environment_size = size;
-        scene.environment = sky;
-        // Model textures share the device's 128-entry sampled-image heap with the
-        // renderer's own targets: colour maps of every draw come first, then normal,
-        // metal/roughness and emissive maps while the budget lasts. Maps past it fold
-        // into their material's factors (mean texel) instead of failing the upload.
-        let budget = SCENE_TEXTURE_BUDGET.saturating_sub(2 + tiles.len());
-        let mut wanted: Vec<Vec<(material::Source<'_>, usize)>> = vec![Vec::new(); 4];
-        let mut seen = std::collections::BTreeSet::new();
-        for draw in &frame.draws {
-            if let Some(source) = material::Source::of(draw) {
-                let m = source.material();
-                for (slot, texture) in [
-                    m.base_color_texture,
-                    m.normal_texture,
-                    m.metallic_roughness_texture,
-                    m.emissive_texture,
-                ]
-                .into_iter()
-                .enumerate()
-                {
-                    if let Some(t) = texture
-                        && seen.insert((slot, source.key(t)))
-                    {
-                        wanted[slot].push((source, t));
-                    }
-                }
-            }
-        }
-        let mut accepted = std::collections::BTreeSet::new();
-        for (source, t) in wanted.iter().flatten() {
-            let key = source.key(*t);
-            if accepted.len() < budget || accepted.contains(&key) {
-                accepted.insert(key);
-            }
-        }
-        let folded = seen.len().saturating_sub(accepted.len());
-        if folded > 0 && !self.warned_budget {
-            eprintln!(
-                "ara-runtime-render: {folded} model texture maps exceed the {SCENE_TEXTURE_BUDGET}-slot scene budget; folded into material factors"
-            );
-            self.warned_budget = true;
-        }
-        let mut texture_slots: BTreeMap<(String, usize), u32> = BTreeMap::new();
-        self.uploaded.clear();
-        for draw in &frame.draws {
-            let source = self.source(&draw.geometry)?;
-            let palette = draw.skin.clone().map(|r| &frame.palettes[r]);
-            let mut vertices = Vec::new();
-            geometry::transform(&source.vertices, draw.world, palette, &mut vertices);
-            // Basic has one UV stream; native overrides use the base-color affine
-            // coordinates. The fidelity consumer retains each slot's independent UVs.
-            if let Some(native) = draw.material.as_ref() {
-                let uv = native.material.base_color_uv;
-                for vertex in &mut vertices {
-                    vertex.uv = uv.apply(vertex.uv);
-                }
-            }
-            // A model without a material has zero source emission; shapes use radiance.
-            let default_emissive = if matches!(&draw.geometry, Geometry::Model { .. }) {
-                let factor = draw.emissive_factor.unwrap_or([0.; 3]);
-                std::array::from_fn(|i| factor[i] * draw.emissive[i])
-            } else {
-                draw.emissive
-            };
-            let mut material = scene::Material {
-                base_color: draw.color,
-                emissive_roughness: [
-                    default_emissive[0],
-                    default_emissive[1],
-                    default_emissive[2],
-                    draw.roughness,
-                ],
-                surface: [draw.metallic, 1.0, 1.0, 0.5],
-                textures: [0, 1, 0, 0],
-                flags: [u32::from(draw.color[3] < 1.0) * 2, 0, 0, 0],
-            };
-            if let Some(source) = material::Source::of(draw) {
-                let m = source.material();
-                for (out, (a, b)) in material
-                    .base_color
-                    .iter_mut()
-                    .zip(m.base_color.iter().zip(draw.color))
-                {
-                    *out = a * b;
-                }
-                let emissive = draw.emissive_factor.unwrap_or(m.emissive);
-                material.emissive_roughness = [
-                    emissive[0] * draw.emissive[0],
-                    emissive[1] * draw.emissive[1],
-                    emissive[2] * draw.emissive[2],
-                    m.roughness,
-                ];
-                material.surface = [m.metallic, m.normal_scale, 1.0, m.alpha_cutoff];
-                material.flags[0] = m.alpha_mode;
-                for (slot, texture) in [
-                    m.base_color_texture,
-                    m.normal_texture,
-                    m.metallic_roughness_texture,
-                    m.emissive_texture,
-                ]
-                .into_iter()
-                .enumerate()
-                {
-                    let Some(t) = texture else { continue };
-                    let key = source.key(t);
-                    if !accepted.contains(&key) {
-                        let mean = if source.raw() {
-                            let texture = self.texture(source, t)?;
-                            let mut mean = [0.; 4];
-                            for pixel in texture.rgba.as_chunks::<4>().0 {
-                                for i in 0..4 {
-                                    mean[i] += f32::from(pixel[i]) / 255.;
-                                }
-                            }
-                            for channel in &mut mean {
-                                *channel /= (texture.size[0] * texture.size[1]) as f32;
-                            }
-                            if source.decode(slot) {
-                                for channel in &mut mean[..3] {
-                                    *channel = if *channel <= 0.04045 {
-                                        *channel / 12.92
-                                    } else {
-                                        ((*channel + 0.055) / 1.055).powf(2.4)
-                                    };
-                                }
-                            }
-                            mean
-                        } else {
-                            mean_texel(&source.texture(t).ktx2)?
-                        };
-                        fold(&mut material, slot, mean);
-                        continue;
-                    }
-                    let index = match texture_slots.get(&key) {
-                        Some(&index) => index,
-                        None => {
-                            let texture = self.texture(source, t)?;
-                            let index = scene.textures.len() as u32;
-                            scene.textures.push(scene::Texture {
-                                size: texture.size,
-                                rgba: texture.rgba.clone(),
-                                srgb: texture.srgb,
-                            });
-                            texture_slots.insert(key, index);
-                            index
-                        }
-                    };
-                    material.textures[slot] = index;
-                    if source.decode(slot) {
-                        material.flags[1] |= if slot == 0 {
-                            scene::BASE_COLOR_DECODE_SRGB
-                        } else {
-                            scene::EMISSIVE_DECODE_SRGB
-                        };
-                    }
-                }
-            }
-            scene.materials.push(material);
-            scene.meshes.push(scene::Mesh {
-                entity: draw.entity,
-                name: draw.label.clone(),
-                vertices,
-                indices: source.indices.clone(),
-                material: scene.materials.len() - 1,
-            });
-            self.uploaded
-                .insert(draw.entity, draw.world.to_cols_array());
-        }
-        for tile in tiles {
-            let slot = scene.textures.len() as u32;
-            scene.textures.push(scene::Texture {
-                size: tile.texture.size,
-                rgba: tile.texture.rgba.clone(),
-                srgb: true,
-            });
-            scene.materials.push(scene::Material {
-                base_color: [1.0; 4],
-                emissive_roughness: [0.0, 0.0, 0.0, 0.95],
-                surface: [0.0, 1.0, 1.0, 0.5],
-                textures: [slot, 1, 0, 0],
-                flags: [0; 4],
-            });
-            let mut vertices = Vec::new();
-            geometry::transform(
-                &tile.source.vertices,
-                glam::Mat4::IDENTITY,
-                None,
-                &mut vertices,
-            );
-            scene.meshes.push(scene::Mesh {
-                entity: tile.entity,
-                name: tile.label.clone(),
-                vertices,
-                indices: tile.source.indices.clone(),
-                material: scene.materials.len() - 1,
-            });
-        }
-        self.lights = scene.lights.clone();
-        self.sun = sun(frame);
-        Ok(scene)
-    }
-
-    fn update(&mut self, frame: &RenderFrame) -> Result<()> {
-        let renderer = self.renderer.as_mut().context("no renderer")?;
-        for draw in &frame.draws {
-            let matrix = draw.world.to_cols_array();
-            let moved = self.uploaded.get(&draw.entity) != Some(&matrix);
-            if !moved && draw.skin.is_none() {
-                continue;
-            }
-            let key = geometry_key(&draw.geometry);
-            let source = self
-                .sources
-                .get(&key)
-                .context("geometry missing from cache")?;
-            let palette = draw.skin.clone().map(|r| &frame.palettes[r]);
-            geometry::transform(&source.vertices, draw.world, palette, &mut self.scratch);
-            renderer.update_mesh(draw.entity, &self.scratch)?;
-            self.uploaded.insert(draw.entity, matrix);
-            self.stats.updated += 1;
-        }
-        let lights = lights(frame);
-        if lights.len() != self.lights.len()
-            || lights
-                .iter()
-                .zip(&self.lights)
-                .any(|(a, b)| bytemuck::bytes_of(a) != bytemuck::bytes_of(b))
-        {
-            renderer.set_lights(&lights)?;
-            self.lights = lights;
-        }
-        let sun = sun(frame);
-        if sun != self.sun {
-            renderer.set_sun(
-                glam30::Vec3::from_array(sun.0),
-                glam30::Vec3::from_array(sun.1),
-            )?;
-            self.sun = sun;
-        }
-        renderer.set_sun_radius(frame.sun_radius)?;
-        let shown = &frame.lights[..frame.lights.len().min(64)];
-        renderer.set_light_tables(&lights::tables(shown).0)?;
-        Ok(())
-    }
-}
-
-/// The frame's sun, or a dim default so the renderer always has a directional light.
-fn sun(frame: &RenderFrame) -> ([f32; 3], [f32; 3]) {
-    frame.sun.unwrap_or(([0.3, 1.0, 0.2], [0.0; 3]))
-}
-
-fn lights(frame: &RenderFrame) -> Vec<scene::Light> {
-    lights::scene_lights(&frame.lights[..frame.lights.len().min(64)])
 }
 
 /// Where [`camera`] looks from when the world has no camera.
@@ -1036,45 +302,6 @@ pub fn environment_at(
     environment
 }
 
-/// Hands the raster renderer `frame`'s local fog volumes (priority, then distance to
-/// the frame's camera; `ara_render_fidelity::environment::fog_volumes`) when they change.
-pub fn apply_fog_volumes(renderer: &mut Renderer, frame: &RenderFrame) -> Result<()> {
-    if frame.look.fog_volumes.is_empty() && renderer.fog_volumes().is_empty() {
-        return Ok(());
-    }
-    let eye = frame.camera.map_or(OVERVIEW, |c| c.position);
-    let volumes =
-        ara_render_fidelity::environment::fog_volumes(&frame.look, glam30::Vec3::from_array(eye));
-    if renderer.fog_volumes() != volumes.as_slice() {
-        renderer.set_fog_volumes(&volumes)?;
-    }
-    Ok(())
-}
-
-/// Hands the raster renderer the colour lookup table `look` selects from `frame`'s
-/// (`FrameEnvironment::lut`) when it changes; `current` tracks the table it holds.
-pub fn apply_lut(
-    renderer: &mut Renderer,
-    frame: &RenderFrame,
-    look: &ara_render_fidelity::environment::FrameEnvironment,
-    current: &mut Option<std::sync::Arc<ara_components::post::ColorLut>>,
-) -> Result<()> {
-    let lut = look
-        .lut
-        .and_then(|i| frame.look.luts.get(i as usize))
-        .map(|(_, table)| table);
-    let same = match (lut, current.as_ref()) {
-        (Some(a), Some(b)) => std::sync::Arc::ptr_eq(a, b),
-        (None, None) => true,
-        _ => false,
-    };
-    if !same {
-        renderer.set_color_lut(lut.map(|t| (t.size, t.texels.as_slice())))?;
-        *current = lut.cloned();
-    }
-    Ok(())
-}
-
 /// The frame's camera, or an overview when the world has none.
 pub fn camera(frame: &RenderFrame) -> Result<CameraSpec> {
     Ok(match frame.camera {
@@ -1122,28 +349,6 @@ pub fn sky(env: &Environment) -> ([u32; 2], Vec<[f32; 4]>) {
         }
     }
     ([W, H], pixels)
-}
-
-/// Folds a texture map that did not fit the budget into its material's factors.
-fn fold(material: &mut scene::Material, slot: usize, mean: [f32; 4]) {
-    match slot {
-        0 => {
-            for (c, m) in material.base_color.iter_mut().zip(mean).take(3) {
-                *c = (*c * m).clamp(0.0, 1.0);
-            }
-        }
-        2 => {
-            material.emissive_roughness[3] *= mean[1];
-            material.surface[0] *= mean[2];
-        }
-        3 => {
-            for (c, m) in material.emissive_roughness.iter_mut().zip(mean).take(3) {
-                *c *= m;
-            }
-        }
-        // Normal maps fold to the flat default.
-        _ => {}
-    }
 }
 
 /// The mean texel of a cooked texture from its coarsest block-sized level (linear

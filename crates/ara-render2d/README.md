@@ -44,8 +44,8 @@ jitters. The resident atlas count is bounded by the common Vulkan heap; overflow
 structured GPU error.
 
 Additive shared hooks (minimal): `Command::DrawProcedural` in ara-gpu (validated with
-the pipeline's `vertex_stride`); in ara-render `CameraSpec::Orthographic` and
-`renderer::post::ToneMap`. Captures go through main's `Capture::from_feature`.
+the pipeline's `vertex_stride`); `CameraSpec::Orthographic` and
+`ToneMap` (`tonemap.rs`). Captures go through main's `Capture::from_feature`.
 
 ## Measurements (RTX 4070 SUPER, 1280x720, Vulkan timestamps)
 

@@ -52,7 +52,7 @@ kernel undo/redo. Do not add UI tests here; this crate does not draw the canvas.
 
 ## Renderer adoption
 
-ara-render consumes the material adapter in ara-material, never raw graph nodes.
+Renderers consume the material adapter in ara-material, never raw graph nodes.
 Use graph semantic hashes to avoid scheduling material cooking after canvas moves.
 Keep compiled results outside the authoring Store and swap last-good results only
 at frame boundaries under the human's application policy (D20).

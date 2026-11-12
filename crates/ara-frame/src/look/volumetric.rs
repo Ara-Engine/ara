@@ -1,4 +1,4 @@
-//! Fog volumes and the volumetric-fog budgets. The froxel passes stay in `ara-render`.
+//! Fog volumes and the volumetric-fog budgets. The froxel passes need a renderer.
 use glam::{Mat4, Quat, Vec3};
 
 /// Local fog volumes a frame renders at most (`Renderer::set_fog_volumes`): the
@@ -168,4 +168,3 @@ impl FogVolume {
         ]
     }
 }
-

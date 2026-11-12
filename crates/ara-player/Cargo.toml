@@ -10,7 +10,6 @@ publish.workspace = true
 default = []
 hotpatch = ["dep:ara-hotpatch", "ara-sim/hotpatch", "ara-runtime-render/hotpatch"]
 tracy = ["ara-gpu/tracy"]
-fidelity-lab = ["dep:ara-render-fidelity", "ara-render/fidelity-lab", "ara-runtime-render/fidelity-lab", "ara-gpu/fidelity-lab", "image/exr"]
 
 [build-dependencies]
 embed-resource.workspace = true
@@ -35,7 +34,6 @@ ara-profile = { path = "../ara-profile", features = ["gpu"] }
 ara-json.workspace = true
 ara-pack = { path = "../ara-pack", default-features = false, features = ["native-decode"] }
 ara-frame = { path = "../ara-frame" }
-ara-render = { path = "../ara-render" }
 ara-renderlab = { path = "../ara-renderlab" }
 ara-render-fidelity = { path = "../ara-render-fidelity", optional = true }
 ara-runtime = { path = "../ara-runtime" }

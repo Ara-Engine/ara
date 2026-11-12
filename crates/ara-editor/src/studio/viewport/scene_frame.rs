@@ -1,8 +1,7 @@
 //! The Scene view's frame. The editor extracts it itself (`world::gltf::extract_frame`) on the
 //! content worker; the worker hands it straight back with the CPU scene picking, snapping and
 //! bounds read, and this view adopts it and has Renderlab draw it. No renderer other than
-//! Renderlab exists: `ara_render` is not involved, and `SceneDevice` is only the GPU device
-//! Renderlab's image lives on.
+//! Renderlab exists, and `SceneDevice` is only the GPU device Renderlab's image lives on.
 use super::*;
 use crate::world::gltf::FidelityContent;
 

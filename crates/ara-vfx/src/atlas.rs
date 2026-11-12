@@ -139,21 +139,3 @@ pub fn cook_sheet(kind: u32) -> Vec<u8> {
 pub fn cook_atlas() -> Vec<u8> {
     (0..5).flat_map(cook_sheet).collect()
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// The sheets are what `ara-vfx-gpu` cooked before they moved here.
-    #[test]
-    fn cooking_matches_the_checked_in_atlas() {
-        let cooked = include_bytes!("../../ara-vfx-gpu/cooked/atlas.rgba");
-        assert_eq!(cook_atlas().as_slice(), cooked.as_slice());
-        let ring = family(SpriteTexture::Ring).unwrap() as usize;
-        let sheet = (SHEET_SIZE * SHEET_SIZE * 4) as usize;
-        assert_eq!(
-            cook_sheet(ring as u32),
-            cooked[ring * sheet..(ring + 1) * sheet]
-        );
-    }
-}

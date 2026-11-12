@@ -1785,11 +1785,9 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
         "lighting.probe.recapture"
         | "lighting.probe.cancel"
         | "lighting.probe.refresh"
-        | "lighting.probe.copy" => Err(format!(
-            "Reflection probe capture: {}",
-            super::unavailable::SOON
-        )
-        .into()),
+        | "lighting.probe.copy" => {
+            Err(format!("Reflection probe capture: {}", super::unavailable::SOON).into())
+        }
         // History pages through older changes, 300 at a time.
         "history.older" => {
             let total = s.editor.host.store().history().len();

@@ -22,15 +22,15 @@ M0 is done: every spike decision is in `docs/decisions.md`. M1–M4 tracks are b
 - `arabench`, the agent-ergonomics benchmark;
 - the simulation core (`ara-sim`, `ara-input`, `ara-components`);
 - the C# host (`ara-script`, `dotnet/`);
-- the renderer (`ara-gpu`, `ara-render`, `ara-platform`, `ara-shader-cook`), fidelity (`ara-render-fidelity`, `ara-pathtrace`), and materials (`ara-graph`, `ara-material`);
+- the GPU layer (`ara-gpu`, `ara-platform`, `ara-shader-cook`), fidelity data (`ara-render-fidelity`), and materials (`ara-graph`, `ara-material`);
 - assets (`ara-asset*`, `ara-importers`);
 - physics (`ara-physics*`), audio (`ara-audio`), navigation (`ara-nav`), animation (`ara-anim`);
 - the UI runtime and tooling (`ara-ui-*`);
 - export (`ara-export*`, `ara-pack`, `ara-bridge`);
 - localization and saves (`ara-l10n`, `ara-save`);
 - the editor (`ara-editor`, `ara-editor-gpu`) and the play process (`ara-runtime*`, `ara-play*`, `ara-player`);
-- multiplayer (`ara-net`), world streaming (`ara-world`), terrain (`ara-terrain`, `ara-landscape`, `ara-foliage`), 2D (`ara-2d`, `ara-render2d`, `ara-physics2d`, `ara-import2d`);
-- VFX (`ara-vfx`, `ara-vfx-gpu`), animation v2 (`ara-anim-physics`), profiling (`ara-profile`, `ara-bench`), vendored SDL3 (`ara-sdl3-src`).
+- multiplayer (`ara-net`), world streaming (`ara-world`), terrain (`ara-terrain`, `ara-foliage`), 2D (`ara-2d`, `ara-render2d`, `ara-physics2d`, `ara-import2d`);
+- VFX (`ara-vfx`), animation v2 (`ara-anim-physics`), profiling (`ara-profile`, `ara-bench`), vendored SDL3 (`ara-sdl3-src`).
 
 **In progress:**
 - integration v2: C# in the runtime, one shared schema DB, subsystem hooks, replicated Play;
@@ -39,7 +39,7 @@ M0 is done: every spike decision is in `docs/decisions.md`. M1–M4 tracks are b
 - virtualized geometry and VSM;
 - the physics performance pass;
 - the diagnostics bus and `ara why`;
-- Renderlab as the default renderer behind the presenter (`ara-renderlab`, D35, D39): the player and the editor's Game view use it, `ara-render` is frozen and is the fallback where Renderlab cannot run (`ara-player --renderer ara` selects it).
+- Renderlab is Ara's only renderer (`ara-renderlab`, D40): the player, the editor's Game view and the editor's Scene view use it, and a Renderlab start failure is `ARA_RENDERLAB_UNAVAILABLE`. What it does not draw yet is the gap table in `crates/ara-renderlab/AGENTS.md`.
 
 Run `ara init` in a scratch dir to try the CLI and MCP.
 

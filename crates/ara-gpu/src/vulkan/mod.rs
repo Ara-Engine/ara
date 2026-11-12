@@ -101,8 +101,6 @@ pub struct VulkanDevice {
     #[cfg(test)]
     query_pool_creations: usize,
     shader_worker: Option<reload::Worker>,
-    #[cfg(all(feature = "fidelity-lab", not(target_os = "macos")))]
-    pub(crate) lab_params: crate::tunables::Registry,
     disposal: Option<disposal::Disposal>,
     preparation: Option<preparation::Worker>,
     pipeline_preparation: Option<pipeline_preparation::Worker>,
@@ -251,8 +249,6 @@ impl VulkanDevice {
             #[cfg(test)]
             query_pool_creations: 0,
             shader_worker,
-            #[cfg(all(feature = "fidelity-lab", not(target_os = "macos")))]
-            lab_params: Default::default(),
             disposal: Some(disposal),
             preparation: None,
             pipeline_preparation: None,

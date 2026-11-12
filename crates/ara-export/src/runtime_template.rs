@@ -70,25 +70,13 @@ pub(crate) fn inventory(player: &Path, engine: &Path) -> Result<Inventory> {
     }
     let packages: &[&str] = if metal {
         &[
-            "ara-render",
-            "ara-render-fidelity",
-            "ara-runtime-render",
             "ara-render2d",
-            "ara-landscape",
-            "ara-vfx-gpu",
             "ara-texture-gpu",
             "ara-gpu",
             "ara-editor-gpu",
         ]
     } else {
-        &[
-            "ara-render",
-            "ara-render-fidelity",
-            "ara-runtime-render",
-            "ara-render2d",
-            "ara-landscape",
-            "ara-vfx-gpu",
-        ]
+        &["ara-render2d"]
     };
     for package in packages {
         let installed = engine.join("resources").join(package);
@@ -179,14 +167,9 @@ fn mach_o(player: &Path) -> Result<bool> {
     ))
 }
 
-/// Cooked files the runtime reads beside pipeline manifests: `ara-vfx-gpu` checks
-/// each effect's content hash (`<effect>/effect.json`) and samples the particle
-/// atlas (`atlas.rgba`). Every other non-manifest file is offline cook state.
-const RUNTIME_FILES: &[&str] = &["effect.json", "atlas.rgba"];
-
 /// Adds runtime artifacts named by manifests: SPIR-V/DXIL, or Metal libraries and
-/// their required converter reflection, plus [`RUNTIME_FILES`]. Slang reflection
-/// is an offline cook cache.
+/// their required converter reflection. Every other file is offline cook state; Slang
+/// reflection is an offline cook cache.
 fn resources(
     root: &Path,
     directory: &Path,
@@ -212,11 +195,6 @@ fn resources(
             .strip_prefix(root)?
             .to_string_lossy()
             .replace('\\', "/");
-        if RUNTIME_FILES.contains(&name.as_str()) {
-            ara_pack::validate_path(&relative)?;
-            files.insert(format!("{prefix}/{relative}"), path.to_owned());
-            continue;
-        }
         if path.extension().is_none_or(|extension| extension != "json") {
             continue;
         }
@@ -318,14 +296,8 @@ mod tests {
         std::fs::write(&player, b"prebuilt player").unwrap();
         let key = "a".repeat(64);
         let stale = "b".repeat(64);
-        for package in [
-            "ara-render",
-            "ara-render-fidelity",
-            "ara-runtime-render",
-            "ara-render2d",
-            "ara-landscape",
-            "ara-vfx-gpu",
-        ] {
+        {
+            let package = "ara-render2d";
             let root = scratch.path().join("crates").join(package).join("cooked");
             for cohort in [&key, &stale] {
                 std::fs::create_dir_all(root.join(cohort)).unwrap();
@@ -350,10 +322,6 @@ mod tests {
             )
             .unwrap();
         }
-        let effect = scratch.path().join("crates/ara-vfx-gpu/cooked/campfire");
-        std::fs::create_dir_all(&effect).unwrap();
-        std::fs::write(effect.join("effect.json"), "{\"hash\":\"cooked\"}").unwrap();
-        std::fs::write(effect.join("../atlas.rgba"), b"particle atlas").unwrap();
         let first = scratch.path().join("first.zip");
         let second = scratch.path().join("second.zip");
         build_runtime_template(&player, scratch.path(), &first).unwrap();
@@ -365,12 +333,12 @@ mod tests {
         let mut archive = zip::ZipArchive::new(std::fs::File::open(&first).unwrap()).unwrap();
         assert!(
             archive
-                .by_name(&format!("resources/ara-render/{key}/main.spv"))
+                .by_name(&format!("resources/ara-render2d/{key}/main.spv"))
                 .is_ok()
         );
         assert!(
             archive
-                .by_name(&format!("resources/ara-render/{stale}/main.spv"))
+                .by_name(&format!("resources/ara-render2d/{stale}/main.spv"))
                 .is_err()
         );
         assert!(
@@ -386,17 +354,9 @@ mod tests {
         ] {
             assert!(
                 archive
-                    .by_name(&format!("resources/ara-render/{file}"))
+                    .by_name(&format!("resources/ara-render2d/{file}"))
                     .is_err(),
                 "offline {file} must stay outside the runtime payload"
-            );
-        }
-        // The VFX runtime checks each effect's cooked hash and samples the atlas.
-        for file in ["campfire/effect.json", "atlas.rgba"] {
-            assert!(
-                archive
-                    .by_name(&format!("resources/ara-vfx-gpu/{file}"))
-                    .is_ok()
             );
         }
         let unpacked = scratch.path().join("game");
@@ -412,12 +372,7 @@ mod tests {
         std::fs::write(&player, [0xcf, 0xfa, 0xed, 0xfe, 1, 2, 3, 4]).unwrap();
         let key = "a".repeat(64);
         for package in [
-            "ara-render",
-            "ara-render-fidelity",
-            "ara-runtime-render",
             "ara-render2d",
-            "ara-landscape",
-            "ara-vfx-gpu",
             "ara-texture-gpu",
             "ara-gpu",
             "ara-editor-gpu",
@@ -455,7 +410,7 @@ mod tests {
         }
         assert!(
             archive
-                .by_name(&format!("resources/ara-render/{key}/main.spv"))
+                .by_name(&format!("resources/ara-render2d/{key}/main.spv"))
                 .is_err()
         );
         let unpacked = scratch.path().join("game");

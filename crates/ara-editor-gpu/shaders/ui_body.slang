@@ -11,7 +11,7 @@ float roundedDistance(float2 p,float2 size,float radius) {
 }
 // A hit with no selectable id (ids::NO_ID_HIT): it occludes the grid and never outlines.
 static const uint NO_ID_HIT=0xFFFFFFFFu;
-// The entity id at `pixel` of id image `slot`. Direct (ara-render): an R32F texel holding
+// The entity id at `pixel` of id image `slot`. Direct: an R32F texel holding
 // the compact index + 1 as a float. Packed (Renderlab): an RGBA8 UNORM texel holding the
 // 32-bit id little-endian, R lowest; Load is exact, and a byte b arrives as b/255.
 uint readId(uint slot,int2 pixel,bool packed){

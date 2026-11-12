@@ -1,4 +1,4 @@
-//! Reflection-capture specs and automatic placement. Baking stays in `ara-render`.
+//! Reflection-capture specs and automatic placement. Baking needs a renderer.
 use anyhow::{Result, ensure};
 use glam::{Mat3, Mat4, Quat, Vec3, Vec4};
 
@@ -389,4 +389,3 @@ fn cluster(boxes: &[[Vec3; 2]], gap: f32, extent: f32) -> Vec<[Vec3; 2]> {
         groups.remove(j);
     }
 }
-

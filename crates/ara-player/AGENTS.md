@@ -9,7 +9,7 @@ Standalone games and S5 Play. Owners authenticate single-use players with `ARA_P
   See [graphics settings](../../docs/dev/graphics-settings.md) and `tests/graphics.rs`.
 
 `ara-player --owner <port> [--name slot] [--window] [--size 1280x720] [--gpu-cache dir]
-[--quality auto|low|medium|high|epic] [--ray-tracing[=true|false]] [--renderer renderlab|ara|renderlab-rt|renderlab-nonrt]` (`renderer.rs`; `ARA_RENDERER`; D35, D39: `renderlab` is the default on every platform, hardware ray tracing where the GPU has it, else its non-RT path, and on macOS Renderlab's ara-gpu backend on Metal; `ara-render`, frozen, draws where Renderlab cannot start, with one line saying so).
+[--quality auto|low|medium|high|epic] [--ray-tracing[=true|false]] [--renderer renderlab|renderlab-rt|renderlab-nonrt]` (`renderer.rs`; `ARA_RENDERER`; `renderlab` is the only renderer, hardware ray tracing where the GPU has it, else its non-RT path, and on macOS Renderlab's ara-gpu backend on Metal; a Renderlab that cannot start is `ARA_RENDERLAB_UNAVAILABLE`).
 Without `--owner`, loads `ara-launch.json` in the sibling `data/` (legacy flat and
 macOS `Contents/Resources` roots remain readable; `--root DIR` accepts either),
 reads the authored PlayScene/cooked generations from game.arapack, and opens a game
@@ -116,8 +116,7 @@ see its LICENSE.md) with its import sidecar.
 
 ## Testing
 
-Set the GPU environment first (`source ../../.sn/env.sh` or the ara-render `run.ps1`
-pattern: SDL3.dll and the Vulkan SDK `Bin` on PATH, `VK_LAYER_PATH`, an empty
+Set the GPU environment first (`source ../../.sn/env.sh`, or by hand: SDL3.dll and the Vulkan SDK `Bin` on PATH, `VK_LAYER_PATH`, an empty
 `VK_IMPLICIT_LAYER_PATH`). Then
 `CARGO_BUILD_JOBS=2 cargo test -p ara-player -- --nocapture`: `tests/scenario.rs` drives
 the demo over MCP end to end (pool boot, Move 120 ticks, grounded, labelled capture,

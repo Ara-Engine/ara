@@ -1,9 +1,10 @@
-//! Object ids as the Scene overlays and the click read them, from either renderer.
+//! Object ids as the Scene overlays and the click read them.
 //!
 //! Both sources carry the same compact id: `index + 1` into the renderer's entities,
 //! which the editor maps to scene entities and outline groups; 0 is nothing.
 //!
-//! - **Direct** (ara-render): an R32_SFLOAT image holding the id as a float.
+//! - **Direct**: an R32_SFLOAT image holding the id as a float (no renderer delivers it now;
+//!   it goes with the overlay shaders' float path at their next re-cook).
 //! - **Packed** (Renderlab): an RGBA8 UNORM (not sRGB) image, the Scene view's output
 //!   size, one texel per output pixel, read with an exact texel fetch (never filtered).
 //!   The 32-bit id is little-endian across the channels: R bits 0 to 7, G 8 to 15, B 16
@@ -23,7 +24,7 @@ pub enum IdHit {
     Nothing,
     /// Something was drawn but it has no selectable id.
     Unselectable,
-    /// A selectable object, by compact index + 1 (`ara_render::Renderer::entities()`).
+    /// A selectable object, by compact index + 1 (`SceneView::entities`).
     Id(u32),
 }
 
@@ -37,7 +38,7 @@ impl IdHit {
         }
     }
 
-    /// The hit an ara-render id texel (the id as a float) holds.
+    /// The hit a float id texel holds.
     pub fn from_direct(texel: f32) -> Self {
         match texel as u32 {
             0 => Self::Nothing,
@@ -77,11 +78,11 @@ impl<F: FnMut([u32; 2]) -> anyhow::Result<[u8; 4]>> IdPick for PackedPick<F> {
 /// attached with `NativeUi::external_image`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum IdSource {
-    /// ara-render's id image (R32_SFLOAT, the id as a float).
+    /// A float id image (R32_SFLOAT, the id as a float).
     Direct(u32),
     /// A packed id image, as Renderlab delivers it (see the module docs).
     Packed(u32),
-    /// Debug: an ara-render id image repacked on the GPU into the packed form before the
+    /// Debug: a float id image repacked on the GPU into the packed form before the
     /// overlays run, so every overlay takes the packed path over the same ids as
     /// `Direct`. Metal only; Vulkan refuses it.
     Repacked(u32),

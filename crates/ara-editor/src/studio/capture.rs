@@ -3,8 +3,8 @@
 //! whole window with the Scene in it. The GPU readback happens here; encoding and writing
 //! finish on a worker (`crate::capture::Work`). `--screenshot` takes the `window` picture
 //! through the same code ([`screenshot`]).
-use ara_frame::capture::{CaptureRequest, ViewMode};
 use super::device::SceneDevice;
+use ara_frame::capture::{CaptureRequest, ViewMode};
 use serde_json::{Value, json};
 use stillkit::el::Runtime;
 

@@ -1,9 +1,6 @@
-//! Terrain in presented (windowed) frames: each resident chunk's heightfield is drawn
-//! by the scene renderer as a world-space mesh, so it takes shadows and every light
-//! like any surface, coloured by its splat weights through a per-tile base-colour
-//! texture (grass, rock, soil, snow). Captures composite ara-landscape (CDLOD terrain
-//! and foliage) by depth instead, so the presenter adds these draws only to frames it
-//! presents.
+//! Terrain tiles as meshes: each resident chunk's heightfield is a world-space mesh, so it
+//! takes shadows and every light like any surface, coloured by its splat weights through
+//! a per-tile base-colour texture (grass, rock, soil, snow). Renderlab's bridge draws them.
 use crate::geometry::Source;
 use ara_frame::scene;
 use ara_runtime::{model::ModelVertex, terrain::TerrainData};

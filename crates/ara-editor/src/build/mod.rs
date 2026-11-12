@@ -248,12 +248,12 @@ fn default_profile(root: &Path) -> anyhow::Result<ara_export::ExportPreset> {
 /// The engine the editor runs from: an installed engine (`resources/<package>` beside
 /// the executable) or a checkout (`crates/<package>/cooked` above it).
 fn engine_root(exe_dir: &Path) -> Option<PathBuf> {
-    if exe_dir.join("engine.json").is_file() || exe_dir.join("resources/ara-render").is_dir() {
+    if exe_dir.join("engine.json").is_file() || exe_dir.join("resources/ara-render2d").is_dir() {
         return Some(exe_dir.into());
     }
     exe_dir
         .ancestors()
-        .find(|dir| dir.join("crates/ara-render/cooked").is_dir())
+        .find(|dir| dir.join("crates/ara-render2d/cooked").is_dir())
         .map(Into::into)
 }
 

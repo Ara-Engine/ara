@@ -1,8 +1,6 @@
 # ara-texture-stream
-Native BC material residency and software virtual texture pages.
-Virtual pages have 128x128 interiors, wrapping gutters, a bounded RGBA8 pool
-and GPU derivative/min-mip feedback.
-Public API: Source::{rgba8,from_cooked}, Catalog, Residency, Binding, Stats.
+Native BC material residency: budgeted compressed mip tails, no RGBA expansion.
+Public API: NativeSource, NativeResidency, NativeConfig, NativeView, NativeBinding.
 `NativeSource` retains validated cooked BC4/BC5/BC7 blocks without CPU decode;
 `mip`, `resident_bytes` and `stage` expose complete native mip tails for residency.
 `NativeResidency` deduplicates caller-provided cooked content hashes, uploads
@@ -29,14 +27,8 @@ uses hardware sRGB/trilinear filtering and reconstructs BC5 Z before normalScale
 NativeView::Raw retains UNORM sampling for native material graphs; their color
 slots use ntSampleColorLevel for exact sRGB decoding after filtering. View policy
 participates in residency identity; raw and hardware-sRGB interpretations differ.
-The existing RGBA virtual page API remains separate.
 Preparation/decoding belongs on the extraction worker. Completed frame boundaries
 own feedback consumption, LRU planning and uploads; never wait in record().
-The caller submits begin_frame(), then its material sampling passes with Binding,
-then end_frame(). Declare Binding.resources() in every sampling graph pass.
-Mark submitted completion after end_frame; prepare() refuses an in-flight slot.
-Sample helper is shader_source(); copy it into the consumer's source directory
-before offline cooking, so its source hash covers the exact sampling contract.
 Pinned mip tails guarantee a valid fallback. Children publish only when their
 parent was resident in an earlier frame; protect current requests and ancestors.
 Cold starts/camera cuts may initially be coarse. Record desired-vs-resident error

@@ -93,10 +93,9 @@ window/audio stream and checks injected key/mouse events, virtual gamepad
 enumeration, recovery, and independent audio/video subsystem references.
 Run `cargo test --workspace --no-run` after changing SDL linkage.
 
-Behavioral gate from repository root:
-`cargo run -p ara-render --example windowed -- --frames=120 --resize-test`.
-Use `../ara-render/run.ps1 -Mode Window` for process-local loader isolation.
-The example exercises the actual swapchain, dynamic pixel resize and renderer,
-then exits with validation clean. Never leave the demo running after verification.
+Behavioral gate: the player's window path (`ara-player --window`, or the editor's
+`--screenshot` run) exercises the actual swapchain and Renderlab; its tests in
+`crates/ara-player` cover resize and an unpresentable window. Never leave a window
+running after verification.
 `Window::hidden` / `floating_hidden` create windows that are never shown (offscreen
 captures and verification); `raise` leaves hidden windows hidden.
