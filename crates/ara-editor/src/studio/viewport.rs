@@ -1152,15 +1152,6 @@ impl SceneView {
     /// The ids and channels of the Renderlab frame on screen: the click and the overlays
     /// read them (`IdSource::Packed`) in place of the renderer's.
     /// A Scene frame reached the screen: earlier render errors no longer matter.
-    /// Whether the Scene has an image the compositor can show: the old renderer's presented
-    /// frame, or Renderlab's (`scene_frame`: the old renderer renders none beside it).
-    pub(super) fn presentable(&self, renderer: &Renderer) -> bool {
-        renderer.presentation_ready()
-            || self
-                .renderlab
-                .as_ref()
-                .is_some_and(|scene| scene.image().is_some())
-    }
     pub(super) fn presented(&mut self) {
         self.failure = None;
     }
