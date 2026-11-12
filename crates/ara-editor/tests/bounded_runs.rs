@@ -161,6 +161,45 @@ fn a_screenshot_run_ends_with_the_game_tab_in_front() {
 }
 
 #[test]
+#[ignore = "opens an unfocused window and needs a GPU: cargo test -p ara-editor --test bounded_runs -- --ignored"]
+fn a_panel_screenshot_shows_the_page_in_the_main_window_and_leaves_the_layout_alone() {
+    let root = common::project("bounded-panel");
+    let layout = root.join(".ara/editor-layout.json");
+    let _ = std::fs::remove_file(&layout);
+    let output = root.join("native");
+    let mut child = spawn(
+        &root,
+        &[
+            "--panel",
+            "vfx",
+            "--screenshot",
+            "--size",
+            "1280x800",
+            "--output",
+            output.to_str().unwrap(),
+        ],
+    );
+    // A page that took the Scene's place ends in seconds, not after the stall limit.
+    let status = finishes(&mut child, &root, Duration::from_secs(40));
+    assert!(status.success(), "{status}");
+    let tree: Value =
+        serde_json::from_str(&std::fs::read_to_string(output.join("editor.layout.json")).unwrap())
+            .unwrap();
+    assert!(
+        tree["elements"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|e| e["key"].as_str().is_some_and(|k| k.starts_with("vfx/"))),
+        "the VFX page is in the main window"
+    );
+    assert!(
+        !layout.exists(),
+        "a bounded run never writes the project's window layout"
+    );
+}
+
+#[test]
 #[ignore = "starts the editor with a hidden window and needs a GPU: cargo test -p ara-editor --test bounded_runs -- --ignored"]
 fn a_long_frame_run_is_a_protocol_server_with_no_window() {
     let root = common::project("bounded-server");

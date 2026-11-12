@@ -929,6 +929,9 @@ struct EditorView {
     /// Versioned navigation state, opaque to gameplay schemas.
     value: Value,
 }
+/// Set (to anything) by bounded and headless runs: the project's `.ara/editor-layout.json`
+/// is read but not written.
+pub(crate) const LAYOUT_READ_ONLY: &str = "ARA_EDITOR_LAYOUT_READ_ONLY";
 pub(crate) struct Navigation {
     store: Store,
     doc: AssetId,
@@ -998,6 +1001,11 @@ impl Navigation {
             record,
             state,
             layout: crate::persist::BackgroundWriter::new("layout-writer", move |text: String| {
+                // A bounded or headless run (`Options::isolate_profile`) reads the layout but
+                // never rewrites it: its `--panel` and sizes are for one capture.
+                if std::env::var_os(LAYOUT_READ_ONLY).is_some() {
+                    return Ok(());
+                }
                 crate::persist::write_text(&path, &text)
                     .map_err(|e| format!("The window layout was not saved: {e}"))
             }),
