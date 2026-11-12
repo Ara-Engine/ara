@@ -6,7 +6,7 @@ mod pipeline;
 mod resources;
 mod shared;
 mod submit;
-use crate::Overlay;
+use crate::{IdSource, Overlay};
 use anyhow::{Result, ensure};
 use ara_gpu::{vk, vulkan::Context as Gpu};
 use ara_platform::{Present, Window};
@@ -130,7 +130,8 @@ pub struct NativeUi {
     dpi: f32,
     overlays: Vec<Overlay>,
     overlay_rect: Box2,
-    outline_texture: Option<u32>,
+    /// Where the overlays read object ids (`NativeUi::overlays`).
+    ids: Option<IdSource>,
     /// UI image mapping entity-ID channels to outline groups (see `outline_groups`).
     outline_groups: Option<u32>,
 }
@@ -189,7 +190,7 @@ impl NativeUi {
             dpi: 1.,
             overlays: Vec::new(),
             overlay_rect: Box2::default(),
-            outline_texture: None,
+            ids: None,
             outline_groups: None,
         };
         ui.overlays = Vec::new();
@@ -219,10 +220,12 @@ impl NativeUi {
         self.dpi = dpi;
         Ok(())
     }
-    /// Replace grid, gizmo and selection overlays when their view/model changes.
-    pub fn overlays(&mut self, rect: Box2, texture: u32, overlays: Vec<Overlay>) {
+    /// Replace grid, gizmo and selection overlays when their view/model changes. `ids`
+    /// is the image the grid, hover and outlines read object ids from (`IdSource::Repacked`
+    /// is Metal-only and fails the frame here).
+    pub fn overlays(&mut self, rect: Box2, ids: IdSource, overlays: Vec<Overlay>) {
         self.overlay_rect = rect;
-        self.outline_texture = Some(texture);
+        self.ids = Some(ids);
         self.overlays = overlays;
     }
     /// Outline and hover by group instead of by channel: `table` is a UI image (uploaded

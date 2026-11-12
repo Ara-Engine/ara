@@ -15,7 +15,18 @@ impl NativeUi {
                 height: (rect.h * self.dpi) as u32,
             },
         };
-        // Outline and hover flags: bit 0 hover, the rest the group table's slot + 1.
+        // The id image's UI slot, and whether it is packed (flags below).
+        let (id_texture, is_packed) = match self.ids {
+            None => (None, false),
+            Some(IdSource::Direct(id)) => (Some(id), false),
+            Some(IdSource::Packed(id)) => (Some(id), true),
+            Some(IdSource::Repacked(_)) => {
+                anyhow::bail!("IdSource::Repacked is only available on Metal")
+            }
+        };
+        // Outline and hover flags: bit 0 hover, bit 1 packed ids, the rest the group
+        // table's slot + 1.
+        let packed = if is_packed { 2. } else { 0. };
         let groups = self
             .outline_groups
             .and_then(|id| {
@@ -24,7 +35,7 @@ impl NativeUi {
                     .map(|t| t.slot)
                     .or_else(|| self.external.get(&id).copied())
             })
-            .map_or(0., |slot| (slot + 1) as f32 * 2.);
+            .map_or(0., |slot| (slot + 1) as f32 * 4.);
         let start = self.draws.len();
         for overlay in &self.overlays {
             if let Overlay::Grid {
@@ -34,10 +45,13 @@ impl NativeUi {
                 axes,
             } = overlay
             {
-                let texture = self
-                    .outline_texture
-                    .and_then(|id| self.external.get(&id))
-                    .copied()
+                let texture = id_texture
+                    .and_then(|id| {
+                        self.external
+                            .get(&id)
+                            .copied()
+                            .or_else(|| self.textures.get(&id).map(|t| t.slot))
+                    })
                     .ok_or_else(|| anyhow::anyhow!("grid ID texture missing"))?;
                 self.draws.push(Draw {
                     first: self.instances.len() as u32,
@@ -58,7 +72,7 @@ impl NativeUi {
                     rect: axes[0],
                     uv: axes[1],
                     color: [0.; 4],
-                    params: [0.; 4],
+                    params: [f32::from(is_packed), 0., 0., 0.],
                 });
                 continue;
             }
@@ -129,22 +143,20 @@ impl NativeUi {
                         rect: [rect.x, rect.y, rect.w, rect.h],
                         uv: [0., 0., 1., 1.],
                         color: *color,
-                        params: [uv[0], uv[1], 0., groups + 1.],
+                        params: [uv[0], uv[1], 0., groups + packed + 1.],
                     },
                     5,
-                    self.outline_texture
-                        .ok_or_else(|| anyhow::anyhow!("hover texture missing"))?,
+                    id_texture.ok_or_else(|| anyhow::anyhow!("hover texture missing"))?,
                 ),
                 Overlay::Outline { index, color } => (
                     Instance {
                         rect: [rect.x, rect.y, rect.w, rect.h],
                         uv: [0., 0., 1., 1.],
                         color: *color,
-                        params: [0., 0., *index as f32, groups],
+                        params: [0., 0., *index as f32, groups + packed],
                     },
                     5,
-                    self.outline_texture
-                        .ok_or_else(|| anyhow::anyhow!("outline texture missing"))?,
+                    id_texture.ok_or_else(|| anyhow::anyhow!("outline texture missing"))?,
                 ),
             };
             let texture = self

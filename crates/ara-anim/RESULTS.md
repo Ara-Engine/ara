@@ -109,10 +109,10 @@ Vulkan validation completed cleanly. This is bone geometry, not a skinned-art de
 Passed:
 
 ```text
-cargo test -p ara-anim -p ara-anim-physics -p ara-anim-capture
+cargo test -p ara-anim -p ara-anim-physics
 cargo test -p ara-jolt-sys -p ara-physics-jolt
-cargo clippy -p ara-anim -p ara-anim-physics -p ara-anim-capture -p ara-jolt-sys -p ara-physics-jolt --all-targets -- -D warnings
-cargo fmt -p ara-anim -p ara-anim-physics -p ara-anim-capture -p ara-jolt-sys -p ara-physics-jolt -- --check
+cargo clippy -p ara-anim -p ara-anim-physics -p ara-jolt-sys -p ara-physics-jolt --all-targets -- -D warnings
+cargo fmt -p ara-anim -p ara-anim-physics -p ara-jolt-sys -p ara-physics-jolt -- --check
 ```
 
 Runtime ownership and checkpoint integration are documented in [V2.md](V2.md).

@@ -30,9 +30,4 @@ image = { workspace = true, features = ["png"] }
 [dev-dependencies]
 blake3 = { workspace = true, default-features = true }
 ara-asset-format = { path = "../ara-asset-format" }
-ara-pathtrace = { path = "../ara-pathtrace" }
 ara-render = { path = "../ara-render", features = ["fidelity-lab"] }
-
-[[example]]
-name = "reflect_g6"
-path = "../ara-render/src/look/reflect/bench/main.rs"

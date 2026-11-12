@@ -33,12 +33,5 @@ image = { workspace = true, features = ["png", "hdr", "jpeg"] }
 sha2 = { workspace = true }
 
 [dev-dependencies]
-ara-pathtrace = { path = "../ara-pathtrace" }
-ara-render-fidelity = { path = "../ara-render-fidelity" }
 ash.workspace = true
 gltf = { workspace = true, default-features = true }
-
-[[example]]
-name = "transport_g3"
-path = "src/look/transport/solve/bench/main.rs"
-required-features = ["fidelity-lab"]
