@@ -70,6 +70,8 @@ public partial struct Pickup
     [Replicate] public ulong TakenTick;
     /// <summary>Scale it returns to when the run restarts.</summary>
     public float Size;
+    /// <summary>Where it floats; it bobs about this point.</summary>
+    [Unit(Units.Meters)] public Vector3 Home;
 }
 
 /// <summary>A point on the course's centre line; the camera follows the polyline they make.</summary>

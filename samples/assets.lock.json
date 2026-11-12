@@ -707,7 +707,6 @@
       ],
       "projects": [
         "atelier",
-        "glint",
         "showcase"
       ],
       "meters": [2, 2],
@@ -2293,7 +2292,6 @@
       ],
       "projects": [
         "atelier",
-        "glint",
         "showcase"
       ],
       "meters": [1.5, 1.5],
@@ -2499,7 +2497,6 @@
       ],
       "projects": [
         "atelier",
-        "glint",
         "outpost",
         "showcase"
       ],
@@ -4858,7 +4855,6 @@
       ],
       "projects": [
         "atelier",
-        "glint",
         "outpost",
         "showcase"
       ],

@@ -19,7 +19,7 @@
     <panel id="fade-full" class="fade full"/><panel id="fade-half" class="fade half"/><panel id="fade-light" class="fade light"/>
     <panel id="win" class="scrim">
       <panel id="win-content">
-        <image class="wm" id="medal-gold" src="medal_gold"/><image class="wm" id="medal-silver" src="medal_silver"/><image class="wm" id="medal-bronze" src="medal_bronze"/>
+        <panel id="medal-box"><image class="wm" id="medal-gold" src="medal_gold"/><image class="wm" id="medal-silver" src="medal_silver"/><image class="wm" id="medal-bronze" src="medal_bronze"/></panel>
         <text id="win-title" text="COURSE CLEAR"/>
         <panel id="win-time" class="row"><text id="w-min" text="0:"/><text id="w-sec" text="00."/><text id="w-cs" text="00"/></panel>
         <panel id="splits">

@@ -15,12 +15,10 @@ public sealed partial class BallController : Behaviour
     [Property, Default(26f)] public partial float GroundAccel { get; set; }
     /// <summary>Acceleration in the air, m/s squared.</summary>
     [Property, Default(6f)] public partial float AirAccel { get; set; }
-    /// <summary>Acceleration while flying from the cannon, m/s squared.</summary>
-    [Property, Default(2f)] public partial float FlyAccel { get; set; }
     /// <summary>Rolling resistance when no direction is held, m/s squared.</summary>
     [Property, Default(6f)] public partial float Resistance { get; set; }
     /// <summary>Upward speed given by a jump, m/s.</summary>
-    [Property, Default(8.2f)] public partial float JumpSpeed { get; set; }
+    [Property, Default(6f)] public partial float JumpSpeed { get; set; }
     /// <summary>The ball's radius in metres.</summary>
     [Property, Default(0.5f)] public partial float Radius { get; set; }
 
@@ -67,7 +65,8 @@ public sealed partial class BallController : Behaviour
         var yaw = camera.IsNull ? 0f : World.Read<FollowCamera>(camera).Yaw * (MathF.PI / 180f);
         var forward = new Vector3(MathF.Sin(yaw), 0, MathF.Cos(yaw));
         var right = new Vector3(-MathF.Cos(yaw), 0, MathF.Sin(yaw));
-        var wish = forward * stick.Y + right * stick.X;
+        // No steering during the cannon's shot: the arc is the cannon's.
+        var wish = ball.Flying ? Vector3.Zero : forward * stick.Y + right * stick.X;
         if (wish.LengthSquared() > 1f) wish = Vector3.Normalize(wish);
 
         var carry = grounded && World.Has<Mover>(under) ? Course.MoverVelocity(under, in tick) : Vector3.Zero;
@@ -78,7 +77,7 @@ public sealed partial class BallController : Behaviour
         // Steer along the surface: project the wish onto its plane.
         var plane = wish - up * Vector3.Dot(wish, up);
         var step = tick.Dt;
-        var accel = grounded ? GroundAccel : ball.Flying ? FlyAccel : AirAccel;
+        var accel = grounded ? GroundAccel : AirAccel;
         if (wish != Vector3.Zero)
         {
             var delta = plane * TopSpeed - along;

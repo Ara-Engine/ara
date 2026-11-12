@@ -1,15 +1,15 @@
 ui { width:100%; height:100%; color:#ffffff; font-family:Kenney Future; font-size:22px; }
 panel { display:flex; flex-direction:column; gap:0px; }
-text { flex-shrink:0; white-space:nowrap; }
+text { flex-shrink:0; white-space:nowrap; font-family:Kenney Future; }
 image { flex-shrink:0; }
 .row { flex-direction:row; align-items:center; }
 #hud { width:100%; height:100%; }
 
 
 #clock { position:absolute; left:44px; top:22px; gap:2px; }
-#t-min { font-size:84px; color:#0f2a55; }
-#t-sec { font-size:84px; color:#0f2a55; }
-#t-cs { font-size:52px; color:#ff5a24; }
+#t-min { font-size:60px; color:#0f2a55; }
+#t-sec { font-size:60px; color:#0f2a55; }
+#t-cs { font-size:36px; color:#ff5a24; }
 #best-label { font-size:20px; color:#ff6a3a; }
 #b-min { font-size:20px; color:#0f2a55; }
 #b-sec { font-size:20px; color:#0f2a55; }
@@ -18,13 +18,13 @@ image { flex-shrink:0; }
 #counters { position:absolute; right:44px; top:26px; gap:10px; align-items:end; }
 .counter { gap:12px; }
 .ci { width:38px; height:38px; }
-.ct { font-size:34px; color:#0f2a55; }
+.ct { font-size:26px; color:#0f2a55; }
 
 #keys { position:absolute; left:44px; bottom:34px; gap:8px; }
 .key { border-width:3px; border-color:#0f2a55; border-radius:7px; padding:6px; width:38px; height:38px; align-items:center; justify-content:center; background:#ffffffb0; }
 .keywide { width:98px; }
-.kt { font-size:18px; color:#0f2a55; }
-.keylabel { font-size:18px; color:#0f2a55; padding-left:6px; padding-right:18px; }
+.kt { font-size:14px; color:#0f2a55; }
+.keylabel { font-size:15px; color:#0f2a55; padding-left:6px; padding-right:18px; }
 
 .fade { position:absolute; left:0px; top:0px; width:100%; height:100%; }
 .full { background:#060b16ff; }
@@ -33,15 +33,16 @@ image { flex-shrink:0; }
 
 .scrim { position:absolute; left:0px; top:0px; width:100%; height:100%; background:#0a1a3aa8; align-items:center; justify-content:center; }
 #win-content { align-items:center; gap:10px; }
-.wm { width:150px; height:150px; }
-#win-title { font-size:46px; color:#ff6a3a; padding-top:20px; }
-#w-min { font-size:110px; }
-#w-sec { font-size:110px; }
-#w-cs { font-size:68px; color:#ffd2bf; }
+#medal-box { width:120px; height:120px; }
+.wm { position:absolute; left:0px; top:0px; width:120px; height:120px; }
+#win-title { font-size:34px; color:#ff6a3a; padding-top:10px; }
+#w-min { font-size:80px; }
+#w-sec { font-size:80px; }
+#w-cs { font-size:48px; color:#ffd2bf; }
 #splits { gap:6px; padding-top:8px; }
 .split { gap:14px; width:520px; justify-content:space-between; }
 .si { width:30px; height:30px; }
-.st { font-size:26px; }
+.st { font-size:20px; }
 #again { gap:10px; padding-top:22px; }
 
 .screen { position:absolute; left:0px; top:0px; width:100%; height:100%; }

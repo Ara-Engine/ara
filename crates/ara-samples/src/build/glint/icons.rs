@@ -6,7 +6,6 @@ use std::path::Path;
 
 type Color = [f32; 4];
 
-const WHITE: Color = [1.0, 1.0, 1.0, 1.0];
 const NAVY: Color = [0.06, 0.16, 0.33, 1.0];
 const CORAL: Color = [1.0, 0.36, 0.14, 1.0];
 
@@ -83,13 +82,13 @@ fn paint(size: u32, shapes: &[Shape]) -> RgbaImage {
                         // Half a pixel of feather keeps edges smooth after the supersample.
                         let coverage =
                             ((0.5 - (shape.distance)(x, y)) / 1.0).clamp(0.0, 1.0) * shape.color[3];
-                        for c in 0..3 {
-                            out[c] = shape.color[c] * coverage + out[c] * (1.0 - coverage);
+                        for (channel, color) in out.iter_mut().zip(&shape.color[..3]) {
+                            *channel = color * coverage + *channel * (1.0 - coverage);
                         }
                         out[3] = coverage + out[3] * (1.0 - coverage);
                     }
-                    for c in 0..4 {
-                        accumulated[c] += out[c];
+                    for (sum, channel) in accumulated.iter_mut().zip(out) {
+                        *sum += channel;
                     }
                 }
             }

@@ -8,6 +8,9 @@ public static class Course
     static Vector3 RotZ(Vector3 v, float a) { var (s, c) = MathF.SinCos(a); return new(v.X * c - v.Y * s, v.X * s + v.Y * c, v.Z); }
     const float Rad = MathF.PI / 180f;
 
+    /// <summary>Gravity the cannon's arc was solved with, m/s squared (the physics default).</summary>
+    public const float Gravity = 9.81f;
+
     /// <summary>Rotates <paramref name="v"/> by Euler degrees applied as Rx * Ry * Rz (the engine's order).</summary>
     public static Vector3 Rotate(Vector3 euler, Vector3 v) => RotX(RotY(RotZ(v, euler.Z * Rad), euler.Y * Rad), euler.X * Rad);
 

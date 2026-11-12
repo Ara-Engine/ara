@@ -144,12 +144,12 @@ enum Command {
     },
     /// Replay Glint's recorded inputs frame-exactly and check the finish time and state hash.
     GlintReplay {
-        /// The replay file (default: `samples/glint/replay/foundry.json`).
+        /// The replay file (default: `samples/glint/replay/skyward.json`).
         file: Option<PathBuf>,
         /// Rewrite the file's expected result from this run instead of checking it.
         #[arg(long)]
         record: bool,
-        /// Write the file's stills (start, mid-course, goal) into this directory.
+        /// Write the file's stills (the `captures` it lists, by tick) into this directory.
         #[arg(long)]
         captures: Option<PathBuf>,
     },
@@ -323,7 +323,7 @@ fn main() -> Result<()> {
             captures,
         } => {
             let root = samples.join("glint");
-            let file = file.unwrap_or_else(|| root.join("replay/foundry.json"));
+            let file = file.unwrap_or_else(|| root.join("replay/skyward.json"));
             glint_replay::run(&glint_replay::Request {
                 root: &root,
                 file: &file,

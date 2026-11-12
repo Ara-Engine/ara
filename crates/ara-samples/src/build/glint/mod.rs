@@ -1,7 +1,7 @@
-//! "Glint": a rolling-ball game, one course ("Skyward"): a floating route of decks, a beam, a
-//! banked turn, sliders, spinner bars and a cannon that fires the ball across a 76 m gap to the
-//! goal, over open sky, in bright low sun. The ball is a dynamic sphere steered by C#
-//! (`samples/glint/content/scripts/Glint`).
+//! "Glint": a rolling-ball game, one course ("Skyward"): decks, a descent and a kicker, a split
+//! (beam or detour), a banked turn, sliders, spinner bars and a cannon that fires the ball 80 m
+//! to the goal plaza, on pylons high over a cloud deck in low sun. The ball is a dynamic sphere
+//! steered by C# (`samples/glint/content/scripts/Glint`).
 //!
 //! Everything comes from `course.rs` (the route as data). Two scenes share one art pass:
 //! `levels/glint.scene` (the game: colliders, `Surface` boxes, movers, the ball, the director)
@@ -18,7 +18,7 @@ use super::{
     place::{Models, Prop, Scene, round3, short},
 };
 use anyhow::Result;
-use course::Course;
+use course::{Course, Step};
 use glam::{Quat, Vec3};
 use serde_json::{Value, json};
 
@@ -28,17 +28,13 @@ pub const SCENE: (&str, &str) = ("levels/glint.scene", "sc_glint000001");
 const MENU: (&str, &str) = ("levels/menu.scene", "sc_glint000002");
 /// Fixed exposure (EV100): no auto-exposure anywhere.
 const EV100: f32 = 13.5;
-/// Direction the sun's light travels: low and warm, from the right and ahead of the start.
-const SUN: Vec3 = Vec3::new(-0.62, -0.38, -0.68);
+/// Direction the sun's light travels: 20 degrees up, ahead and to the left of the start, so the
+/// course is side-lit from the front for the first half and from behind after the turn.
+const SUN: Vec3 = Vec3::new(-0.163, -0.342, -0.926);
 /// The spinner bar's length and thickness (m).
 pub const BAR: (f32, f32) = (6.4, 0.32);
 /// Gold, silver and bronze times in seconds (the UI prints the same numbers).
 pub const MEDALS: [u32; 3] = [60, 75, 100];
-
-fn euler(rot: Quat) -> [f32; 3] {
-    let (x, y, z) = rot.to_euler(glam::EulerRot::XYZ);
-    [x.to_degrees(), y.to_degrees(), z.to_degrees()]
-}
 
 fn lamp(
     id: &str,
@@ -71,74 +67,86 @@ fn models(ctx: &Ctx, c: &Course) -> Result<Models> {
     let cannon = c.cannon.as_ref().expect("the course has a cannon");
     for (name, path) in [
         ("glint_course", kits::course(root, lock, c)?),
+        ("glint_supports", kits::supports(root, lock, c)?),
         ("glint_mover", kits::mover(root, lock, slider)?),
         ("glint_bar", kits::bar(root, lock)?),
         ("glint_orb", kits::orb(root, lock)?),
+        ("glint_hoop", kits::hoop(root, lock)?),
         ("glint_gate", kits::gate(root, lock)?),
         (
             "glint_cannon",
             kits::cannon(root, lock, cannon.muzzle - cannon.breech)?,
         ),
         ("glint_goal", kits::goal(root, lock)?),
-        ("glint_blob", blob(root, lock)?),
+        ("glint_cloud", kits::cloud(root, lock)?),
+        ("glint_isle", kits::isle(root, lock)?),
+        ("glint_sun", kits::sun(root, lock)?),
     ] {
         ctx.model(&mut models, name, &path, &format!("as_kit{}", short(name)))?;
     }
     Ok(models)
 }
 
-/// The ball's contact shadow: three stacked plain-alpha discs (`BLEND` is coverage, not glass),
-/// widest and faintest at the bottom, so the edge falls off softly.
-fn blob(root: &std::path::Path, lock: &crate::lock::Lock) -> Result<String> {
-    use crate::kit::{Kit, Material};
-    use glam::{Mat4, Vec2};
-    let film = |name: &str, alpha: f32| Material {
-        color: [0.03, 0.05, 0.12, alpha],
-        blend: true,
-        ..Material::flat(name, [0.03, 0.05, 0.12], 1.0, 0.0)
-    };
-    let mut k = Kit::new(vec![
-        film("shadow outer", 0.14),
-        film("shadow mid", 0.2),
-        film("shadow core", 0.3),
-    ]);
-    k.cylinder(0, 0.5, 0.004, 40, Mat4::IDENTITY, Vec2::ONE);
-    k.cylinder(
-        1,
-        0.36,
-        0.004,
-        40,
-        Mat4::from_translation(Vec3::new(0.0, 0.004, 0.0)),
-        Vec2::ONE,
-    );
-    k.cylinder(
-        2,
-        0.2,
-        0.004,
-        40,
-        Mat4::from_translation(Vec3::new(0.0, 0.008, 0.0)),
-        Vec2::ONE,
-    );
-    k.write(root, lock, "glint_blob")
+/// A repeatable number in 0..1 from an index and a salt (placement only; never gameplay).
+fn scatter(index: u32, salt: u32) -> f32 {
+    let mut x = index.wrapping_mul(0x9E37_79B9) ^ salt.wrapping_mul(0x85EB_CA6B);
+    x ^= x >> 15;
+    x = x.wrapping_mul(0x2C1B_3C6D);
+    x ^= x >> 12;
+    (x & 0xFFFF) as f32 / 65535.0
 }
 
-/// Sky, sun, haze, lights and the visual course: everything both scenes share. With
-/// `play` the gameplay components the director and the cannon read are added too.
+/// A decoration: a kit model at a place, with its own rotation (scene Euler degrees), scale
+/// and emissive level (cd/m2).
+#[allow(clippy::too_many_arguments)]
+fn decor(
+    s: &mut Scene,
+    id: &str,
+    name: &str,
+    model: &str,
+    at: Vec3,
+    rotation: [f32; 3],
+    scale: Vec3,
+    emissive: f32,
+) {
+    let mut renderer = s.models.get(model).renderer.clone();
+    if emissive > 0.0 {
+        renderer["emissive"] = json!([emissive, emissive, emissive]);
+    }
+    s.entity(
+        id,
+        name,
+        json!({
+            "Transform": {"position": round3(at), "rotation": rotation, "scale": scale.to_array()},
+            "MeshRenderer": renderer,
+        }),
+    );
+}
+
+/// Sky, sun, haze, lights, the visual course and the world around it: everything both scenes
+/// share. With `play` the gameplay components the director and the cannon read are added too.
 fn art(s: &mut Scene, c: &Course, play: bool) {
     let models = s.models;
+    let lowest = c.pieces.iter().map(|p| p.center.y).fold(f32::MAX, f32::min);
+    let centre = (c.start + c.goal) * 0.5;
+    // The cloud deck's level: well under the lowest piece.
+    let deck = lowest - 50.0;
     s.entity(
         "e_env",
         "Clear sky and fixed exposure",
         json!({
-            "Environment": {"sky": [0.05, 0.2, 0.7, 1], "horizon": [0.6, 0.78, 1.0, 1], "skyFalloff": 2.6,
-                "glow": [0.9, 0.5, 0.25, 1], "glowFalloff": 14, "ground": [1.5, 1.62, 1.85, 1],
+            // A deep blue zenith held low (high falloff), a pale band at the horizon with a warm
+            // glow, and a hazy blue below the horizon where the cloud opens.
+            "Environment": {"sky": [0.04, 0.17, 0.62, 1], "horizon": [0.62, 0.8, 1.0, 1], "skyFalloff": 5.5,
+                "glow": [1.0, 0.56, 0.3, 1], "glowFalloff": 22, "ground": [0.72, 0.84, 1.0, 1],
                 "intensity": 7000, "skyLight": 1},
-            // A bright, faintly cool haze: the drop below the course fades into pale haze.
-            "HeightFog": {"density": 0.0004, "falloff": 60, "albedo": [0.6, 0.76, 1.0, 1], "anisotropy": 0.4},
+            // Thick at the cloud deck (it softens the banks into one sea), a light haze at the
+            // course: the pylons fade as they go down.
+            "HeightFog": {"density": 0.012, "baseHeight": deck, "falloff": 15, "albedo": [0.78, 0.86, 1.0, 1], "anisotropy": 0.5},
             "PostProcessVolume": {"overrides": [
                 {"exposure": "manual", "ev100": EV100},
                 {"module": "toneMapping", "toneMapping": "neutral"},
-                {"module": "bloom", "bloom": 0.12},
+                {"module": "bloom", "bloom": 0.16},
             ]},
         }),
     );
@@ -146,52 +154,91 @@ fn art(s: &mut Scene, c: &Course, play: bool) {
         "e_sun",
         "Sun",
         Vec3::new(0.0, 60.0, 30.0),
-        json!({"kind": "directional", "color": [1.0, 0.86, 0.68, 1], "intensity": 95_000, "sourceAngle": 0.5357}),
+        json!({"kind": "directional", "color": [1.0, 0.84, 0.64, 1], "intensity": 95_000, "sourceAngle": 0.5357}),
         Some(SUN),
     ));
+    // The sun's disc, far along its direction (the sky has no disc of its own). It must not
+    // cast: an opaque sphere between a directional light and the course shades the course.
+    // The traced path ignored `castShadows: false`, so the disc also sits 2.6 degrees high:
+    // its shadow then passes 90 m over the course and lands far behind it.
+    let mut disc = models.get("glint_sun").renderer.clone();
+    disc["emissive"] = json!([600_000, 600_000, 600_000]);
+    disc["castShadows"] = json!(false);
+    s.entity(
+        "e_sundisc",
+        "Sun disc",
+        json!({"Transform": {"position": round3(centre + Vec3::Y * 110.0 - SUN.normalize() * 2400.0), "scale": [52, 52, 52]}, "MeshRenderer": disc}),
+    );
     for (i, (at, _)) in c.checkpoints.iter().enumerate() {
         s.commands.extend(lamp(
             &format!("e_lcp{i}"),
             "Gate light",
-            *at + Vec3::new(0.0, 3.0, 0.0),
+            *at + Vec3::new(0.0, 4.0, 0.0),
             [1.0, 0.45, 0.25],
             90_000.0,
             0.3,
-            14.0,
+            16.0,
         ));
     }
     s.commands.extend(lamp(
         "e_lgoal",
         "Goal light",
-        c.goal + Vec3::new(0.0, 6.0, 0.0),
-        [1.0, 0.55, 0.3],
-        220_000.0,
-        0.6,
-        26.0,
+        c.goal + Vec3::new(0.0, 9.0, 0.0),
+        [1.0, 0.6, 0.36],
+        160_000.0,
+        0.8,
+        40.0,
     ));
-    s.prop(
-        Prop::new("e_course", "Course", "glint_course", Vec3::ZERO, 0.0)
-            .at_origin()
-            .decor(),
+    decor(
+        s,
+        "e_course",
+        "Course",
+        "glint_course",
+        Vec3::ZERO,
+        [0.0; 3],
+        Vec3::ONE,
+        45_000.0,
     );
-    // Checkpoint gates, the cannon, the goal arch.
+    decor(
+        s,
+        "e_supports",
+        "Pylons",
+        "glint_supports",
+        Vec3::ZERO,
+        [0.0; 3],
+        Vec3::ONE,
+        30_000.0,
+    );
+    for (i, r) in c.rings.iter().enumerate() {
+        decor(
+            s,
+            &format!("e_hoop{i}"),
+            "Ring",
+            "glint_hoop",
+            r.at,
+            course::euler(r.rot),
+            Vec3::splat(r.radius),
+            50_000.0,
+        );
+    }
+    // Checkpoint arches, the cannon, the goal.
     for (i, (at, heading)) in c.checkpoints.iter().enumerate() {
         s.prop(
             Prop::new(
                 &format!("e_gate{i}"),
-                "Checkpoint gate",
+                "Checkpoint arch",
                 "glint_gate",
                 *at,
                 *heading,
             )
             .at_origin()
             .decor()
-            .renderer(json!({"emissive": [9000, 9000, 9000]})),
+            .renderer(json!({"emissive": [50_000, 50_000, 50_000]})),
         );
         if play {
             s.commands.push((
                 "component.add",
-                json!({"entity": format!("e_gate{i}"), "component": "Checkpoint", "value": {"index": i + 1, "radius": 3.2}}),
+                json!({"entity": format!("e_gate{i}"), "component": "Checkpoint", "value": {"index": i + 1, "radius": 4.0}}),
             ));
         }
     }
@@ -206,13 +253,13 @@ fn art(s: &mut Scene, c: &Course, play: bool) {
         )
         .at_origin()
         .decor()
-        .renderer(json!({"emissive": [12000, 12000, 12000]})),
+        .renderer(json!({"emissive": [50_000, 50_000, 50_000]})),
     );
     s.prop(
-        Prop::new("e_goal", "Goal arch", "glint_goal", c.goal, cannon.heading)
+        Prop::new("e_goal", "Goal", "glint_goal", c.goal, cannon.heading)
             .at_origin()
             .decor()
-            .renderer(json!({"emissive": [16000, 16000, 16000]})),
+            .renderer(json!({"emissive": [70_000, 70_000, 70_000]})),
     );
     if play {
         s.commands.push((
@@ -231,16 +278,104 @@ fn art(s: &mut Scene, c: &Course, play: bool) {
     }
     let orb = models.get("glint_orb").renderer["model"].clone();
     for (i, p) in c.pickups.iter().enumerate() {
-        let id = format!("e_orb{i}");
         let mut components = json!({
             "Transform": {"position": round3(*p)},
-            "MeshRenderer": {"model": orb, "emissive": [12000, 12000, 12000]},
+            "MeshRenderer": {"model": orb, "emissive": [90_000, 90_000, 90_000]},
         });
         if play {
-            components["Pickup"] = json!({"size": 1.0});
-            components["Spinner"] = json!({"degreesPerSecond": 110, "startYaw": (i * 37 % 360)});
+            components["Pickup"] = json!({"size": 1.0, "home": round3(*p)});
+            components["Spinner"] = json!({"degreesPerSecond": 140, "startYaw": (i * 37 % 360)});
         }
-        s.entity(&id, "Orb", components);
+        s.entity(&format!("e_orb{i}"), "Orb", components);
+    }
+    // The cloud deck: banks spread on a spiral around the course, flattened, each a little
+    // different; a few high, thin ones far off.
+    let banks = 96u32;
+    for i in 0..banks {
+        let radius = 760.0 * ((i as f32 + 0.5) / banks as f32).sqrt();
+        let angle = i as f32 * 2.399_963;
+        let size = 2.0 + scatter(i, 1) * 2.4;
+        let at = centre + Vec3::new(angle.cos() * radius, 0.0, angle.sin() * radius);
+        decor(
+            s,
+            &format!("e_cloud{i}"),
+            "Cloud bank",
+            "glint_cloud",
+            Vec3::new(at.x, deck - 6.0 - scatter(i, 2) * 22.0, at.z),
+            [0.0, scatter(i, 3) * 360.0, 0.0],
+            Vec3::new(
+                size,
+                size * (0.5 + scatter(i, 4) * 0.2),
+                size * (0.8 + scatter(i, 5) * 0.5),
+            ),
+            0.0,
+        );
+    }
+    // Nothing far away may put the course in shade: a blocker is dropped if any waypoint's ray
+    // to the sun passes through it.
+    let to_sun = -SUN.normalize();
+    let shades = |at: Vec3, radius: f32| {
+        c.waypoints.iter().any(|w| {
+            let along = (at - *w).dot(to_sun);
+            along > 0.0 && (*w + to_sun * along - at).length() < radius
+        })
+    };
+    let mut high = 0;
+    for i in 0..24u32 {
+        let angle = i as f32 * 0.628 + 0.3;
+        let radius = 620.0 + scatter(i, 6) * 420.0;
+        let size = 3.0 + scatter(i, 7) * 3.0;
+        let at = centre
+            + Vec3::new(
+                angle.cos() * radius,
+                70.0 + scatter(i, 8) * 120.0,
+                angle.sin() * radius,
+            );
+        if high >= 10 || shades(at, 60.0 * size) {
+            continue;
+        }
+        decor(
+            s,
+            &format!("e_cirrus{high}"),
+            "High cloud",
+            "glint_cloud",
+            at,
+            [0.0, scatter(i, 9) * 360.0, 0.0],
+            Vec3::new(size * 1.5, size * 0.5, size),
+            0.0,
+        );
+        high += 1;
+    }
+    // Islands in the distance, kept clear of the route.
+    let mut placed = 0;
+    for i in 0..40u32 {
+        let angle = i as f32 * 2.399_963 + 1.0;
+        let radius = 230.0 + scatter(i, 10) * 420.0;
+        let at = centre
+            + Vec3::new(
+                angle.cos() * radius,
+                -24.0 + scatter(i, 11) * 70.0,
+                angle.sin() * radius,
+            );
+        let size = 0.8 + scatter(i, 12) * 1.5;
+        let clear = c
+            .waypoints
+            .iter()
+            .all(|w| Vec3::new(w.x - at.x, 0.0, w.z - at.z).length() > 110.0 + 40.0 * size);
+        if !clear || placed >= 11 || shades(at + Vec3::Y * (20.0 * size), 55.0 * size) {
+            continue;
+        }
+        decor(
+            s,
+            &format!("e_isle{placed}"),
+            "Island",
+            "glint_isle",
+            at,
+            [0.0, scatter(i, 13) * 360.0, 0.0],
+            Vec3::splat(size),
+            40_000.0,
+        );
+        placed += 1;
     }
 }
 
@@ -264,42 +399,27 @@ fn game(ctx: &Ctx, c: &Course) -> Result<()> {
             }),
         );
     }
-    // The launch deck's glass guard is solid: back and both sides.
-    let first = &c.pieces[0];
-    for (i, (at, half)) in [
-        (
-            Vec3::new(0.0, first.half.y + 0.5, -first.half.z + 0.1),
-            Vec3::new(first.half.x, 0.5, 0.06),
-        ),
-        (
-            Vec3::new(-first.half.x + 0.1, first.half.y + 0.5, 0.0),
-            Vec3::new(0.06, 0.5, first.half.z),
-        ),
-        (
-            Vec3::new(first.half.x - 0.1, first.half.y + 0.5, 0.0),
-            Vec3::new(0.06, 0.5, first.half.z),
-        ),
-    ]
-    .into_iter()
-    .enumerate()
-    {
+    // The glass rails are solid.
+    for w in &c.walls {
         s.entity(
-            &format!("e_guard{i}"),
-            "Guard glass",
-            json!({"Transform": {"position": round3(first.center + first.rot * at), "rotation": round3(Vec3::from_array(first.euler()))},
-                "RigidBody": {"motion": "static"}, "Collider": {"halfExtents": half.to_array()}}),
+            &w.id,
+            "Glass rail",
+            json!({"Transform": {"position": round3(w.center), "rotation": round3(Vec3::from_array(course::euler(w.rot)))},
+                "RigidBody": {"motion": "static"}, "Collider": {"halfExtents": [w.half.x.max(0.06), w.half.y, w.half.z.max(0.06)]}}),
         );
     }
     // Sliders and bars.
     let mover = models.get("glint_mover").renderer.clone();
     for m in &c.sliders {
         let half = m.half.to_array();
+        let mut renderer = mover.clone();
+        renderer["emissive"] = json!([50_000, 50_000, 50_000]);
         s.entity(
             &m.id,
             "Moving platform",
             json!({
-                "Transform": {"position": round3(m.origin), "rotation": round3(Vec3::from_array(euler(m.rot)))},
-                "MeshRenderer": mover,
+                "Transform": {"position": round3(m.origin), "rotation": round3(Vec3::from_array(course::euler(m.rot)))},
+                "MeshRenderer": renderer,
                 "RigidBody": {"motion": "kinematic"},
                 "Collider": {"halfExtents": half},
                 "Surface": {"half": half},
@@ -341,16 +461,7 @@ fn game(ctx: &Ctx, c: &Course) -> Result<()> {
             "Collider": {"kind": "sphere", "radius": 0.5, "friction": 0.8},
             "PlayerControl": {"camera": "e_camera"},
             "Ball": {"spawn": c.start.to_array()},
-            "BallController": {},
-        }),
-    );
-    s.entity(
-        "e_shadow",
-        "Ball contact shadow",
-        json!({
-            "Transform": {"position": [0, 0.02, -2.0], "scale": [1.3, 1, 1.3]},
-            "MeshRenderer": models.get("glint_blob").renderer,
-            "BallShadow": {},
+            "BallController": {"topSpeed": course::TOP_SPEED},
         }),
     );
     s.entity(
@@ -362,52 +473,53 @@ fn game(ctx: &Ctx, c: &Course) -> Result<()> {
         "e_camera",
         "Camera",
         json!({
-            "Transform": {"position": [0, 4.0, -12.0]},
+            "Transform": {"position": round3(c.start + Vec3::new(4.0, 3.0, -4.0))},
             "Camera": {"fov": 56},
-            "FollowCamera": {"target": "e_ball", "distance": 5.4, "height": 2.2, "pitch": 18, "sensitivity": 0},
+            "FollowCamera": {"target": "e_ball", "distance": 5.4, "height": 2.2, "yaw": course::START_HEADING, "pitch": 16, "sensitivity": 0},
             "CourseCamera": {},
         }),
     );
-    // An establishing shot for previews; a higher priority number keeps the follow camera active.
-    s.entity(
-        "e_camwide",
-        "Establishing camera",
-        json!({"Transform": {"position": [0.0, 7.0, -17.0]}, "Camera": {"fov": 62, "priority": 10}}),
-    );
-    s.commands.push((
-        "transform.lookAt",
-        json!({"entity": "e_camwide", "point": [-30.0, 1.0, 60.0]}),
-    ));
-    // Review cameras: the whole route from the side, the turn, the cannon's shot, the goal.
+    // Review cameras (a higher priority number keeps the follow camera active): the world from
+    // behind the start, the turn, the cannon's shot, the goal.
     let (cannon, goal) = (c.cannon.as_ref().expect("cannon"), c.goal);
-    let centre = (c.start + goal) * 0.5;
+    let ahead = Quat::from_rotation_y(course::START_HEADING.to_radians()) * Vec3::Z;
+    let left = Quat::from_rotation_y(course::START_HEADING.to_radians()) * Vec3::X;
+    let turn = c.waypoints[c.waypoints.len() * 3 / 5];
+    let shot = Quat::from_rotation_y(cannon.heading.to_radians());
     for (id, name, at, look, fov) in [
         (
             "e_camover",
             "Overview",
-            centre + Vec3::new(260.0, 190.0, -120.0),
-            centre,
-            58.0,
+            c.start - ahead * 46.0 + left * 34.0 + Vec3::Y * 30.0,
+            c.start + ahead * 150.0 - left * 30.0 - Vec3::Y * 10.0,
+            62.0,
         ),
         (
             "e_camturn",
             "Turn view",
-            c.waypoints[c.waypoints.len() / 2] + Vec3::new(30.0, 22.0, -40.0),
-            c.waypoints[c.waypoints.len() / 2],
+            turn + Vec3::new(34.0, 20.0, -44.0),
+            turn,
             60.0,
         ),
         (
             "e_camcannon",
             "Cannon view",
-            cannon.breech + Vec3::new(18.0, 6.0, -12.0),
-            cannon.muzzle + Vec3::new(-50.0, 6.0, 0.0),
+            cannon.breech + shot * Vec3::new(9.0, 6.0, -22.0),
+            cannon.arc(cannon.flight * 0.5),
             60.0,
         ),
         (
             "e_camgoal",
             "Goal view",
-            goal + Vec3::new(34.0, 8.0, -24.0),
-            goal + Vec3::new(0.0, 4.0, 0.0),
+            goal + shot * Vec3::new(26.0, 7.0, -36.0),
+            goal + Vec3::new(0.0, 9.0, 0.0),
+            60.0,
+        ),
+        (
+            "e_camsliders",
+            "Slider view",
+            (c.sliders[0].origin + c.sliders[1].origin) * 0.5 + shot * Vec3::new(15.0, 9.0, -6.0),
+            (c.sliders[0].origin + c.sliders[1].origin) * 0.5,
             60.0,
         ),
     ] {
@@ -453,7 +565,7 @@ fn menu(ctx: &Ctx, c: &Course) -> Result<()> {
         s.entity(
             &format!("{}m", m.id),
             "Moving platform",
-            json!({"Transform": {"position": round3(m.origin + m.travel * 0.4), "rotation": round3(Vec3::from_array(euler(m.rot)))}, "MeshRenderer": mover}),
+            json!({"Transform": {"position": round3(m.origin + m.travel * 0.4), "rotation": round3(Vec3::from_array(course::euler(m.rot)))}, "MeshRenderer": mover}),
         );
     }
     let bar = models.get("glint_bar").renderer.clone();
@@ -464,32 +576,49 @@ fn menu(ctx: &Ctx, c: &Course) -> Result<()> {
             json!({"Transform": {"position": round3(b.pivot), "rotation": [0, b.yaw + 35.0, 0]}, "MeshRenderer": bar}),
         );
     }
-    s.entity(
-        "e_menuball",
-        "Ball",
-        json!({"Transform": {"position": [0.0, 0.5, 9.0]}, "MeshRenderer": ball_look()}),
-    );
-    // The title view: low and a little to the side of the launch deck, the long straight ahead.
-    s.entity(
-        "e_gamemenueye",
-        "Menu vista camera",
-        json!({"Transform": {"position": [-7.0, 3.4, -16.0]}}),
-    );
-    s.entity(
-        "e_gamemenutarget",
-        "Menu vista focus",
-        json!({"Transform": {"position": [3.0, 2.0, 40.0]}}),
-    );
+    let ahead = Quat::from_rotation_y(course::START_HEADING.to_radians()) * Vec3::Z;
+    let left = Quat::from_rotation_y(course::START_HEADING.to_radians()) * Vec3::X;
+    s.entity("e_menuball", "Ball", json!({"Transform": {"position": round3(c.start - Vec3::Y * 0.1)}, "MeshRenderer": ball_look()}));
+    // The title view: low and to the side of the launch deck, the long straight ahead.
+    s.entity("e_gamemenueye", "Menu vista camera", json!({"Transform": {"position": round3(c.start - ahead * 9.0 + left * 5.0 + Vec3::Y * 2.6)}}));
+    s.entity("e_gamemenutarget", "Menu vista focus", json!({"Transform": {"position": round3(c.start + ahead * 60.0 - left * 8.0 + Vec3::Y * 3.0)}}));
     let calls = std::mem::take(&mut s.commands);
     ctx.apply(MENU.0, "Glint: native menu backdrop", calls)
 }
 
-/// Builds the Glint project: icons, UI data, the game scene and the menu backdrop.
+/// The autopilot's plan as JSON (`replay/route.json`): the steps of a plain, perfect run.
+fn route(c: &Course) -> Value {
+    let steps: Vec<Value> = c
+        .plan
+        .iter()
+        .map(|step| match step {
+            Step::Roll { at, speed } => json!({"kind": "roll", "at": round3(*at), "speed": speed}),
+            Step::Jump { at } => json!({"kind": "jump", "at": round3(*at)}),
+            Step::Board { slider, reach } => {
+                json!({"kind": "board", "slider": slider, "reach": reach})
+            }
+            Step::Leave { at, reach } => {
+                json!({"kind": "leave", "at": round3(*at), "reach": reach})
+            }
+            Step::Cannon { at } => json!({"kind": "cannon", "at": round3(*at)}),
+        })
+        .collect();
+    json!({"scene": SCENE.0, "start": round3(c.start), "goal": round3(c.goal), "orbs": c.pickups.len(), "steps": steps})
+}
+
+/// Builds the Glint project: icons, UI data, the autopilot's route, the game scene and the
+/// menu backdrop.
 pub fn build(ctx: &Ctx) -> Result<()> {
     clean(ctx, &["levels", "kit"])?;
     let c = course::build();
     icons::write(&ctx.path("ui/icons"))?;
     ui::write(&ctx.path("ui"), c.pickups.len(), c.checkpoints.len())?;
+    let replay = ctx.root.join("replay");
+    std::fs::create_dir_all(&replay)?;
+    std::fs::write(
+        replay.join("route.json"),
+        serde_json::to_string_pretty(&route(&c))? + "\n",
+    )?;
     game(ctx, &c)?;
     menu(ctx, &c)?;
     ctx.check()

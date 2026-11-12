@@ -381,7 +381,7 @@
     "entity": "e_run",
     "component": "GlintRun",
     "field": "orbs",
-    "template": "{value} / 27"
+    "template": "{value} / 43"
   },
   {
     "node": "gates",
@@ -643,7 +643,7 @@
     "entity": "e_run",
     "component": "GlintRun",
     "field": "orbs",
-    "template": "{value} / 27"
+    "template": "{value} / 43"
   },
   {
     "node": "win-falls",
