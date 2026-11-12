@@ -99,7 +99,8 @@ fn request(editor: &crate::Editor, renderer: &SceneDevice, marks: Option<usize>)
 
 /// The editor window with its Scene in it: the Scene's capture laid into the Scene view's
 /// rectangle and the UI composited over it, as the window composites its native layer
-/// under the UI. The report is the window's layout.
+/// under the UI. When the Scene is not in front (the Game tab is, say) the window is the UI as
+/// laid out, its native layers empty. The report is the window's layout.
 fn window(
     rt: &mut Runtime<Studio>,
     scene: Option<(&mut SceneDevice, &SceneView)>,
@@ -108,28 +109,26 @@ fn window(
     let (renderer, scene) = scene.ok_or_else(not_shown)?;
     let ui = rt.snap()?;
     let report = layout(rt);
-    let view = rt
-        .tree()
-        .into_iter()
-        .find(|n| {
-            n.key
-                .as_ref()
-                .is_some_and(|k| k.to_string() == "scene/view")
-        })
-        .ok_or_else(not_shown)?;
-    let capture = scene.capture(renderer, &request(&rt.state().editor, renderer, None))?;
-    let (x, y) = (view.rect.left.round() as i64, view.rect.top.round() as i64);
-    let (w, h) = (
-        view.rect.width().round().max(1.0) as u32,
-        view.rect.height().round().max(1.0) as u32,
-    );
-    let scene_image = if capture.image.dimensions() == (w, h) {
-        capture.image
-    } else {
-        resize(&capture.image, w, h, FilterType::Triangle)
-    };
+    let view = rt.tree().into_iter().find(|n| {
+        n.key
+            .as_ref()
+            .is_some_and(|k| k.to_string() == "scene/view")
+    });
     let mut canvas = image::RgbaImage::from_pixel(ui.width, ui.height, image::Rgba([0, 0, 0, 255]));
-    replace(&mut canvas, &scene_image, x, y);
+    if let Some(view) = view {
+        let capture = scene.capture(renderer, &request(&rt.state().editor, renderer, None))?;
+        let (x, y) = (view.rect.left.round() as i64, view.rect.top.round() as i64);
+        let (w, h) = (
+            view.rect.width().round().max(1.0) as u32,
+            view.rect.height().round().max(1.0) as u32,
+        );
+        let scene_image = if capture.image.dimensions() == (w, h) {
+            capture.image
+        } else {
+            resize(&capture.image, w, h, FilterType::Triangle)
+        };
+        replace(&mut canvas, &scene_image, x, y);
+    }
     let ui = image::RgbaImage::from_raw(ui.width, ui.height, ara_kit::capture::rgba(&ui))
         .ok_or_else(|| anyhow::anyhow!("the window snapshot has the wrong size"))?;
     overlay(&mut canvas, &ui, 0, 0);

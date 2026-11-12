@@ -5120,9 +5120,7 @@ fn click_cost() {
 #[test]
 #[ignore = "needs a Wayland session and a Vulkan GPU (the Linux gate)"]
 fn a_wayland_layer_presents_and_resizes() -> anyhow::Result<()> {
-    use crate::world::EditWorldView as _;
-    use anyhow::Context;
-    let mut rt = open();
+    let rt = open();
     stillkit::platform::set_render(stillkit::platform::Render::Gpu);
     let surface = stillkit::Surface::new(
         stillkit::Kind::App { min: (320, 240) },

@@ -279,6 +279,7 @@ impl Terrain {
 
     /// Apple's backend has no object ids yet.
     #[cfg(target_vendor = "apple")]
+    #[allow(dead_code)]
     pub fn tag(&mut self, _: &mut Engine, _: u32) -> Result<()> {
         Ok(())
     }

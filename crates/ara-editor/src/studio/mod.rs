@@ -85,6 +85,10 @@ const VERTEX_KEY: u16 = 0x56;
 /// The Scene view's native layer.
 pub(crate) const SCENE_LAYER: &str = "scene";
 
+/// How long a bounded run (`--frames`, `--screenshot`) may count no frame, once the import gate
+/// is open, before it gives up.
+const BOUNDED_STALL: Duration = Duration::from_secs(60);
+
 /// Open the project in the studio and run until its window closes.
 pub fn run(options: Options) -> anyhow::Result<()> {
     let user_settings = settings::user_settings_path()?;
@@ -230,6 +234,9 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     // given). Presented Scene frames count when the window shows; hidden, the loop's own.
     let frame_limit = options.bounded().then(|| options.frames.unwrap_or(60));
     let mut frames = 0_u64;
+    // When a bounded run last counted a frame (or last waited on the import gate): a run that
+    // counts none for `BOUNDED_STALL` ends with an error instead of waiting forever.
+    let mut counted_at = Instant::now();
     let mut last_frame = Instant::now();
     let mut fps = 0.0_f32;
     let mut camera = rt.state().editor.state.camera;
@@ -759,6 +766,9 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                     .map(|layer| (layer, [r.width() as u32, r.height() as u32])),
                 None => None,
             };
+        // The Game view has a layer to present into this pass: it is what the view area
+        // shows when the Game tab is in front.
+        let game_shown = game_layer.is_some();
         if game_layer.is_some() || rt.touch(|s| game.wants_frame(&s.editor))
         {
             let scale = rt.scale();
@@ -912,8 +922,20 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             anyhow::bail!("Renderlab could not draw the Scene and a bounded run cannot finish: {error}");
         }
         if let Some(limit) = frame_limit {
-            if options.hidden() || presented {
+            // A frame counts when whichever view the view area shows (the Scene or the Game)
+            // was presented, so the window is captured as it is laid out.
+            if options.hidden() || presented || game_shown {
                 frames += 1;
+                counted_at = Instant::now();
+            } else if gated {
+                // Loading is the import gate's wait, which ends itself.
+                counted_at = Instant::now();
+            } else if counted_at.elapsed() >= BOUNDED_STALL {
+                anyhow::bail!(
+                    "a bounded run counted no frame for {} s: it counts a frame when the view area's Scene or Game is composited, and neither was (window visible {visible}, Scene rect {rect:?}, Game rect {game_rect:?}, Scene drawn {}, Scene extent shown {shown_extent:?})",
+                    BOUNDED_STALL.as_secs(),
+                    scene_view.presentable()
+                );
             }
             if frames >= limit {
                 if options.screenshot {
