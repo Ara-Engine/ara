@@ -1,0 +1,336 @@
+{
+  "$schema": "ara://schema/scene/1",
+  "id": "sc_glint000002",
+  "versions": {
+    "PostProcessVolume": 2
+  },
+  "records": {
+    "e_b1m": {
+      "name": "Spinner bar",
+      "order": "aJ",
+      "MeshRenderer": {
+        "model": "@kit/glint_bar.gltf#as_kitglintbar"
+      },
+      "Transform": {
+        "position": [0, 1.35, 48],
+        "rotation": [0, 35, 0]
+      }
+    },
+    "e_b2m": {
+      "name": "Spinner bar",
+      "order": "aK",
+      "MeshRenderer": {
+        "model": "@kit/glint_bar.gltf#as_kitglintbar"
+      },
+      "Transform": {
+        "position": [0, 1.35, 58],
+        "rotation": [0, 125, 0]
+      }
+    },
+    "e_c1": {
+      "name": "Checkpoint 1",
+      "order": "aL",
+      "MeshRenderer": {
+        "model": "@kit/glint_pad.gltf#as_kitglintpad",
+        "emissive": [5000, 5000, 5000]
+      },
+      "Transform": {
+        "position": [0, 0.8, 40]
+      }
+    },
+    "e_c2": {
+      "name": "Checkpoint 2",
+      "order": "aM",
+      "MeshRenderer": {
+        "model": "@kit/glint_pad.gltf#as_kitglintpad",
+        "emissive": [5000, 5000, 5000]
+      },
+      "Transform": {
+        "position": [0, 0.8, 66]
+      }
+    },
+    "e_course": {
+      "name": "Catwalk",
+      "order": "a9",
+      "MeshRenderer": {
+        "model": "@kit/glint_course.gltf#as_kitglintcourse"
+      },
+      "Transform": {}
+    },
+    "e_env": {
+      "name": "Dusk sky and fixed exposure",
+      "order": "a0",
+      "Environment": {
+        "sky": [0.1, 0.2, 0.55, 1],
+        "horizon": [1, 0.6, 0.32, 1],
+        "skyFalloff": 2.5,
+        "glow": [0.9, 0.3, 0.1, 1],
+        "glowFalloff": 8,
+        "ground": [0.1, 0.08, 0.07, 1],
+        "intensity": 6000
+      },
+      "HeightFog": {
+        "density": 0.0003,
+        "falloff": 30,
+        "albedo": [1, 0.72, 0.52, 1],
+        "anisotropy": 0.6
+      },
+      "PostProcessVolume": {
+        "overrides": [
+          {
+            "exposure": "manual",
+            "ev100": 13
+          },
+          {
+            "module": "toneMapping",
+            "toneMapping": "neutral"
+          }
+        ]
+      }
+    },
+    "e_gamemenueye": {
+      "name": "Menu vista camera",
+      "order": "aP",
+      "Transform": {
+        "position": [-5.5, 3.4, -7]
+      }
+    },
+    "e_gamemenutarget": {
+      "name": "Menu vista focus",
+      "order": "aQ",
+      "Transform": {
+        "position": [0, 0.8, 24]
+      }
+    },
+    "e_goal": {
+      "name": "Goal",
+      "order": "aN",
+      "MeshRenderer": {
+        "model": "@kit/glint_goal.gltf#as_kitglintgoal",
+        "emissive": [6000, 6000, 6000]
+      },
+      "Transform": {
+        "position": [0, -1.8, 94]
+      }
+    },
+    "e_lcp0": {
+      "name": "Checkpoint light",
+      "order": "a6",
+      "Light": {
+        "color": [1, 0.6200000047683716, 0.2199999988079071, 1],
+        "intensity": 900,
+        "range": 8,
+        "sourceRadius": 0.11999999731779099
+      },
+      "Transform": {
+        "position": [0, 2.2, 40]
+      }
+    },
+    "e_lcp1": {
+      "name": "Checkpoint light",
+      "order": "a7",
+      "Light": {
+        "color": [1, 0.6200000047683716, 0.2199999988079071, 1],
+        "intensity": 900,
+        "range": 8,
+        "sourceRadius": 0.11999999731779099
+      },
+      "Transform": {
+        "position": [0, 2.2, 66]
+      }
+    },
+    "e_lfurn0": {
+      "name": "Furnace glow",
+      "order": "a2",
+      "Light": {
+        "color": [1, 0.4000000059604645, 0.10000000149011612, 1],
+        "intensity": 60000,
+        "range": 45,
+        "sourceRadius": 0.800000011920929
+      },
+      "Transform": {
+        "position": [-52, -21, 26]
+      }
+    },
+    "e_lfurn1": {
+      "name": "Furnace glow",
+      "order": "a3",
+      "Light": {
+        "color": [1, 0.4000000059604645, 0.10000000149011612, 1],
+        "intensity": 60000,
+        "range": 45,
+        "sourceRadius": 0.800000011920929
+      },
+      "Transform": {
+        "position": [-64, -21, 74]
+      }
+    },
+    "e_lfurn2": {
+      "name": "Furnace glow",
+      "order": "a4",
+      "Light": {
+        "color": [1, 0.4000000059604645, 0.10000000149011612, 1],
+        "intensity": 60000,
+        "range": 45,
+        "sourceRadius": 0.800000011920929
+      },
+      "Transform": {
+        "position": [56, -21, 46]
+      }
+    },
+    "e_lfurn3": {
+      "name": "Furnace glow",
+      "order": "a5",
+      "Light": {
+        "color": [1, 0.4000000059604645, 0.10000000149011612, 1],
+        "intensity": 60000,
+        "range": 45,
+        "sourceRadius": 0.800000011920929
+      },
+      "Transform": {
+        "position": [70, -21, 100]
+      }
+    },
+    "e_lgoal": {
+      "name": "Goal light",
+      "order": "a8",
+      "Light": {
+        "color": [0.30000001192092896, 0.8500000238418579, 1, 1],
+        "intensity": 1800,
+        "range": 14,
+        "sourceRadius": 0.30000001192092896
+      },
+      "Transform": {
+        "position": [0, -0.4, 94]
+      }
+    },
+    "e_menuball": {
+      "name": "Ball",
+      "order": "aO",
+      "MeshRenderer": {
+        "shape": "sphere",
+        "color": [0.95, 0.95, 0.95, 1],
+        "roughness": 0.04,
+        "metallic": 1
+      },
+      "Transform": {
+        "position": [0, 0.5, 6]
+      }
+    },
+    "e_menumover": {
+      "name": "Moving platform",
+      "order": "aI",
+      "MeshRenderer": {
+        "model": "@kit/glint_mover.gltf#as_kitglintmover"
+      },
+      "Transform": {
+        "position": [1.8, 0.3, 32.5]
+      }
+    },
+    "e_smoke0": {
+      "name": "Chimney smoke",
+      "order": "aB",
+      "Transform": {
+        "position": [-52, 20, 30]
+      },
+      "VisualEffect": {
+        "effect": "smoke",
+        "scale": 5,
+        "intensity": 0.6
+      }
+    },
+    "e_smoke1": {
+      "name": "Chimney smoke",
+      "order": "aC",
+      "Transform": {
+        "position": [-64, 14, 78]
+      },
+      "VisualEffect": {
+        "effect": "smoke",
+        "scale": 5,
+        "intensity": 0.6
+      }
+    },
+    "e_smoke2": {
+      "name": "Chimney smoke",
+      "order": "aD",
+      "Transform": {
+        "position": [56, 24, 50]
+      },
+      "VisualEffect": {
+        "effect": "smoke",
+        "scale": 5,
+        "intensity": 0.6
+      }
+    },
+    "e_smoke3": {
+      "name": "Chimney smoke",
+      "order": "aE",
+      "Transform": {
+        "position": [70, 16, 104]
+      },
+      "VisualEffect": {
+        "effect": "smoke",
+        "scale": 5,
+        "intensity": 0.6
+      }
+    },
+    "e_smoke4": {
+      "name": "Chimney smoke",
+      "order": "aF",
+      "Transform": {
+        "position": [-44, 10, 118]
+      },
+      "VisualEffect": {
+        "effect": "smoke",
+        "scale": 5,
+        "intensity": 0.6
+      }
+    },
+    "e_sparks": {
+      "name": "Goal sparks",
+      "order": "aG",
+      "Transform": {
+        "position": [0, -1.5, 94]
+      },
+      "VisualEffect": {
+        "effect": "sparks",
+        "scale": 1.2
+      }
+    },
+    "e_sun": {
+      "name": "Sun",
+      "order": "a1",
+      "Light": {
+        "kind": "directional",
+        "color": [1, 0.76, 0.52, 1],
+        "intensity": 80000
+      },
+      "Transform": {
+        "position": [0, 40, 30],
+        "rotation": [-34.261154, 33.37642, 20.54257]
+      }
+    },
+    "e_swirl": {
+      "name": "Goal swirl",
+      "order": "aH",
+      "Transform": {
+        "position": [0, -1.5, 94]
+      },
+      "VisualEffect": {
+        "effect": "magic_swirl",
+        "scale": 1.6,
+        "intensity": 0.8
+      }
+    },
+    "e_yard": {
+      "name": "Foundry yard",
+      "order": "aA",
+      "MeshRenderer": {
+        "model": "@kit/glint_yard.gltf#as_kitglintyard",
+        "emissive": [6000, 6000, 6000]
+      },
+      "Transform": {}
+    }
+  }
+}

@@ -7,14 +7,12 @@
   "records": {
     "e_b1": {
       "name": "Spinner bar",
-      "order": "aD",
+      "order": "aT",
       "Collider": {
-        "halfExtents": [1.8, 0.15, 0.15]
+        "halfExtents": [1.7999999523162842, 0.15000000596046448, 0.15000000596046448]
       },
       "MeshRenderer": {
-        "size": [3.6, 0.3, 0.3],
-        "color": [0.8, 0.2, 0.15, 1],
-        "roughness": 0.4
+        "model": "@kit/glint_bar.gltf#as_kitglintbar"
       },
       "RigidBody": {
         "motion": "kinematic"
@@ -28,14 +26,12 @@
     },
     "e_b2": {
       "name": "Spinner bar",
-      "order": "aE",
+      "order": "aU",
       "Collider": {
-        "halfExtents": [1.8, 0.15, 0.15]
+        "halfExtents": [1.7999999523162842, 0.15000000596046448, 0.15000000596046448]
       },
       "MeshRenderer": {
-        "size": [3.6, 0.3, 0.3],
-        "color": [0.8, 0.2, 0.15, 1],
-        "roughness": 0.4
+        "model": "@kit/glint_bar.gltf#as_kitglintbar"
       },
       "RigidBody": {
         "motion": "kinematic"
@@ -51,7 +47,7 @@
     },
     "e_ball": {
       "name": "Ball",
-      "order": "aI",
+      "order": "aY",
       "Ball": {
         "spawn": [0, 0.6000000238418579, -2]
       },
@@ -63,7 +59,7 @@
       "MeshRenderer": {
         "shape": "sphere",
         "color": [0.95, 0.95, 0.95, 1],
-        "roughness": 0.05,
+        "roughness": 0.04,
         "metallic": 1
       },
       "PlayerControl": {
@@ -80,42 +76,36 @@
     },
     "e_c1": {
       "name": "Checkpoint 1",
-      "order": "aF",
+      "order": "aV",
       "Checkpoint": {
         "radius": 2.6
       },
       "MeshRenderer": {
-        "shape": "plane",
-        "size": [4, 0.05, 4],
-        "color": [0.1, 0.1, 0.1, 1],
-        "emissive": [6000, 4200, 1800],
-        "castShadows": false
+        "model": "@kit/glint_pad.gltf#as_kitglintpad",
+        "emissive": [5000, 5000, 5000]
       },
       "Transform": {
-        "position": [0, 0.84, 40]
+        "position": [0, 0.8, 40]
       }
     },
     "e_c2": {
       "name": "Checkpoint 2",
-      "order": "aG",
+      "order": "aW",
       "Checkpoint": {
         "index": 2,
         "radius": 2.6
       },
       "MeshRenderer": {
-        "shape": "plane",
-        "size": [4, 0.05, 4],
-        "color": [0.1, 0.1, 0.1, 1],
-        "emissive": [6000, 4200, 1800],
-        "castShadows": false
+        "model": "@kit/glint_pad.gltf#as_kitglintpad",
+        "emissive": [5000, 5000, 5000]
       },
       "Transform": {
-        "position": [0, 0.84, 66]
+        "position": [0, 0.8, 66]
       }
     },
     "e_camera": {
       "name": "Camera",
-      "order": "aJ",
+      "order": "aZ",
       "Camera": {
         "fov": 60
       },
@@ -129,20 +119,37 @@
         "position": [0, 3.5, -9]
       }
     },
+    "e_course": {
+      "name": "Catwalk",
+      "order": "a9",
+      "MeshRenderer": {
+        "model": "@kit/glint_course.gltf#as_kitglintcourse"
+      },
+      "Transform": {}
+    },
     "e_env": {
-      "name": "Sky and fixed exposure",
+      "name": "Dusk sky and fixed exposure",
       "order": "a0",
       "Environment": {
-        "sky": [0.2, 0.36, 0.85, 1],
-        "horizon": [0.72, 0.82, 0.95, 1],
-        "ground": [0.28, 0.26, 0.23, 1],
-        "intensity": 9000
+        "sky": [0.1, 0.2, 0.55, 1],
+        "horizon": [1, 0.6, 0.32, 1],
+        "skyFalloff": 2.5,
+        "glow": [0.9, 0.3, 0.1, 1],
+        "glowFalloff": 8,
+        "ground": [0.1, 0.08, 0.07, 1],
+        "intensity": 6000
+      },
+      "HeightFog": {
+        "density": 0.0003,
+        "falloff": 30,
+        "albedo": [1, 0.72, 0.52, 1],
+        "anisotropy": 0.6
       },
       "PostProcessVolume": {
         "overrides": [
           {
             "exposure": "manual",
-            "ev100": 14
+            "ev100": 13
           },
           {
             "module": "toneMapping",
@@ -153,31 +160,117 @@
     },
     "e_goal": {
       "name": "Goal",
-      "order": "aH",
+      "order": "aX",
       "Goal": {
         "radius": 3.2
       },
       "MeshRenderer": {
-        "shape": "plane",
-        "size": [6, 0.05, 6],
-        "color": [0.1, 0.1, 0.1, 1],
-        "emissive": [1500, 6000, 7000],
-        "castShadows": false
+        "model": "@kit/glint_goal.gltf#as_kitglintgoal",
+        "emissive": [6000, 6000, 6000]
       },
       "Transform": {
-        "position": [0, -1.76, 94]
+        "position": [0, -1.8, 94]
+      }
+    },
+    "e_lcp0": {
+      "name": "Checkpoint light",
+      "order": "a6",
+      "Light": {
+        "color": [1, 0.6200000047683716, 0.2199999988079071, 1],
+        "intensity": 900,
+        "range": 8,
+        "sourceRadius": 0.11999999731779099
+      },
+      "Transform": {
+        "position": [0, 2.2, 40]
+      }
+    },
+    "e_lcp1": {
+      "name": "Checkpoint light",
+      "order": "a7",
+      "Light": {
+        "color": [1, 0.6200000047683716, 0.2199999988079071, 1],
+        "intensity": 900,
+        "range": 8,
+        "sourceRadius": 0.11999999731779099
+      },
+      "Transform": {
+        "position": [0, 2.2, 66]
+      }
+    },
+    "e_lfurn0": {
+      "name": "Furnace glow",
+      "order": "a2",
+      "Light": {
+        "color": [1, 0.4000000059604645, 0.10000000149011612, 1],
+        "intensity": 60000,
+        "range": 45,
+        "sourceRadius": 0.800000011920929
+      },
+      "Transform": {
+        "position": [-52, -21, 26]
+      }
+    },
+    "e_lfurn1": {
+      "name": "Furnace glow",
+      "order": "a3",
+      "Light": {
+        "color": [1, 0.4000000059604645, 0.10000000149011612, 1],
+        "intensity": 60000,
+        "range": 45,
+        "sourceRadius": 0.800000011920929
+      },
+      "Transform": {
+        "position": [-64, -21, 74]
+      }
+    },
+    "e_lfurn2": {
+      "name": "Furnace glow",
+      "order": "a4",
+      "Light": {
+        "color": [1, 0.4000000059604645, 0.10000000149011612, 1],
+        "intensity": 60000,
+        "range": 45,
+        "sourceRadius": 0.800000011920929
+      },
+      "Transform": {
+        "position": [56, -21, 46]
+      }
+    },
+    "e_lfurn3": {
+      "name": "Furnace glow",
+      "order": "a5",
+      "Light": {
+        "color": [1, 0.4000000059604645, 0.10000000149011612, 1],
+        "intensity": 60000,
+        "range": 45,
+        "sourceRadius": 0.800000011920929
+      },
+      "Transform": {
+        "position": [70, -21, 100]
+      }
+    },
+    "e_lgoal": {
+      "name": "Goal light",
+      "order": "a8",
+      "Light": {
+        "color": [0.30000001192092896, 0.8500000238418579, 1, 1],
+        "intensity": 1800,
+        "range": 14,
+        "sourceRadius": 0.30000001192092896
+      },
+      "Transform": {
+        "position": [0, -0.4, 94]
       }
     },
     "e_m1": {
       "name": "Moving platform",
-      "order": "aC",
+      "order": "aS",
       "Collider": {
         "halfExtents": [1.600000023841858, 0.5, 1.600000023841858]
       },
       "MeshRenderer": {
-        "size": [3.200000047683716, 1, 3.200000047683716],
-        "color": [0.85, 0.45, 0.2, 1],
-        "roughness": 0.5
+        "model": "@kit/glint_mover.gltf#as_kitglintmover"
       },
       "Mover": {
         "origin": [0, 0.30000001192092896, 32.5],
@@ -196,21 +289,16 @@
     },
     "e_run": {
       "name": "Run",
-      "order": "aK",
+      "order": "aa",
       "GlintRun": {
         "start": [0, 0.6000000238418579, -2]
       }
     },
     "e_s0": {
       "name": "Start dock",
-      "order": "a2",
+      "order": "aI",
       "Collider": {
         "halfExtents": [4, 0.5, 5]
-      },
-      "MeshRenderer": {
-        "size": [8, 1, 10],
-        "color": [0.41999998688697815, 0.4000000059604645, 0.3700000047683716, 1],
-        "roughness": 0.699999988079071
       },
       "RigidBody": {},
       "Surface": {
@@ -222,14 +310,9 @@
     },
     "e_s1": {
       "name": "Runway",
-      "order": "a3",
+      "order": "aJ",
       "Collider": {
         "halfExtents": [2, 0.5, 7]
-      },
-      "MeshRenderer": {
-        "size": [4, 1, 14],
-        "color": [0.5, 0.5199999809265137, 0.550000011920929, 1],
-        "roughness": 0.699999988079071
       },
       "RigidBody": {},
       "Surface": {
@@ -241,14 +324,9 @@
     },
     "e_s2": {
       "name": "Pad B",
-      "order": "a4",
+      "order": "aK",
       "Collider": {
         "halfExtents": [3, 0.5, 3]
-      },
-      "MeshRenderer": {
-        "size": [6, 1, 6],
-        "color": [0.41999998688697815, 0.4000000059604645, 0.3700000047683716, 1],
-        "roughness": 0.699999988079071
       },
       "RigidBody": {},
       "Surface": {
@@ -260,14 +338,9 @@
     },
     "e_s3": {
       "name": "Checkpoint pad 1",
-      "order": "a5",
+      "order": "aL",
       "Collider": {
         "halfExtents": [3, 0.5, 3]
-      },
-      "MeshRenderer": {
-        "size": [6, 1, 6],
-        "color": [0.41999998688697815, 0.4000000059604645, 0.3700000047683716, 1],
-        "roughness": 0.699999988079071
       },
       "RigidBody": {},
       "Surface": {
@@ -279,14 +352,9 @@
     },
     "e_s4": {
       "name": "Beam",
-      "order": "a6",
+      "order": "aM",
       "Collider": {
         "halfExtents": [0.8999999761581421, 0.5, 10]
-      },
-      "MeshRenderer": {
-        "size": [1.7999999523162842, 1, 20],
-        "color": [0.5, 0.5199999809265137, 0.550000011920929, 1],
-        "roughness": 0.699999988079071
       },
       "RigidBody": {},
       "Surface": {
@@ -298,14 +366,9 @@
     },
     "e_s5": {
       "name": "Checkpoint pad 2",
-      "order": "a7",
+      "order": "aN",
       "Collider": {
         "halfExtents": [3, 0.5, 3]
-      },
-      "MeshRenderer": {
-        "size": [6, 1, 6],
-        "color": [0.41999998688697815, 0.4000000059604645, 0.3700000047683716, 1],
-        "roughness": 0.699999988079071
       },
       "RigidBody": {},
       "Surface": {
@@ -317,14 +380,9 @@
     },
     "e_s6": {
       "name": "Island 1",
-      "order": "a8",
+      "order": "aO",
       "Collider": {
         "halfExtents": [1.7000000476837158, 0.5, 1.7000000476837158]
-      },
-      "MeshRenderer": {
-        "size": [3.4000000953674316, 1, 3.4000000953674316],
-        "color": [0.5, 0.5199999809265137, 0.550000011920929, 1],
-        "roughness": 0.699999988079071
       },
       "RigidBody": {},
       "Surface": {
@@ -336,14 +394,9 @@
     },
     "e_s7": {
       "name": "Island 2",
-      "order": "a9",
+      "order": "aP",
       "Collider": {
         "halfExtents": [1.7000000476837158, 0.5, 1.7000000476837158]
-      },
-      "MeshRenderer": {
-        "size": [3.4000000953674316, 1, 3.4000000953674316],
-        "color": [0.5, 0.5199999809265137, 0.550000011920929, 1],
-        "roughness": 0.699999988079071
       },
       "RigidBody": {},
       "Surface": {
@@ -355,14 +408,9 @@
     },
     "e_s8": {
       "name": "Island 3",
-      "order": "aA",
+      "order": "aQ",
       "Collider": {
         "halfExtents": [1.7000000476837158, 0.5, 1.7000000476837158]
-      },
-      "MeshRenderer": {
-        "size": [3.4000000953674316, 1, 3.4000000953674316],
-        "color": [0.5, 0.5199999809265137, 0.550000011920929, 1],
-        "roughness": 0.699999988079071
       },
       "RigidBody": {},
       "Surface": {
@@ -374,14 +422,9 @@
     },
     "e_s9": {
       "name": "Goal island",
-      "order": "aB",
+      "order": "aR",
       "Collider": {
         "halfExtents": [4, 0.5, 4]
-      },
-      "MeshRenderer": {
-        "size": [8, 1, 8],
-        "color": [0.41999998688697815, 0.4000000059604645, 0.3700000047683716, 1],
-        "roughness": 0.699999988079071
       },
       "RigidBody": {},
       "Surface": {
@@ -391,18 +434,110 @@
         "position": [0, -2.3, 94]
       }
     },
+    "e_smoke0": {
+      "name": "Chimney smoke",
+      "order": "aB",
+      "Transform": {
+        "position": [-52, 20, 30]
+      },
+      "VisualEffect": {
+        "effect": "smoke",
+        "scale": 5,
+        "intensity": 0.6
+      }
+    },
+    "e_smoke1": {
+      "name": "Chimney smoke",
+      "order": "aC",
+      "Transform": {
+        "position": [-64, 14, 78]
+      },
+      "VisualEffect": {
+        "effect": "smoke",
+        "scale": 5,
+        "intensity": 0.6
+      }
+    },
+    "e_smoke2": {
+      "name": "Chimney smoke",
+      "order": "aD",
+      "Transform": {
+        "position": [56, 24, 50]
+      },
+      "VisualEffect": {
+        "effect": "smoke",
+        "scale": 5,
+        "intensity": 0.6
+      }
+    },
+    "e_smoke3": {
+      "name": "Chimney smoke",
+      "order": "aE",
+      "Transform": {
+        "position": [70, 16, 104]
+      },
+      "VisualEffect": {
+        "effect": "smoke",
+        "scale": 5,
+        "intensity": 0.6
+      }
+    },
+    "e_smoke4": {
+      "name": "Chimney smoke",
+      "order": "aF",
+      "Transform": {
+        "position": [-44, 10, 118]
+      },
+      "VisualEffect": {
+        "effect": "smoke",
+        "scale": 5,
+        "intensity": 0.6
+      }
+    },
+    "e_sparks": {
+      "name": "Goal sparks",
+      "order": "aG",
+      "Transform": {
+        "position": [0, -1.5, 94]
+      },
+      "VisualEffect": {
+        "effect": "sparks",
+        "scale": 1.2
+      }
+    },
     "e_sun": {
       "name": "Sun",
       "order": "a1",
       "Light": {
         "kind": "directional",
-        "color": [1, 0.94, 0.84, 1],
-        "intensity": 90000
+        "color": [1, 0.76, 0.52, 1],
+        "intensity": 80000
       },
       "Transform": {
         "position": [0, 40, 30],
-        "rotation": [-48.46822, 20.520555, 21.592405]
+        "rotation": [-34.261154, 33.37642, 20.54257]
       }
+    },
+    "e_swirl": {
+      "name": "Goal swirl",
+      "order": "aH",
+      "Transform": {
+        "position": [0, -1.5, 94]
+      },
+      "VisualEffect": {
+        "effect": "magic_swirl",
+        "scale": 1.6,
+        "intensity": 0.8
+      }
+    },
+    "e_yard": {
+      "name": "Foundry yard",
+      "order": "aA",
+      "MeshRenderer": {
+        "model": "@kit/glint_yard.gltf#as_kitglintyard",
+        "emissive": [6000, 6000, 6000]
+      },
+      "Transform": {}
     }
   }
 }

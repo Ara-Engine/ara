@@ -2914,13 +2914,13 @@
       "name": "midcourse"
     },
     {
-      "tick": 1940,
+      "tick": 1990,
       "name": "goal"
     }
   ],
   "expect": {
-    "finishTicks": 1929,
+    "finishTicks": 1947,
     "falls": 1,
-    "hash": "1f44ee0f2090673ff2b643399764859c83232b5bd3d2cca5b345b6a5d201e821"
+    "hash": "baf5020116f53af5400260387bd0368904163f0e007a05c4f5a6cb6240234795"
   }
 }

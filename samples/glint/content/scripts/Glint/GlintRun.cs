@@ -69,7 +69,7 @@ public sealed partial class GlintRun : Behaviour
         {
             var at = World.Read<Transform>(goal).Position;
             var reach = World.Read<Goal>(goal).Radius;
-            if (Course.Planar(position, at) < reach * reach && MathF.Abs(position.Y - at.Y) < 2.5f)
+            if (control.Grounded && Course.Planar(position, at) < reach * reach && MathF.Abs(position.Y - at.Y) < 2.5f)
             {
                 State = 2;
                 Finished = true;
