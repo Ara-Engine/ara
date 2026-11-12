@@ -2251,7 +2251,7 @@ pub(super) fn keys_of(s: &Studio, id: &str) -> Option<String> {
 }
 
 /// Whether `panel` is a tab somewhere in `node`.
-fn holds(node: &ara_ui::docking::DockNode, panel: &str) -> bool {
+pub(super) fn holds(node: &ara_ui::docking::DockNode, panel: &str) -> bool {
     use ara_ui::docking::DockNode;
     match node {
         DockNode::Area { tabs, .. } => tabs.iter().any(|t| t == panel),

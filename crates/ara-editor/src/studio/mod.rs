@@ -247,6 +247,24 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     if let Some(panel) = &options.panel {
         let id = format!("window.{panel}");
         rt.update(|s| commands::run(s, &id, &crate::catalog::Target::None));
+        // A page that opened its own window (a tool page whose starter asset was just
+        // created opens floating) is docked: a bounded capture shows the main window.
+        if options.bounded() {
+            rt.update(|s| {
+                let floating = s
+                    .editor
+                    .state
+                    .floating
+                    .iter()
+                    .any(|f| commands::holds(&f.root, panel));
+                if floating {
+                    s.act(
+                        "editor.layout.move",
+                        serde_json::json!({"panel": panel, "slot": "view"}),
+                    );
+                }
+            });
+        }
     }
     rt.update(|s| {
         let store = s.editor.host.store();

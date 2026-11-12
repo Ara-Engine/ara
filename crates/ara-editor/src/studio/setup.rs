@@ -56,8 +56,8 @@ impl Options {
         self.background || self.bounded() || self.headless
     }
 
-    /// A headless or bounded run never touches the owner's profile and starts from fresh
-    /// preferences: preferences (`ARA_CONFIG_DIR`) and crash reports (`ARA_CRASH_DIR`) go
+    /// A headless or bounded run never touches the owner's profile or the project's saved
+    /// window layout (read, never written) and starts from fresh preferences: preferences (`ARA_CONFIG_DIR`) and crash reports (`ARA_CRASH_DIR`) go
     /// to `<output>/.ara-profile`, and the players and import workers it starts inherit
     /// both, hidden (`ARA_PLAY_OFFSCREEN`).
     ///
@@ -76,6 +76,8 @@ impl Options {
         }
         // SAFETY: as above.
         unsafe { std::env::set_var("ARA_PLAY_OFFSCREEN", "1") };
+        // SAFETY: as above.
+        unsafe { std::env::set_var(crate::state::LAYOUT_READ_ONLY, "1") };
     }
 }
 
