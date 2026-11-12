@@ -737,11 +737,12 @@ fn exterior(ctx: &Ctx, models: &Models, ground: &Ground) -> Result<()> {
             "Environment": {"sky": [0.16, 0.22, 0.42, 1], "horizon": [1.0, 0.56, 0.32, 1], "ground": [0.16, 0.12, 0.09, 1], "intensity": 420, "exposure": 0.0028},
             "SkyAtmosphere": {"mieScatteringScale": 0.005994, "mieAbsorptionScale": 0.000666, "cloudCoverage": 0.12},
             "HeightFog": {"density": 0.0012, "falloff": 30, "albedo": [0.92, 0.86, 0.78, 1], "anisotropy": 0.5},
-            "PostProcessVolume": {"overrides": [{"module": "exposure", "compensation": -0.5}, {"module": "bloom", "bloom": 0.05}]}
+            "PostProcessVolume": {"overrides": [{"module": "exposure", "compensation": -1.5}, {"module": "bloom", "bloom": 0.05}]}
         }),
     );
     // 10 degrees up, 82 degrees from +Z toward -X (west). The terrain's shadow covers the whole
-    // compound at the earlier 4 degrees up and 69 degrees; this is a nearby direction that lights it.
+    // compound at the earlier 4 degrees up and 69 degrees; this is a nearby direction that lights it,
+    // and the dusk sky's exposure compensation (-1.5) keeps the lit yard from washing out.
     let sun_toward = Vec3::new(-0.9752, 0.1736, 0.1371).normalize();
     s.commands.extend(light(
         "e_sun",
