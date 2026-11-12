@@ -119,28 +119,12 @@ enum Command {
         /// Project folder name.
         project: String,
     },
-    /// Fidelity captures and GPU timings of one look (`<project>/look/<look>.look.json`).
+    /// Capture one look's scene with the player's Renderlab renderer.
     Capture {
         /// Project folder name.
         project: String,
         /// Look name.
         look: String,
-        /// First shot only, native only (look iteration).
-        #[arg(long)]
-        quick: bool,
-        /// Frames per timing window.
-        #[arg(long, default_value_t = 240)]
-        timing_frames: u32,
-        /// Quality presets to capture: comma-separated low, medium, high, epic, or all.
-        #[arg(long, default_value = "high")]
-        quality: String,
-        /// Path-traced reference samples per pixel for RMSE/FLIP scoring (0 skips).
-        #[arg(long, default_value_t = 0)]
-        reference: u32,
-        /// Capture Medium and above with the opt-in ray-traced renderer (D27:
-        /// every preset is raster by default).
-        #[arg(long)]
-        ray_tracing: bool,
     },
     /// Play a scene in a windowed `ara-player` through `ara mcp` and capture it.
     Play {
@@ -306,41 +290,13 @@ fn main() -> Result<()> {
             }
             println!("generated {project} kits");
         }
-        Command::Capture {
-            project,
-            look,
-            quick,
-            timing_frames,
-            quality,
-            reference,
-            ray_tracing,
-        } => {
-            use ara_render_fidelity::presets::{QualityChoice, QualityPreset};
-            let presets = if quality == "all" {
-                QualityPreset::ALL.to_vec()
-            } else {
-                quality
-                    .split(',')
-                    .map(|q| match q.trim().parse()? {
-                        QualityChoice::Preset(p) => Ok(p),
-                        QualityChoice::Auto => anyhow::bail!("capture needs explicit presets"),
-                    })
-                    .collect::<anyhow::Result<Vec<_>>>()?
-            };
-            capture::run(
-                &samples,
-                &read_lock()?,
-                &capture::Request {
-                    project: &project,
-                    look: &look,
-                    quick,
-                    timing_frames,
-                    presets: &presets,
-                    reference_samples: reference,
-                    ray_tracing,
-                },
-            )?
-        }
+        Command::Capture { project, look } => capture::run(
+            &samples,
+            &capture::Request {
+                project: &project,
+                look: &look,
+            },
+        )?,
         Command::Play {
             project,
             scene,

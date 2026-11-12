@@ -8,7 +8,7 @@ use crate::look::transport::{
 use anyhow::Result;
 use ara_patch_charts::{Mesh, Settings, Triangle, cache};
 use std::sync::Arc;
-#[path = "bench/fixtures.rs"]
+#[path = "fixtures.rs"]
 pub(super) mod fixtures;
 
 #[test]
