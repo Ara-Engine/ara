@@ -583,6 +583,12 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                 scene_dirty = false;
             }
             pass.mark("composite");
+            // The next Scene frame goes out after the composite: the composite's GPU work is in
+            // the queue before it, so the next pass is not held up behind the frame.
+            if render {
+                agent_work::start(&mut rt, &mut scene_view, &mut renderer);
+                pass.mark("scene start");
+            }
             // A click in the view: the entity under it through the channel map.
             if let Some(pick) = rt.touch(|s| s.local.pick.take()) {
                 let size = renderer.size();

@@ -91,9 +91,10 @@ pub trait ExternalRenderer: Send {
     /// Releases what it created on `gpu`, before that device is destroyed.
     fn release(&mut self, gpu: &mut GpuDevice) -> Result<()>;
     /// Starts drawing `view` and returns without waiting for the GPU, for a host that must not
-    /// block on a frame: `Ok(true)` when it did (take the result with [`Self::finish`]; one frame
-    /// is in flight at a time, see [`Self::in_flight`]), `Ok(false)` when the renderer cannot
-    /// split a frame and the host calls [`Self::render`] instead.
+    /// block on a frame: `Ok(true)` when it did (take the oldest result with [`Self::finish`]; up
+    /// to [`Self::max_frames_in_flight`] frames are in flight, see [`Self::frames_in_flight`]),
+    /// `Ok(false)` when the renderer cannot split a frame and the host calls [`Self::render`]
+    /// instead.
     fn begin(&mut self, _gpu: &mut GpuDevice, _view: &ExternalView<'_>) -> Result<bool> {
         Ok(false)
     }
@@ -101,8 +102,17 @@ pub trait ExternalRenderer: Send {
     fn in_flight(&self) -> bool {
         false
     }
-    /// Takes the frame [`Self::begin`] started once the GPU has finished it; `None` while it is
-    /// still drawing. Never waits for the GPU.
+    /// How many frames were begun and not yet taken.
+    fn frames_in_flight(&self) -> usize {
+        usize::from(self.in_flight())
+    }
+    /// How many frames [`Self::begin`] accepts before one is taken: more than one lets the host
+    /// record the next frame while the GPU draws the last.
+    fn max_frames_in_flight(&self) -> usize {
+        1
+    }
+    /// Takes the oldest frame [`Self::begin`] started once the GPU has finished it; `None` while
+    /// it is still drawing. Never waits for the GPU.
     fn finish(&mut self, _gpu: &mut GpuDevice) -> Result<Option<ExternalFrame>> {
         Ok(None)
     }

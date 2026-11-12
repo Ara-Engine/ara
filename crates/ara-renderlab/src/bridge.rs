@@ -53,6 +53,11 @@ struct Target {
     ids: Option<crate::id_target::IdTarget>,
 }
 
+/// Most frames the bridge can keep in flight: the CPU records and submits the next while the GPU
+/// draws the last, so a frame costs the longer of the two, not their sum. Two is enough; a third
+/// would only add latency.
+const MAX_IN_FLIGHT: usize = 2;
+
 /// A frame begun and not yet taken.
 struct Pending {
     frame: renderlab::engine::FrameId,
@@ -60,6 +65,15 @@ struct Pending {
     since: Instant,
     /// The engine reported it complete.
     done: bool,
+    /// Shared handoff: the frame's copy into the shared slot is queued. The slot holds one frame
+    /// at a time, so a frame begun while the last one is still undelivered is published once
+    /// that one is delivered (`Bridge::finish`), before any later frame is recorded.
+    published: bool,
+    /// CPU handoff: the colour and id copies queued behind the frame when it was recorded.
+    readback: Option<(
+        crate::id_target::Readback,
+        Option<crate::id_target::Readback>,
+    )>,
 }
 
 /// Lighting last applied to the engine, so unchanged frames set nothing.
@@ -102,8 +116,11 @@ pub(crate) struct Bridge {
     /// Renderlab's own passes for the frame `gpu_ms` measured (`ExternalFrame::passes`).
     passes: [(&'static str, f64); EXTERNAL_PASSES],
     cut: bool,
-    /// The frame begun and not yet taken (`Bridge::begin`, `Bridge::finish`).
-    pending: Option<Pending>,
+    /// How many frames `begin` allows in flight (`Options::frames_in_flight`, at most
+    /// `MAX_IN_FLIGHT`).
+    in_flight_limit: usize,
+    /// The frames begun and not yet taken, oldest first (`Bridge::begin`, `Bridge::finish`).
+    pending: std::collections::VecDeque<Pending>,
     /// The last frame's eye and view direction, to notice a view that jumps.
     last_view: Option<([f32; 3], [f32; 3])>,
 }
@@ -232,7 +249,12 @@ impl Bridge {
             gpu_ms: None,
             passes: [("", 0.); EXTERNAL_PASSES],
             cut: true,
-            pending: None,
+            in_flight_limit: std::env::var("ARA_RENDERLAB_FRAMES_IN_FLIGHT")
+                .ok()
+                .and_then(|value| value.parse().ok())
+                .unwrap_or(options.frames_in_flight)
+                .clamp(1, MAX_IN_FLIGHT),
+            pending: std::collections::VecDeque::new(),
             last_view: None,
         })
     }
@@ -272,15 +294,22 @@ impl Bridge {
         Ok(None)
     }
 
-    /// Draws `view` and waits for it: [`Self::begin`], then [`Self::finish`] until it is done.
+    /// Draws `view` and waits for it: [`Self::begin`], then [`Self::finish`] until it (and any
+    /// frame begun before it) is done.
     pub fn render(
         &mut self,
         gpu: &mut GpuDevice,
         view: &ExternalView<'_>,
     ) -> Result<ExternalFrame> {
+        while self.pending.len() >= self.in_flight_limit {
+            self.finish(gpu)?;
+            std::thread::yield_now();
+        }
         self.begin(gpu, view)?;
         loop {
-            if let Some(frame) = self.finish(gpu)? {
+            if let Some(frame) = self.finish(gpu)?
+                && self.pending.is_empty()
+            {
                 return Ok(frame);
             }
             std::thread::yield_now();
@@ -289,16 +318,29 @@ impl Bridge {
 
     /// Whether a frame was begun and not yet taken by [`Self::finish`].
     pub fn in_flight(&self) -> bool {
-        self.pending.is_some()
+        !self.pending.is_empty()
+    }
+
+    /// How many frames were begun and not yet taken.
+    pub fn frames_in_flight(&self) -> usize {
+        self.pending.len()
+    }
+
+    /// How many frames [`Self::begin`] allows in flight.
+    pub fn max_frames_in_flight(&self) -> usize {
+        self.in_flight_limit
     }
 
     /// Starts drawing `view` and returns without waiting for the GPU: the scene is synced and the
-    /// frame, its ids and the meter's pass are submitted. [`Self::finish`] takes the result. Only
-    /// one frame is in flight at a time: it is an error to begin another before it is taken.
+    /// frame, its ids and the meter's pass are submitted, and its handoff queued behind it.
+    /// [`Self::finish`] takes the oldest result. Up to [`MAX_IN_FLIGHT`] frames are in flight (the
+    /// CPU records the next while the GPU draws the last); it is an error to begin another
+    /// before one is taken.
     pub fn begin(&mut self, gpu: &mut GpuDevice, view: &ExternalView<'_>) -> Result<()> {
         anyhow::ensure!(
-            self.pending.is_none(),
-            "a frame is in flight: finish it before beginning another"
+            self.pending.len() < self.in_flight_limit,
+            "{} frames are in flight: finish one before beginning another",
+            self.in_flight_limit
         );
         let frame = view.frame;
         // The meter's readings of earlier frames, the previous one's included: the bridge
@@ -414,7 +456,6 @@ impl Bridge {
             .render_view(view_id, &lighting::camera(frame)?)?
             .frame;
         let target = self.target.as_mut().context("target ensured above")?;
-        // Shared: the copy into the shared slot queues behind the frame right away.
         if self.scene_ids {
             if target.ids.as_ref().is_none_or(|t| t.size() != view.size) {
                 target.ids = Some(crate::id_target::IdTarget::new(
@@ -426,6 +467,8 @@ impl Bridge {
                 ids.write(&mut self.engine, view_id)?;
             }
         }
+        let mut published = false;
+        let mut readback = None;
         if let Some(shared) = &mut target.shared {
             match &target.ids {
                 Some(ids) => shared.set_id(ids.texture().clone()),
@@ -434,7 +477,24 @@ impl Bridge {
                 }
                 None => {}
             }
-            shared.publish(&self.engine, view_id)?;
+            // The copy into the shared slot queues behind the frame right away, unless the slot
+            // still holds the frame before: that one's delivery publishes this one
+            // (`Self::finish`), before any later frame is recorded over the output.
+            if shared.idle() {
+                shared.publish(&self.engine, view_id)?;
+                published = true;
+            }
+        } else if let Some(output) = self.engine.view_output(view_id) {
+            // The CPU copy: the frame's texels are copied into buffers now, behind it, so a frame
+            // recorded after it cannot change what this one's `finish` reads.
+            let colour = crate::id_target::Readback::queue(
+                self.engine.device(),
+                self.engine.queue(),
+                output,
+                view.size,
+            );
+            let ids = target.ids.as_ref().map(|ids| ids.queue_read(&self.engine));
+            readback = Some((colour, ids));
         }
 
         // The meter: queue this frame's histogram pass when the meter asks (every frame while
@@ -458,11 +518,13 @@ impl Bridge {
             }
         }
 
-        self.pending = Some(Pending {
+        self.pending.push_back(Pending {
             frame: rendered,
             view: view_id,
             since: Instant::now(),
             done: false,
+            published,
+            readback,
         });
         Ok(())
     }
@@ -485,33 +547,35 @@ impl Bridge {
             ]
             .map(|(name, pass)| ms(pass).map_or(("", 0.), |ms| (name, ms)));
         }
-        if let Some(pending) = &mut self.pending
-            && events
+        for pending in &mut self.pending {
+            if events
                 .completed
                 .iter()
                 .any(|c| c.frame == Some(pending.frame))
-        {
-            pending.done = true;
+            {
+                pending.done = true;
+            }
         }
         Ok(events)
     }
 
-    /// Takes the frame [`Self::begin`] started if the GPU has finished it: `None` while it is
-    /// still drawing (without waiting), or when none is in flight. A frame the engine never
+    /// Takes the oldest frame [`Self::begin`] started if the GPU has finished it: `None` while it
+    /// is still drawing (without waiting), or when none is in flight. A frame the engine never
     /// reports done is taken after `FRAME_WAIT`: the handoff waits for it itself.
     pub fn finish(&mut self, gpu: &mut GpuDevice) -> Result<Option<ExternalFrame>> {
-        if self.pending.is_none() {
+        if self.pending.is_empty() {
             return Ok(None);
         }
         self.pump()?;
-        let Some(pending) = &self.pending else {
+        let Some(oldest) = self.pending.front() else {
             return Ok(None);
         };
-        if !pending.done && pending.since.elapsed() <= FRAME_WAIT {
+        if !oldest.done && oldest.since.elapsed() <= FRAME_WAIT {
             return Ok(None);
         }
-        let view_id = pending.view;
-        self.pending = None;
+        let Some(taken) = self.pending.pop_front() else {
+            return Ok(None);
+        };
         let target = self
             .target
             .as_mut()
@@ -522,20 +586,29 @@ impl Bridge {
         let started = Instant::now();
         let mut id_texels = None;
         let image = if let Some(shared) = &mut target.shared {
+            if !taken.published {
+                // Only reached when the slot was busy and the frame before it never delivered
+                // (it timed out); the output may already hold a later frame.
+                shared.publish(&self.engine, taken.view)?;
+            }
             settle(gpu, target.image, &mut target.fresh)?;
             shared.deliver(gpu, target.image)?;
             if shared.id_pending() {
                 crate::shared::PresentedId::copy_from(&mut target.id, shared, gpu, target.size)?;
             }
+            // The slot is free: the next frame waiting for it goes out now.
+            if let Some(next) = self.pending.iter_mut().find(|p| !p.published) {
+                shared.publish(&self.engine, next.view)?;
+                next.published = true;
+            }
             target.image
         } else {
-            let read = self.engine.capture_view(view_id)?;
-            id_texels = target
-                .ids
-                .as_ref()
-                .map(|ids| ids.read(&self.engine))
-                .transpose()?;
-            upload(gpu, target, &read.rgba8)?
+            let (colour, ids) = taken
+                .readback
+                .context("a CPU-copy frame has its readback queued at begin")?;
+            let rgba8 = colour.take(self.engine.device())?;
+            id_texels = ids.map(|ids| ids.take(self.engine.device())).transpose()?;
+            upload(gpu, target, &rgba8)?
         };
         let handoff_ms = started.elapsed().as_secs_f64() * 1000.;
 
@@ -623,8 +696,8 @@ impl Bridge {
     }
 
     pub fn release(&mut self, gpu: &mut GpuDevice) -> Result<()> {
-        // A frame in flight draws into the target: it goes with it.
-        self.pending = None;
+        // Frames in flight draw into the target: they go with it.
+        self.pending.clear();
         if let Some(target) = self.target.take() {
             // The import hands its slots back on this device before the image goes.
             drop(target.shared);
