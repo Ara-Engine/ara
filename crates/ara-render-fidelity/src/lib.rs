@@ -8,6 +8,7 @@ mod controls;
 pub mod environment;
 mod features;
 mod frame;
+pub mod instanced;
 pub mod material;
 mod pipeline_variants;
 pub mod presets;

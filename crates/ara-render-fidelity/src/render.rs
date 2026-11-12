@@ -1,7 +1,7 @@
 use crate::{pipeline_variants::Transport, settings::*, targets::*, view::FidelityView};
 use anyhow::Result;
 use ara_gpu::{Access, GpuDevice, Queue, Resource, RootConstants, vulkan::Command};
-use ara_render::graph::{Graph, State};
+use ara_render2d::graph::{Graph, State};
 
 impl FidelityView {
     /// Execute graph-declared passes and publish a completed offscreen output.

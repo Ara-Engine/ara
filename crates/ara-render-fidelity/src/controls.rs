@@ -2,7 +2,7 @@
 use crate::{probes::ProbeVolume, scene::buffer, view::FidelityView};
 use anyhow::{Result, ensure};
 use ara_gpu::{Access, Device, GpuDevice, Queue, Resource, vk};
-use ara_render::graph::State;
+use ara_render2d::graph::State;
 impl FidelityView {
     /// The directional light's angular radius in radians (half its source angle), or
     /// `None` for the Sun's: the cone sun rays sample, as the raster renderer's soft

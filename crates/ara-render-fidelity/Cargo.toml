@@ -9,13 +9,13 @@ publish.workspace = true
 workspace = true
 
 [features]
-hotpatch = ["dep:ara-hotpatch", "ara-render/hotpatch"]
+hotpatch = ["dep:ara-hotpatch"]
 
 [dependencies]
 ara-hotpatch = { path = "../ara-hotpatch", optional = true, features = ["runtime"] }
 ara-gpu = { path = "../ara-gpu" }
 ara-frame = { path = "../ara-frame" }
-ara-render = { path = "../ara-render" }
+ara-render2d = { path = "../ara-render2d" }
 ara-components.workspace = true
 ara-schema.workspace = true
 ara-texture-stream = { path = "../ara-texture-stream" }

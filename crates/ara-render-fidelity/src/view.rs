@@ -8,7 +8,7 @@ use anyhow::{Result, ensure};
 use ara_gpu::{
     Access, Buffer, Device, GpuDevice, Image, Pipeline, Queue, Resource, vk, vulkan::PassTiming,
 };
-use ara_render::graph::State;
+use ara_render2d::graph::State;
 use glam::{Mat4, Vec3};
 use std::collections::BTreeMap;
 

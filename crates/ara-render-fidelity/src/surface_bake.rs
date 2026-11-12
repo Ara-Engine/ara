@@ -5,7 +5,7 @@ use anyhow::{Result, ensure};
 use ara_gpu::{
     Access, Barrier, Device, GpuDevice, Queue, Resource, RootConstants, vk, vulkan::Command,
 };
-use ara_render::graph::State;
+use ara_render2d::graph::State;
 use ara_frame::look::gi::{ProbeSurfaces, STATIC_VECTORS, SURFACE_TEXELS};
 
 /// Probes per submission, bounding each dispatch well under driver timeouts.

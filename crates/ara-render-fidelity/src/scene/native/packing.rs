@@ -28,7 +28,7 @@ pub(super) fn pack_motion(
     textures: u32,
     bounds: &mut [Vec3; 2],
     previous: Option<&[glam::Mat4]>,
-    pose: Option<&ara_render::instanced::PreparedPose>,
+    pose: Option<&crate::instanced::PreparedPose>,
 ) -> Result<Vec<u8>> {
     ara_gpu::cpu_scope!("Native.pack_motion_table");
     let records = 64usize
@@ -131,7 +131,7 @@ fn transmissive(material: &ara_frame::instanced::Material) -> bool {
 pub(super) fn instances(
     scene: &NativeScene,
     pool: &GeometryGpu,
-    pose: Option<&ara_render::instanced::PreparedPose>,
+    pose: Option<&crate::instanced::PreparedPose>,
 ) -> Result<Vec<AccelerationInstance>> {
     ara_gpu::cpu_scope!("Native.pack_tlas_instances");
     scene

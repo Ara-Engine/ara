@@ -7,7 +7,7 @@ use crate::{
 };
 use anyhow::Result;
 use ara_gpu::{Access, Barrier, Buffer, Device, GpuDevice, Queue, Resource, commands::Command, vk};
-use ara_render::graph::State;
+use ara_render2d::graph::State;
 
 impl FidelityView {
     /// Starts a reproducible capture sequence without reallocating geometry,

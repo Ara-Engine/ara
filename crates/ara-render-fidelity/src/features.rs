@@ -4,7 +4,7 @@ use anyhow::{Result, ensure};
 use ara_gpu::{
     Access, Buffer, GpuDevice, Image, Queue, Resource, RootConstants, commands::Command,
 };
-use ara_render::graph::{Graph, State};
+use ara_render2d::graph::{Graph, State};
 
 /// Published same-device image and its actual completed access.
 #[derive(Clone, Copy)]

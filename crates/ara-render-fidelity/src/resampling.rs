@@ -1,7 +1,7 @@
 //! Per-view direct and diffuse-path reservoirs; allocated only when selected.
 use anyhow::Result;
 use ara_gpu::{Access, Buffer, Device, GpuDevice, Queue, Resource, vk};
-use ara_render::graph::State;
+use ara_render2d::graph::State;
 
 pub(crate) struct Reservoirs {
     pub buffers: [Buffer; 6],

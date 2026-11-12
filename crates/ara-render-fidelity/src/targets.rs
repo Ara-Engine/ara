@@ -1,6 +1,6 @@
 use anyhow::Result;
 use ara_gpu::{Access, Device, GpuDevice, Image, Queue, Resource, vk};
-use ara_render::graph::State;
+use ara_render2d::graph::State;
 
 pub(crate) const WORLD0: usize = 0;
 pub(crate) const NORMAL0: usize = 2;
@@ -61,7 +61,7 @@ pub(crate) type BloomPass = (
     &'static str,
     u32,
     [u32; 3],
-    Vec<(ara_render::graph::ResourceId, Access)>,
+    Vec<(ara_render2d::graph::ResourceId, Access)>,
 );
 
 /// The bloom pyramid's nine passes over a render size (see post.slang `bloomMain`),
@@ -69,9 +69,9 @@ pub(crate) type BloomPass = (
 pub(crate) fn bloom_passes(
     names: &'static [&'static str; 9],
     render: [u32; 2],
-    source: ara_render::graph::ResourceId,
-    bloom: [ara_render::graph::ResourceId; 2],
-    exposure: ara_render::graph::ResourceId,
+    source: ara_render2d::graph::ResourceId,
+    bloom: [ara_render2d::graph::ResourceId; 2],
+    exposure: ara_render2d::graph::ResourceId,
 ) -> Vec<BloomPass> {
     (0..9u32)
         .map(|pass| {

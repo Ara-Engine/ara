@@ -2,7 +2,7 @@
 use super::*;
 use anyhow::Context;
 use ara_frame::instanced::{Scene as NativeScene};
-use ara_render::instanced::{GeometryGpu};
+use crate::instanced::{GeometryGpu};
 use ara_texture_stream::{NativeResidency, NativeStats};
 
 mod motion;
