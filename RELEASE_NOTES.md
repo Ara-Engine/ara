@@ -185,8 +185,11 @@ come from a matching, complete engine build. Exported games draw with Renderlab.
   minimize, maximize and close buttons at every size.
 - **Scene.** Overlays that drag to any edge and collapse, box selection, saved views,
   Drop to Surface, Pilot Selected Camera, a Rect tool (T) that works in the object's
-  own frame, Mesh Paint, and a Game view Scale slider (1x to 5x). The Draw Mode menu's
-  view modes and effect switches were the removed renderer's and do nothing yet.
+  own frame, Mesh Paint, and a Game view Scale slider (1x to 5x). The Collider shapes
+  overlay draws every entity's authored collider, and Mesh bounds draws a box around
+  each selected mesh. The Draw Mode button, the View Mode and Rendering Debug menus,
+  the Scene quality chooser, the reflection-probe Recapture controls and the VFX
+  page's timeline belonged to the removed renderer and are removed.
 - **Inspector.** Fields that differ across a multi-selection can be edited; prefab
   instances show their source and an Overrides menu with per-field Apply and Revert;
   a Debug mode shows the resolved record; lists edit in place. Vector fields show
@@ -214,9 +217,9 @@ come from a matching, complete engine build. Exported games draw with Renderlab.
 
 - **Renderlab is slow.** See **Performance**. There is no faster renderer to switch
   to.
-- **The editor waits for each Scene frame.** While the Scene redraws, the editor's
-  input lag is the Scene's frame time: small on a fast GPU with a light scene, a fifth
-  of a second or more on Outpost on an integrated GPU.
+- **On macOS the editor waits for each Scene frame.** While the Scene redraws there,
+  the editor's input lag is the Scene's frame time. On Windows and Linux the editor
+  no longer waits: it keeps drawing and shows each Scene frame when it is ready.
 - **Camera cuts cost extra frames.** After a cut, one frame takes about three times
   as long on the ray-traced path, and about six frames are slow on the non-RT path
   while its lighting cache refills. The picture stays clean.
@@ -238,9 +241,7 @@ come from a matching, complete engine build. Exported games draw with Renderlab.
 - **Terrain and groups.** Terrain takes at most 192 of the 256 mesh-material groups;
   entity draws and foliage share the other 64, merging by material past it, and what
   cannot merge (skinned, see-through, moving batches) is left out and reported once.
-- **The new editor does not yet have** the Scene view's Collider shapes and Mesh
-  bounds overlays (the toggles exist and draw nothing), a draw-call and triangle
-  statistics overlay, the colour picker's eyedropper, a per-type gizmo visibility
+- **The new editor does not yet have** a draw-call and triangle statistics overlay, the colour picker's eyedropper, a per-type gizmo visibility
   menu, importer cook presets, or prefab thumbnails in Assets. A `--screenshot` taken
   with the Game tab in front shows the Game area empty, because the game's picture is
   a native layer outside the interface snapshot.
@@ -270,7 +271,7 @@ reported as `ARA_RENDERLAB_UNSUPPORTED` where a frame uses it; the full table is
   and are gone. The editor's captures carry entity marks and a legend again, from
   Renderlab's object ids; the player's labelled capture has no marks yet.
 - **Scene view and previews:** view modes and rendering debug views in the Scene view,
-  render probes, asset previews and thumbnails.
+  reflection-probe capture, a VFX effect preview, asset previews and thumbnails.
 - **macOS:** on the hardware-ray path only, with no non-RT path. The backend does not
   draw particles or textured transparency; a click on glass selects what is behind it.
 
