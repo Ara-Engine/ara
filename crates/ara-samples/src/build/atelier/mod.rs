@@ -42,7 +42,9 @@ const SKY_SCALE_CD: f32 = 9000.0;
 const SKY_FALLOFF: f32 = 3.0;
 
 /// One local light. `lumens` is the flux of a point and the flux a spot's cone masks
-/// from a point of that flux; `length` makes the source a tube along its local X.
+/// from a point of that flux; `length` makes the source a tube along its local X (every
+/// light here is a sphere: Renderlab draws tube lights as spheres, so a tube would differ
+/// between the engines compared).
 struct Lamp {
     id: &'static str,
     name: &'static str,
@@ -96,7 +98,7 @@ const LAMPS: [Lamp; 6] = [
         color: [1.0, 0.9, 0.75],
         lumens: 350.0,
         radius: 0.02,
-        length: 0.6,
+        length: 0.0,
         range: 3.5,
         cone: Some((30.0, 55.0)),
         shadow: false,
@@ -109,7 +111,7 @@ const LAMPS: [Lamp; 6] = [
         color: [1.0, 0.93, 0.8],
         lumens: 300.0,
         radius: 0.01,
-        length: 1.4,
+        length: 0.0,
         range: 3.0,
         cone: None,
         shadow: false,
@@ -464,7 +466,10 @@ pub fn build(ctx: &Ctx) -> Result<()> {
             s.entity(
                 &id,
                 &format!("Camera {name} {i}"),
-                json!({"Transform": {"position": round3(k.position)}, "Camera": {"fov": k.fov}}),
+                // The still's first key is the scene's main camera (priority 0); the rest are
+                // preferred last, so an export or a Play of the scene frames the still.
+                json!({"Transform": {"position": round3(k.position)},
+                    "Camera": {"fov": k.fov, "priority": if name == "still" { 0 } else { 10 }}}),
             );
             s.commands.push((
                 "transform.lookAt",
