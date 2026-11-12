@@ -560,15 +560,20 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                     ((pick.u * size[0] as f32) as u32).min(size[0].saturating_sub(1)),
                     ((pick.v * size[1] as f32) as u32).min(size[1].saturating_sub(1)),
                 ];
-                let entity =
-                    match compositor.pick(scene_view.id_host(), &view, revision, at)
-                    {
-                        Ok(entity) => entity,
-                        Err(error) => {
-                            rt.touch(|s| s.editor.report_failure(&*error));
-                            None
-                        }
-                    };
+                // The engine's own answer (glass included), else the delivered ids.
+                let front = scene_view.pick_front(at);
+                let entity = match compositor.pick(
+                    scene_view.id_host().map(|host| host.with_front(front)),
+                    &view,
+                    revision,
+                    at,
+                ) {
+                    Ok(entity) => entity,
+                    Err(error) => {
+                        rt.touch(|s| s.editor.report_failure(&*error));
+                        None
+                    }
+                };
                 rt.update(|s| {
                     use crate::catalog::{Target, menus::Context};
                     match (&entity, pick.context) {

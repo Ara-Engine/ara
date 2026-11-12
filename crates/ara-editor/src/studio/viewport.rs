@@ -154,6 +154,13 @@ impl SceneView {
             .as_ref()
             .is_some_and(|scene| scene.image().is_some())
     }
+    /// The engine's own id under `pixel` for a click, when Renderlab shows the Scene.
+    pub(super) fn pick_front(&mut self, pixel: [u32; 2]) -> Option<u32> {
+        self.renderlab
+            .as_mut()
+            .filter(|r| r.image().is_some())
+            .and_then(|r| r.pick_id(pixel))
+    }
     pub(super) fn id_host(&self) -> Option<ids::IdHost<'_>> {
         self.renderlab
             .as_ref()

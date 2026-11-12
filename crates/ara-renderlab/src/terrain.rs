@@ -76,6 +76,10 @@ pub(crate) struct Terrain {
     meshes: TerrainMeshes,
     /// Placed tiles by their content key.
     tiles: HashMap<u64, Tile>,
+    /// The placed tiles' objects with their index among the frame's sorted resident tile
+    /// coordinates, and the ids last set from them (`Terrain::tag`).
+    tagged: Vec<(ObjectId, u32)>,
+    applied: Vec<(ObjectId, u32)>,
     /// Foliage part draws of the resident tiles, for `Scene::sync`.
     foliage: Vec<Draw>,
     /// What `foliage` was built from; a new value means every draw may have changed.
@@ -155,9 +159,15 @@ impl Terrain {
         let splat = program.zip(self.splat.as_ref().and_then(|(_, s)| s.as_ref()));
         let wanted: Vec<_> = coords
             .iter()
-            .filter_map(|coord| {
+            .enumerate()
+            .filter_map(|(index, coord)| {
                 let mesh = self.meshes.tile(&terrain.data, *coord)?;
-                Some((mesh.key ^ layers.key, mesh, terrain.data.tiles.get(coord)?))
+                Some((
+                    mesh.key ^ layers.key,
+                    mesh,
+                    terrain.data.tiles.get(coord)?,
+                    index as u32,
+                ))
             })
             .collect();
         if wanted.len() > budget {
@@ -182,11 +192,16 @@ impl Terrain {
                 release(engine, tile)?;
             }
         }
-        for (key, mesh, tile) in wanted.iter().take(budget) {
+        for (key, mesh, tile, _) in wanted.iter().take(budget) {
             if let std::collections::hash_map::Entry::Vacant(slot) = self.tiles.entry(*key) {
                 slot.insert(place(engine, mesh, &tile.weights, &layers, splat)?);
             }
         }
+        self.tagged = wanted
+            .iter()
+            .take(budget)
+            .filter_map(|(key, _, _, index)| Some((self.tiles.get(key)?.object, *index)))
+            .collect();
         for texture in old_textures {
             engine.remove_texture(texture)?;
         }
@@ -209,7 +224,7 @@ impl Terrain {
         let largest = packed_ids.map_or(0, |uploaded| {
             wanted
                 .iter()
-                .map(|(_, mesh, _)| mesh.source.indices.len() / 3)
+                .map(|(_, mesh, _, _)| mesh.source.indices.len() / 3)
                 .chain(view.frame.draws.iter().map(triangles_of))
                 .chain(view.foliage_parts.values().flatten().map(triangles_of))
                 .fold(uploaded, usize::max)
@@ -243,6 +258,31 @@ impl Terrain {
         Ok((self.tiles.len(), largest))
     }
 
+    /// Gives the placed tiles the editor's ids: tile `n` of the frame's sorted resident
+    /// coordinates is `first + n` (the editor lists them after the frame's draws). Sets only
+    /// what changed.
+    #[cfg(not(target_vendor = "apple"))]
+    pub fn tag(&mut self, engine: &mut Engine, first: u32) -> Result<()> {
+        let wanted: Vec<(ObjectId, u32)> = self
+            .tagged
+            .iter()
+            .map(|(object, index)| (*object, first + index))
+            .collect();
+        if wanted != self.applied {
+            for (object, id) in &wanted {
+                engine.set_object_ids(*object, &[(0, u32::MAX, *id)])?;
+            }
+            self.applied = wanted;
+        }
+        Ok(())
+    }
+
+    /// Apple's backend has no object ids yet.
+    #[cfg(target_vendor = "apple")]
+    pub fn tag(&mut self, _: &mut Engine, _: u32) -> Result<()> {
+        Ok(())
+    }
+
     /// The foliage draws and the key of what they were built from.
     pub fn foliage(&self) -> (&[Draw], u64) {
         (&self.foliage, self.foliage_key)
@@ -252,6 +292,8 @@ impl Terrain {
         for (_, tile) in self.tiles.drain() {
             release(engine, tile)?;
         }
+        self.tagged.clear();
+        self.applied.clear();
         if !self.foliage.is_empty() || self.foliage_key != 0 {
             self.foliage.clear();
             self.foliage_key = 0;
