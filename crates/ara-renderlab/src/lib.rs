@@ -104,9 +104,15 @@ pub struct Renderlab {
 impl Renderlab {
     /// Creates Renderlab's engine: on its own Vulkan device through wgpu, or on Apple
     /// on the presenter's Metal device through Renderlab's ara-gpu backend. Fails with
-    /// `ARA_RENDERLAB_UNAVAILABLE` when this machine cannot run the requested path; the
-    /// host then keeps Ara's renderer.
+    /// `ARA_RENDERLAB_UNAVAILABLE` when this machine cannot run the requested path, and
+    /// always while `ARA_RENDERLAB_FAIL_START` is set non-empty (to see what a host shows when
+    /// the engine does not start).
     pub fn new(options: &Options) -> Result<Self> {
+        if std::env::var_os("ARA_RENDERLAB_FAIL_START").is_some_and(|v| !v.is_empty()) {
+            anyhow::bail!(
+                "ARA_RENDERLAB_UNAVAILABLE: Renderlab was told not to start (ARA_RENDERLAB_FAIL_START)"
+            );
+        }
         #[cfg(not(target_vendor = "apple"))]
         let bridge = bridge::Bridge::new(options)?;
         #[cfg(target_vendor = "apple")]
