@@ -39,7 +39,7 @@ public sealed partial class BallController : Behaviour
         var grounded = Course.Resting(position, Radius, out var normal, out var under);
         if (grounded)
         {
-            if (!ball.Grounded && ball.FallSpeed > 9f) ball.LandTick = tick.Frame;
+            if (!ball.Grounded && ball.FallSpeed > 4f) ball.LandTick = tick.Frame;
             ball.Flying = false;
             ball.LastGroundY = position.Y;
             ball.FallSpeed = 0;

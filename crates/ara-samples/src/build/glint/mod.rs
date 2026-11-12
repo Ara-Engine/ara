@@ -6,10 +6,13 @@
 //! Everything comes from `course.rs` (the route as data). Two scenes share one art pass:
 //! `levels/glint.scene` (the game: colliders, `Surface` boxes, movers, the ball, the director)
 //! and `levels/menu.scene` (the native menu's backdrop: the same art, no gameplay components, a
-//! fly-over camera marked by two points). The UI's bindings and resources are generated here too.
+//! fly-over camera marked by two points). The UI's markup, bindings and resources, the sounds and
+//! the autopilot's route are generated here too.
+mod compare;
 mod course;
 mod icons;
 mod kits;
+mod sounds;
 mod ui;
 
 use super::{
@@ -17,20 +20,35 @@ use super::{
     outpost::light,
     place::{Models, Prop, Scene, round3, short},
 };
+use crate::lock::Lock;
 use anyhow::Result;
 use course::{Course, Step};
 use glam::{Quat, Vec3};
 use serde_json::{Value, json};
+use std::path::Path;
 
 /// Gameplay scene.
 pub const SCENE: (&str, &str) = ("levels/glint.scene", "sc_glint000001");
 /// The menu backdrop the native shell requires at this path.
 const MENU: (&str, &str) = ("levels/menu.scene", "sc_glint000002");
+/// The mixer (master, music, sfx) and the two-stem score.
+const MIXER: (&str, &str) = ("audio/glint.mixer", "mx_glint");
+const MUSIC: (&str, &str) = ("audio/glint.music", "mu_glint");
 /// Fixed exposure (EV100): no auto-exposure anywhere.
 const EV100: f32 = 13.5;
 /// Direction the sun's light travels: 20 degrees up, ahead and to the left of the start, so the
 /// course is side-lit from the front for the first half and from behind after the turn.
 const SUN: Vec3 = Vec3::new(-0.163, -0.342, -0.926);
+/// Emissive levels in cd/m2 (a sunlit pale deck is about 7,000): the course's chevrons, the
+/// pylons' bands, the set pieces (rings, arches, cannon, platforms), the goal, the orbs, the
+/// far islands and the sun's disc.
+const LIT_COURSE: f32 = 45_000.0;
+const LIT_PYLONS: f32 = 30_000.0;
+const LIT_SET: f32 = 50_000.0;
+const LIT_GOAL: f32 = 70_000.0;
+const LIT_ORB: f32 = 90_000.0;
+const LIT_ISLE: f32 = 40_000.0;
+const LIT_SUN: f32 = 600_000.0;
 /// The spinner bar's length and thickness (m).
 pub const BAR: (f32, f32) = (6.4, 0.32);
 /// Gold, silver and bronze times in seconds (the UI prints the same numbers).
@@ -55,17 +73,14 @@ fn lamp(
     )
 }
 
-/// Registers the kits as models.
-fn models(ctx: &Ctx, c: &Course) -> Result<Models> {
-    let mut models = Models::default();
-    let root = &ctx.root;
-    let lock = &ctx.lock;
+/// Writes every kit's glTF and returns each kit's name and path.
+fn kits_written(root: &Path, lock: &Lock, c: &Course) -> Result<Vec<(&'static str, String)>> {
     let slider = c
         .sliders
         .first()
         .map_or(Vec3::new(2.2, 0.4, 2.2), |s| s.half);
     let cannon = c.cannon.as_ref().expect("the course has a cannon");
-    for (name, path) in [
+    Ok(vec![
         ("glint_course", kits::course(root, lock, c)?),
         ("glint_supports", kits::supports(root, lock, c)?),
         ("glint_mover", kits::mover(root, lock, slider)?),
@@ -81,7 +96,20 @@ fn models(ctx: &Ctx, c: &Course) -> Result<Models> {
         ("glint_cloud", kits::cloud(root, lock)?),
         ("glint_isle", kits::isle(root, lock)?),
         ("glint_sun", kits::sun(root, lock)?),
-    ] {
+    ])
+}
+
+/// Writes the generated, git-ignored files (kit geometry and the synthesised sounds) without
+/// authoring a document: what a fresh clone needs before it can play.
+pub fn generate(root: &Path, lock: &Lock) -> Result<()> {
+    kits_written(root, lock, &course::build())?;
+    sounds::write(&root.join("content/audio"))
+}
+
+/// Registers the kits as models.
+fn models(ctx: &Ctx, c: &Course) -> Result<Models> {
+    let mut models = Models::default();
+    for (name, path) in kits_written(&ctx.root, &ctx.lock, c)? {
         ctx.model(&mut models, name, &path, &format!("as_kit{}", short(name)))?;
     }
     Ok(models)
@@ -123,26 +151,77 @@ fn decor(
     );
 }
 
+/// The sky: a deep blue zenith held low (high falloff), a pale band at the horizon with a warm
+/// glow, and a hazy blue below the horizon where the cloud opens.
+fn environment() -> Value {
+    json!({"sky": [0.04, 0.17, 0.62, 1], "horizon": [0.62, 0.8, 1.0, 1], "skyFalloff": 5.5,
+        "glow": [1.0, 0.56, 0.3, 1], "glowFalloff": 22, "ground": [0.72, 0.84, 1.0, 1],
+        "intensity": 7000, "skyLight": 1})
+}
+
+/// The haze: thick at the cloud deck (it softens the banks into one sea), light at the course,
+/// so the pylons fade as they go down.
+fn fog(deck: f32) -> Value {
+    json!({"density": 0.012, "baseHeight": deck, "falloff": 15, "albedo": [0.78, 0.86, 1.0, 1], "anisotropy": 0.5})
+}
+
+/// The cloud deck's level: well under the lowest piece.
+fn deck_level(c: &Course) -> f32 {
+    c.pieces.iter().map(|p| p.center.y).fold(f32::MAX, f32::min) - 50.0
+}
+
+/// A local point light.
+struct Lamp {
+    id: String,
+    name: &'static str,
+    at: Vec3,
+    color: [f32; 3],
+    lumens: f32,
+    /// Source radius and range, metres.
+    radius: f32,
+    range: f32,
+}
+
+/// The local lights: one over each checkpoint and one over the goal.
+fn lamps(c: &Course) -> Vec<Lamp> {
+    let mut all: Vec<Lamp> = c
+        .checkpoints
+        .iter()
+        .enumerate()
+        .map(|(i, (at, _))| Lamp {
+            id: format!("e_lcp{i}"),
+            name: "Gate light",
+            at: *at + Vec3::new(0.0, 4.0, 0.0),
+            color: [1.0, 0.45, 0.25],
+            lumens: 90_000.0,
+            radius: 0.3,
+            range: 16.0,
+        })
+        .collect();
+    all.push(Lamp {
+        id: "e_lgoal".into(),
+        name: "Goal light",
+        at: c.goal + Vec3::new(0.0, 9.0, 0.0),
+        color: [1.0, 0.6, 0.36],
+        lumens: 160_000.0,
+        radius: 0.8,
+        range: 40.0,
+    });
+    all
+}
+
 /// Sky, sun, haze, lights, the visual course and the world around it: everything both scenes
 /// share. With `play` the gameplay components the director and the cannon read are added too.
 fn art(s: &mut Scene, c: &Course, play: bool) {
     let models = s.models;
-    let lowest = c.pieces.iter().map(|p| p.center.y).fold(f32::MAX, f32::min);
     let centre = (c.start + c.goal) * 0.5;
-    // The cloud deck's level: well under the lowest piece.
-    let deck = lowest - 50.0;
+    let deck = deck_level(c);
     s.entity(
         "e_env",
         "Clear sky and fixed exposure",
         json!({
-            // A deep blue zenith held low (high falloff), a pale band at the horizon with a warm
-            // glow, and a hazy blue below the horizon where the cloud opens.
-            "Environment": {"sky": [0.04, 0.17, 0.62, 1], "horizon": [0.62, 0.8, 1.0, 1], "skyFalloff": 5.5,
-                "glow": [1.0, 0.56, 0.3, 1], "glowFalloff": 22, "ground": [0.72, 0.84, 1.0, 1],
-                "intensity": 7000, "skyLight": 1},
-            // Thick at the cloud deck (it softens the banks into one sea), a light haze at the
-            // course: the pylons fade as they go down.
-            "HeightFog": {"density": 0.012, "baseHeight": deck, "falloff": 15, "albedo": [0.78, 0.86, 1.0, 1], "anisotropy": 0.5},
+            "Environment": environment(),
+            "HeightFog": fog(deck),
             "PostProcessVolume": {"overrides": [
                 {"exposure": "manual", "ev100": EV100},
                 {"module": "toneMapping", "toneMapping": "neutral"},
@@ -162,33 +241,18 @@ fn art(s: &mut Scene, c: &Course, play: bool) {
     // The traced path ignored `castShadows: false`, so the disc also sits 2.6 degrees high:
     // its shadow then passes 90 m over the course and lands far behind it.
     let mut disc = models.get("glint_sun").renderer.clone();
-    disc["emissive"] = json!([600_000, 600_000, 600_000]);
+    disc["emissive"] = json!([LIT_SUN, LIT_SUN, LIT_SUN]);
     disc["castShadows"] = json!(false);
     s.entity(
         "e_sundisc",
         "Sun disc",
         json!({"Transform": {"position": round3(centre + Vec3::Y * 110.0 - SUN.normalize() * 2400.0), "scale": [52, 52, 52]}, "MeshRenderer": disc}),
     );
-    for (i, (at, _)) in c.checkpoints.iter().enumerate() {
+    for l in lamps(c) {
         s.commands.extend(lamp(
-            &format!("e_lcp{i}"),
-            "Gate light",
-            *at + Vec3::new(0.0, 4.0, 0.0),
-            [1.0, 0.45, 0.25],
-            90_000.0,
-            0.3,
-            16.0,
+            &l.id, l.name, l.at, l.color, l.lumens, l.radius, l.range,
         ));
     }
-    s.commands.extend(lamp(
-        "e_lgoal",
-        "Goal light",
-        c.goal + Vec3::new(0.0, 9.0, 0.0),
-        [1.0, 0.6, 0.36],
-        160_000.0,
-        0.8,
-        40.0,
-    ));
     decor(
         s,
         "e_course",
@@ -197,7 +261,7 @@ fn art(s: &mut Scene, c: &Course, play: bool) {
         Vec3::ZERO,
         [0.0; 3],
         Vec3::ONE,
-        45_000.0,
+        LIT_COURSE,
     );
     decor(
         s,
@@ -207,7 +271,7 @@ fn art(s: &mut Scene, c: &Course, play: bool) {
         Vec3::ZERO,
         [0.0; 3],
         Vec3::ONE,
-        30_000.0,
+        LIT_PYLONS,
     );
     for (i, r) in c.rings.iter().enumerate() {
         decor(
@@ -218,7 +282,7 @@ fn art(s: &mut Scene, c: &Course, play: bool) {
             r.at,
             course::euler(r.rot),
             Vec3::splat(r.radius),
-            50_000.0,
+            LIT_SET,
         );
     }
     // Checkpoint arches, the cannon, the goal.
@@ -233,7 +297,7 @@ fn art(s: &mut Scene, c: &Course, play: bool) {
             )
             .at_origin()
             .decor()
-            .renderer(json!({"emissive": [50_000, 50_000, 50_000]})),
+            .renderer(json!({"emissive": [LIT_SET, LIT_SET, LIT_SET]})),
         );
         if play {
             s.commands.push((
@@ -253,13 +317,13 @@ fn art(s: &mut Scene, c: &Course, play: bool) {
         )
         .at_origin()
         .decor()
-        .renderer(json!({"emissive": [50_000, 50_000, 50_000]})),
+        .renderer(json!({"emissive": [LIT_SET, LIT_SET, LIT_SET]})),
     );
     s.prop(
         Prop::new("e_goal", "Goal", "glint_goal", c.goal, cannon.heading)
             .at_origin()
             .decor()
-            .renderer(json!({"emissive": [70_000, 70_000, 70_000]})),
+            .renderer(json!({"emissive": [LIT_GOAL, LIT_GOAL, LIT_GOAL]})),
     );
     if play {
         s.commands.push((
@@ -280,7 +344,7 @@ fn art(s: &mut Scene, c: &Course, play: bool) {
     for (i, p) in c.pickups.iter().enumerate() {
         let mut components = json!({
             "Transform": {"position": round3(*p)},
-            "MeshRenderer": {"model": orb, "emissive": [90_000, 90_000, 90_000]},
+            "MeshRenderer": {"model": orb, "emissive": [LIT_ORB, LIT_ORB, LIT_ORB]},
         });
         if play {
             components["Pickup"] = json!({"size": 1.0, "home": round3(*p)});
@@ -341,7 +405,7 @@ fn art(s: &mut Scene, c: &Course, play: bool) {
             "glint_cloud",
             at,
             [0.0, scatter(i, 9) * 360.0, 0.0],
-            Vec3::new(size * 1.5, size * 0.5, size),
+            Vec3::new(size * 1.3, size * 0.7, size),
             0.0,
         );
         high += 1;
@@ -373,10 +437,67 @@ fn art(s: &mut Scene, c: &Course, play: bool) {
             at,
             [0.0, scatter(i, 13) * 360.0, 0.0],
             Vec3::splat(size),
-            40_000.0,
+            LIT_ISLE,
         );
         placed += 1;
     }
+}
+
+/// A review camera: where it stands, what it looks at, its vertical field of view.
+pub struct View {
+    pub id: &'static str,
+    pub name: &'static str,
+    pub at: Vec3,
+    pub look: Vec3,
+    pub fov: f32,
+}
+
+/// The review cameras, in route order: the world from behind the start, the turn, the sliders,
+/// the cannon's shot, the goal. The comparison's stills and fly-over use the same list.
+fn views(c: &Course) -> Vec<View> {
+    let (cannon, goal) = (c.cannon.as_ref().expect("cannon"), c.goal);
+    let ahead = Quat::from_rotation_y(course::START_HEADING.to_radians()) * Vec3::Z;
+    let left = Quat::from_rotation_y(course::START_HEADING.to_radians()) * Vec3::X;
+    let turn = c.waypoints[c.waypoints.len() * 3 / 5];
+    let shot = Quat::from_rotation_y(cannon.heading.to_radians());
+    let sliders = (c.sliders[0].origin + c.sliders[1].origin) * 0.5;
+    vec![
+        View {
+            id: "e_camover",
+            name: "Overview",
+            at: c.start - ahead * 46.0 + left * 34.0 + Vec3::Y * 30.0,
+            look: c.start + ahead * 150.0 - left * 30.0 - Vec3::Y * 10.0,
+            fov: 62.0,
+        },
+        View {
+            id: "e_camturn",
+            name: "Turn view",
+            at: turn + Vec3::new(34.0, 20.0, -44.0),
+            look: turn,
+            fov: 60.0,
+        },
+        View {
+            id: "e_camsliders",
+            name: "Slider view",
+            at: sliders + shot * Vec3::new(15.0, 9.0, -6.0),
+            look: sliders,
+            fov: 60.0,
+        },
+        View {
+            id: "e_camcannon",
+            name: "Cannon view",
+            at: cannon.breech + shot * Vec3::new(9.0, 6.0, -22.0),
+            look: cannon.arc(cannon.flight * 0.5),
+            fov: 60.0,
+        },
+        View {
+            id: "e_camgoal",
+            name: "Goal view",
+            at: goal + shot * Vec3::new(26.0, 7.0, -36.0),
+            look: goal + Vec3::new(0.0, 9.0, 0.0),
+            fov: 60.0,
+        },
+    ]
 }
 
 /// The gameplay scene.
@@ -413,7 +534,7 @@ fn game(ctx: &Ctx, c: &Course) -> Result<()> {
     for m in &c.sliders {
         let half = m.half.to_array();
         let mut renderer = mover.clone();
-        renderer["emissive"] = json!([50_000, 50_000, 50_000]);
+        renderer["emissive"] = json!([LIT_SET, LIT_SET, LIT_SET]);
         s.entity(
             &m.id,
             "Moving platform",
@@ -464,10 +585,29 @@ fn game(ctx: &Ctx, c: &Course) -> Result<()> {
             "BallController": {"topSpeed": course::TOP_SPEED},
         }),
     );
+    // The spark trail and the roll loop ride the ball (BallFx sets both from its speed).
     s.entity(
         "e_fx",
-        "Ball sparks",
-        json!({"Transform": {"position": c.start.to_array()}, "VisualEffect": {"effect": "sparks", "scale": 0.8, "intensity": 0.0}, "BallFx": {}}),
+        "Ball sparks and roll",
+        json!({
+            "Transform": {"position": c.start.to_array()},
+            "VisualEffect": {"effect": "sparks", "scale": 0.8, "intensity": 0.0},
+            "AudioSource": {"clip": clip(sounds::CLIPS[0].0, sounds::CLIPS[0].1), "bus": "sfx", "looping": true, "spatial": false, "gain": 0.0},
+            "BallFx": {},
+        }),
+    );
+    // Feedback clips are also named by a silent source each, which pins them into the cook.
+    for (name, id) in &sounds::CLIPS[1..] {
+        s.entity(
+            &format!("e_snd{name}"),
+            "Sound pin",
+            json!({"AudioSource": {"clip": clip(name, id), "bus": "sfx", "spatial": false, "gain": 0.0}}),
+        );
+    }
+    s.entity(
+        "e_music",
+        "Music",
+        json!({"MusicSource": {"music": format!("@{}#{}", MUSIC.0, MUSIC.1)}}),
     );
     s.entity(
         "e_camera",
@@ -477,60 +617,17 @@ fn game(ctx: &Ctx, c: &Course) -> Result<()> {
             "Camera": {"fov": 56},
             "FollowCamera": {"target": "e_ball", "distance": 5.4, "height": 2.2, "yaw": course::START_HEADING, "pitch": 16, "sensitivity": 0},
             "CourseCamera": {},
+            // The listener; RunFeedback carries the fall and finish counters where they are heard.
+            "AudioListener": {},
+            "RunFeedback": {},
         }),
     );
-    // Review cameras (a higher priority number keeps the follow camera active): the world from
-    // behind the start, the turn, the cannon's shot, the goal.
-    let (cannon, goal) = (c.cannon.as_ref().expect("cannon"), c.goal);
-    let ahead = Quat::from_rotation_y(course::START_HEADING.to_radians()) * Vec3::Z;
-    let left = Quat::from_rotation_y(course::START_HEADING.to_radians()) * Vec3::X;
-    let turn = c.waypoints[c.waypoints.len() * 3 / 5];
-    let shot = Quat::from_rotation_y(cannon.heading.to_radians());
-    for (id, name, at, look, fov) in [
-        (
-            "e_camover",
-            "Overview",
-            c.start - ahead * 46.0 + left * 34.0 + Vec3::Y * 30.0,
-            c.start + ahead * 150.0 - left * 30.0 - Vec3::Y * 10.0,
-            62.0,
-        ),
-        (
-            "e_camturn",
-            "Turn view",
-            turn + Vec3::new(34.0, 20.0, -44.0),
-            turn,
-            60.0,
-        ),
-        (
-            "e_camcannon",
-            "Cannon view",
-            cannon.breech + shot * Vec3::new(9.0, 6.0, -22.0),
-            cannon.arc(cannon.flight * 0.5),
-            60.0,
-        ),
-        (
-            "e_camgoal",
-            "Goal view",
-            goal + shot * Vec3::new(26.0, 7.0, -36.0),
-            goal + Vec3::new(0.0, 9.0, 0.0),
-            60.0,
-        ),
-        (
-            "e_camsliders",
-            "Slider view",
-            (c.sliders[0].origin + c.sliders[1].origin) * 0.5 + shot * Vec3::new(15.0, 9.0, -6.0),
-            (c.sliders[0].origin + c.sliders[1].origin) * 0.5,
-            60.0,
-        ),
-    ] {
-        s.entity(
-            id,
-            name,
-            json!({"Transform": {"position": round3(at)}, "Camera": {"fov": fov, "priority": 10}}),
-        );
+    // Review cameras: a higher priority number keeps the follow camera active.
+    for view in views(c) {
+        s.entity(view.id, view.name, json!({"Transform": {"position": round3(view.at)}, "Camera": {"fov": view.fov, "priority": 10}}));
         s.commands.push((
             "transform.lookAt",
-            json!({"entity": id, "point": round3(look)}),
+            json!({"entity": view.id, "point": round3(view.look)}),
         ));
     }
     s.entity(
@@ -586,6 +683,61 @@ fn menu(ctx: &Ctx, c: &Course) -> Result<()> {
     ctx.apply(MENU.0, "Glint: native menu backdrop", calls)
 }
 
+/// A clip's `@path#id` reference.
+fn clip(name: &str, id: &str) -> String {
+    format!("@audio/{name}.wav#{id}")
+}
+
+/// Synthesises the sounds and authors their import settings, the mixer and the score: a pad
+/// that always plays and a pulse that comes in as the run's intensity rises.
+fn audio(ctx: &Ctx) -> Result<()> {
+    sounds::write(&ctx.path("audio"))?;
+    for (name, id) in sounds::CLIPS {
+        ctx.sidecar(
+            &format!("audio/{name}.wav"),
+            id,
+            json!({"usage": "shortEffect", "codec": "pcm"}),
+        )?;
+    }
+    for (name, id) in sounds::STEMS {
+        ctx.sidecar(&format!("audio/{name}.wav"), id, json!({"usage": "music"}))?;
+    }
+    // `clean` does not retire mixers, so the document is created once and then updated.
+    if !ctx.path(MIXER.0).is_file() {
+        ctx.new_document(MIXER.0, "mixer", MIXER.1)?;
+    }
+    ctx.apply(
+        MIXER.0,
+        "Glint: master, music and effects buses",
+        ["master", "music", "sfx"]
+            .into_iter()
+            .map(|name| {
+                let output = if name == "master" { "" } else { "master" };
+                (
+                    "mixer.bus.set",
+                    json!({"id": format!("b_{name}"), "bus": {"name": name, "output": output}}),
+                )
+            })
+            .collect(),
+    )?;
+    ctx.new_document(MUSIC.0, "music", MUSIC.1)?;
+    let (bars, bpm) = sounds::LOOP;
+    ctx.apply(
+        MUSIC.0,
+        "Glint: a pad and a pulse that follows the run",
+        vec![
+            ("music.settings.set", json!({"settings": {"initial": "sky", "intensity": 0.1, "seed": 7}})),
+            (
+                "music.segment.set",
+                json!({"id": "sg_sky", "segment": {"name": "sky", "bars": bars, "tempo": [{"bpm": bpm}], "stems": [
+                    {"name": "pad", "clip": clip(sounds::STEMS[0].0, sounds::STEMS[0].1), "gainDb": -9, "looping": true},
+                    {"name": "pulse", "clip": clip(sounds::STEMS[1].0, sounds::STEMS[1].1), "gainDb": -11, "intensity": [0.3, 0.8], "looping": true},
+                ]}}),
+            ),
+        ],
+    )
+}
+
 /// The autopilot's plan as JSON (`replay/route.json`): the steps of a plain, perfect run.
 fn route(c: &Course) -> Value {
     let steps: Vec<Value> = c
@@ -606,18 +758,39 @@ fn route(c: &Course) -> Value {
     json!({"scene": SCENE.0, "start": round3(c.start), "goal": round3(c.goal), "orbs": c.pickups.len(), "steps": steps})
 }
 
-/// Builds the Glint project: icons, UI data, the autopilot's route, the game scene and the
-/// menu backdrop.
+/// Builds the Glint project: icons, UI data, sounds, the autopilot's route, the game scene and
+/// the menu backdrop.
 pub fn build(ctx: &Ctx) -> Result<()> {
-    clean(ctx, &["levels", "kit"])?;
+    clean(ctx, &["levels", "kit", "audio"])?;
     let c = course::build();
     icons::write(&ctx.path("ui/icons"))?;
-    ui::write(&ctx.path("ui"), c.pickups.len(), c.checkpoints.len())?;
+    ui::write(
+        &ctx.path("ui"),
+        c.pickups.len(),
+        c.checkpoints.len(),
+        MEDALS,
+    )?;
+    audio(ctx)?;
     let replay = ctx.root.join("replay");
     std::fs::create_dir_all(&replay)?;
     std::fs::write(
         replay.join("route.json"),
         serde_json::to_string_pretty(&route(&c))? + "\n",
+    )?;
+    let lights: Vec<Value> = lamps(&c)
+        .into_iter()
+        .map(|l| {
+            json!({"id": l.id, "name": l.name, "kind": "point", "position": round3(l.at), "color": l.color, "lumens": l.lumens, "sourceRadius": l.radius, "range": l.range})
+        })
+        .collect();
+    compare::write(
+        &ctx.root.join("compare"),
+        &views(&c),
+        &environment(),
+        &fog(deck_level(&c)),
+        &lights,
+        &json!({"routeChevrons": LIT_COURSE, "pylonBands": LIT_PYLONS, "ringsArchesCannonPlatforms": LIT_SET, "goal": LIT_GOAL,
+            "orbs": LIT_ORB, "islands": LIT_ISLE, "sunDisc": LIT_SUN}),
     )?;
     game(ctx, &c)?;
     menu(ctx, &c)?;

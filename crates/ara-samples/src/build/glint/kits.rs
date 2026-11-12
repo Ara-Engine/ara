@@ -47,6 +47,11 @@ fn cool(name: &str) -> Material {
     Material::emitter(name, [0.55, 0.8, 1.0])
 }
 
+/// The surface palette, for the comparison spec.
+pub fn palette() -> Vec<Material> {
+    vec![stone(), paint(), navy(), polish(), coral(), chrome()]
+}
+
 /// A box in a piece's local frame: `at` is an offset from the piece centre.
 fn local(kit: &mut Kit, material: usize, piece: &Piece, at: Vec3, half: Vec3, extra: Quat) {
     oriented(

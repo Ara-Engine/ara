@@ -1,100 +1,151 @@
 # Findings from building Glint
 
-Gaps hit while building a small rolling-ball game as a user of Ara (C# scripting, the `ara`
-CLI, `ara capture`, `ara_play` over MCP, the native game shell, Renderlab on the M5 Pro).
-What was tried, what happened, what was done instead. Severity: **P0** blocks the work,
-**P1** visibly wrong or slow, **P2** friction. House style: [`../FINDINGS.md`](../FINDINGS.md).
-No engine code was changed. Items marked *from reading* were not confirmed by running.
+What building a small game through Ara's own interfaces showed: the `ara` CLI, `ara do`
+through `ara-samples build`, `ara capture`, `ara_play` over `ara mcp` (start, step, read,
+capture, captureAudio, events), the C# module, the native UI and the `--game` shell, on the
+M5 Pro. Ranked by how much each cost. Each item says what was wanted, what happened, the
+workaround in this sample, and the smallest engine change that would remove it.
+Items marked *from reading* were not confirmed by running. Renderlab was not touched.
 
-## What worked
+## What worked well
 
-- The C# module (six files: components, two behaviours, `[Query]` systems, helpers) compiled
-  with no diagnostics on the first build, and a headless `ara_play` run steps it.
-- Entities carrying the module's components are accepted by `ara do` once it compiles
-  (`ara-samples build glint`, a couple of seconds).
-- Native UI bound to component fields did the whole HUD and results panel: timer (`clock`),
-  checkpoint and falls counters, a state label, and a panel shown by a bool.
-- `ara_play step` returns a state hash; with the recorded inputs it gives an identical finish
-  time and hash on every run (see README).
-- The shell's route (title, Roll, Loading, start page, Ready, Game) runs on Glint.
+- **The agent loop is real.** A headless world started over MCP, stepped tick by tick with
+  injected actions, read back by component path and captured to a PNG, was enough to write an
+  autopilot that finishes the course and records a frame-exact replay. No window was opened
+  at any point. `ara_play step` returning a state hash made "did my change alter gameplay" a
+  one-line check.
+- **C# iteration is fast.** The module (five behaviours, three query systems, ten
+  components) compiles in a couple of seconds inside `ara check`, and a behaviour fault comes
+  back as a diagnostic with a C# stack (`ARA0911`).
+- **Typed commands for authoring.** Every scene, sidecar, mixer and score is written by
+  `ara do` batches; `ara check` caught bad ids, bad ranges and unsupported CSS before a run.
+- **Audio has evidence.** `ara_play captureAudio` returns loudness, peaks, a spectrum and the
+  per-bus levels, which is how the roll loop and the score were balanced without speakers.
+- **Physical light units.** A scene lit by a 95,000 lux sun and emissive in cd/m2 behaved as
+  the numbers said it would.
 
-## P1
+## P0: cost the most
 
-1. **Scripts have no contact events, ray casts or impulses.** `Movement` has `Stop` and
-   nothing else for physics bodies. The ball is a dynamic sphere, so grounding is a test
-   against the course's own `Surface` components (same half extents as their colliders)
-   and steering writes `Velocity`. A course of anything but axis-aligned boxes would need
-   its geometry duplicated in script.
-2. **A platform moved by writing its transform does not carry a ball.** The sliding platform
-   is a kinematic body placed from the tick number, as the Outpost doors are. The ball
-   resting on it stayed where it was and the platform slid out from under it (found by the
-   autopilot falling at the platform's far edge). Worked around in script: the controller
-   adds the platform's analytic velocity while the ball rests on it
-   (`Course.MoverVelocity`). The engine's own kinematic-body velocity is not exposed either.
-3. **`ara capture` does not wait for model imports.** The first capture after a build drew
-   magenta placeholders (the whole course missing, a magenta cube where it should be); the
-   same command a minute later, with the cooks cached, was right. Atelier needed the same
-   second capture after a change to its kits.
-4. **Particles do not draw on the Mac.** The smoke, sparks and goal swirl are in the scene;
-   the player logs `ARA_RENDERLAB_UNSUPPORTED ... particle emitters: Renderlab's Metal
-   backend leaves it out of the frame` and none appear in any still. Kept as engine-side
-   extras. Known; listed here because the brief asked for particles at the goal.
-5. **Script time is not reported apart from the simulation.** Outside the editor's profiler
-   (`docs/dev/player-profiling.md`) the only numbers are `ara_play step` wall time and the
-   renderer's `External.*` passes; "simulation with scripts" is one figure (0.27 ms a tick idle,
-   0.48 rolling) and cannot be split into physics, the native sync and C#.
+1. **A behaviour that reads a physics component on the first tick is disabled for good.**
+   *Wanted:* the camera and effects scripts to read the ball's `Velocity`. *Happened:*
+   `Velocity` and `PhysicsPose` appear on a body only after the first physics tick; the read
+   threw `MissingComponentException`, the engine disabled both behaviours "until the next
+   reload", and the only sign was one `ARA0911` event among the published type tables, so the
+   camera simply never moved. *Workaround:* `World.Has<Velocity>` guards. *Smallest change:*
+   add the physics components when the body is authored (zeroed), or retry a faulted behaviour
+   next tick for this exception, and print behaviour faults in `ara_play step`'s result.
+2. **Scripts have no contact events, ray casts or sweeps.** *Wanted:* "is the ball on
+   something, and what is its normal". *Happened:* nothing to ask. *Workaround:* every
+   walkable box carries a `Surface` component with the same half extents as its collider and
+   the ball tests itself against them each tick (`Course.Resting`); the course is limited to
+   boxes. *Smallest change:* `Physics.Raycast(origin, direction, distance)`
+   returning entity, point and normal, and a per-tick contact list on a body.
+3. **A kinematic platform does not carry what rests on it.** *Wanted:* a moving platform.
+   *Happened:* a body moved by writing its transform slides out from under the ball.
+   *Workaround:* the controller adds the platform's analytic velocity while the ball rests on
+   it (`Course.MoverVelocity`). *Smallest change:* give kinematic bodies a velocity (derive it
+   from the transform change each tick) so friction carries riders.
+4. **Free flight is damped and a scene cannot say otherwise.** *Wanted:* a cannon shot that
+   lands where the ballistic solution says. *Happened:* the ball lost about 5 percent of its
+   horizontal speed a second and landed 10 m short of a 97 m shot; `RigidBody` has no damping
+   field. *Workaround:* the cannon sets the velocity from the time since firing each tick.
+   *Smallest change:* `RigidBody.linearDamping` and `angularDamping`, defaulting to what the
+   physics engine uses now.
+5. **`castShadows: false` did not stop a mesh shading the scene on the traced path.**
+   *Wanted:* a sun disc (the sky draws none): a lit sphere far along the sun's direction.
+   *Happened:* the 52 m sphere put a 300 m long ellipse of the course in shadow, with
+   `castShadows` off. *Workaround:* the disc sits 2.6 degrees high so its shadow passes over
+   the course. *Smallest change:* honour the flag in the traced sun visibility, and give
+   `Environment` a sun disc. (Seen on a binary older than today's pins; to be checked on head.)
+6. **`ara capture` cannot show a UI screen, and nothing can click through the shell.**
+   *Wanted:* stills of the title and the start page. *Happened:* a capture always draws the
+   in-game HUD (on the menu scene it draws the results panel over the backdrop). *Workaround:*
+   none: there is no title still in `preview/`. *Smallest change:* `ara capture --screen
+   <main-menu|lobby|pause|hud>`.
 
-## P2
+## P1: visibly wrong, or slow to work around
 
-6. **The `--game` shell is Outpost-shaped.** It needs a `levels/menu.scene` with two points
-   named `e_gamemenueye` and `e_gamemenutarget` (the fly-over camera) and fails with
-   `authored native menu scene is missing` otherwise; the Loading screen's label and the
-   window title are hard-coded to Outpost (`Ara | Outpost — Dusk shift`,
-   `Outpost: Preparing assets: 3 / 6` on Glint's loading page); every solo game passes
-   through a co-op Lobby page that needs a Ready click (Glint restyles it as the
-   course's start page); and the actions are fixed (`solo`, `host`, `join`, `ready`,
-   `resume`, `leave`, `settings`, `quit` on the UI side; `Move`, `Look`, `Jump`, `Sprint`,
-   `Interact`, `Inventory` as input, so restart is E). The hidden `--bot --bot-solo` route
-   drives the menus on any project, then plays Outpost's mission, which is how the route
-   above was checked; there is no supported way to click through the menus or screenshot
-   the title screen (the stills use `screencapture -l` on the player's window).
-7. **`ara_play read` takes `paths` (a list), not `path`.** Rejected with `ARA1101`, with a
-   good fix hint.
-8. **`ara init` leaves an empty `content/scenes/main.scene`** that `project.setMain` then
-   makes redundant (also in Atelier).
-9. **Entity IDs must be `prefix_base32`** (`e_cam_a` is rejected, `e_camA` accepted); the
-    rule is only in the error.
-10. **`HeightFog.falloff` is limited to [1, 10000] with no stated unit**, and the density
-    scale is not documented: density 0.004 turned the whole yard into orange haze, 0.0012 was
-    still too thick, 0.0003 (falloff 30) is the subtle dusk haze used.
-11. **Textured materials work, but `Material::textured` needs its sets fetched first.**
-    `ara-samples fetch` does nothing until the project directory exists (`ara init` first),
-    and a binary built in another worktree fetches into that worktree (`--samples`).
-12. **The goal fired while the ball was still in the air** over the goal island (my script:
-    a position test only). Fixed by requiring a grounded ball, which moved the recorded
-    finish from 1929 to 1947 ticks. A useful accident: the replay caught the change.
-13. **No albedo or other debug views on Renderlab.** `ara capture --view albedo` fails with
-    `ARA_VIEW_MODE_UNAVAILABLE ... the renderlab-rt renderer draws the lit image only`, so a
-    surface that renders brighter or darker than its material (the first dusk's orange wash
-    over a 0.035-albedo yard) cannot be split into light and material; the fix was to change
-    the light and look.
-14. **`FollowCamera` framing is undocumented in effect.** `distance`, `height` and `pitch`
-    interact so that the ball sat 75 to 90 percent of the way down the frame for the first
-    three settings tried; (distance 5.5, height 1.4, pitch 20) puts it at about 65 percent.
-    Found by capturing each setting; the schema docs do not say where the ball lands.
-15. **Colour alpha does not blend on Renderlab, on primitives or on a glass kit.** A `MeshRenderer`
-    box or sphere with `color` alpha 0.3 drew opaque black, and so did a glTF disc with a
-    `Material::glass` (alpha blend, opacity 0.09 to 0.24; the same kind of material is fine in
-    Atelier's window glass, where something is seen through it). The ball's contact shadow is
-    therefore two opaque discs, a pale penumbra under a dark core, moved by a script.
-16. **Textured metal sheet mirrors the sky.** A shed clad in `metal_plate` (the ARM map makes it
-    fully metallic) reflected the pink horizon as one flat peach wall. Flat non-metal paint
-    fixed it; the surprise is that the `Material::textured` factors stay at metallic 1.
-17. **The look costs render time.** The grey box rendered at 33.8 ms GPU (720p, M5, loaded); the
-    dressed dusk yard is 65 ms at the start view, 77 ms mid-course and 88 ms at the goal, with
-    the same simulation cost. About twenty local lights with shadows, a yard of a few thousand
-    triangles, GI and a few hundred draws; `External.Pass.Shading` is 55 to 70 ms of it.
-18. **The project cook cache is large on a small disk.** `samples/glint/.ara/cache/intermediates`
-    holds about 0.9 GB after a few dozen kit rebuilds (Atelier 0.4 GB) and is rewritten when the
-    cache is cleared, which matters on a machine held to a 30 GB free-space floor. The cache is
-    safe to delete and cooks again on the next capture.
+7. **The UI cannot edge or animate text.** No `text-shadow`, stroke, opacity, gradient,
+   transform or transition. *Wanted:* HUD text that reads over both white cloud and deep blue
+   sky, a title with a logo treatment, panels that fade. *Workaround:* each HUD text is two
+   `text` nodes with the same binding, a white twin one or two pixels down and right of the
+   navy one (generated, `ui.rs`); the fall fade is three stacked panels switched by bools; the
+   title does not animate. *Smallest change:* `text-shadow: x y colour` (no blur needed).
+8. **No number format in bindings.** *Wanted:* `0:07.52`. *Happened:* `{value}` prints an
+   integer; `clock` is `m:ss` only. *Workaround:* the director writes minutes, seconds and
+   hundredths as separate fields and the bindings carry `labels` maps for 0..59 and 0..99
+   (five such clocks: 15 fields, 15 bindings). *Smallest change:* a `format` on a binding
+   (`{value:02}`), or a `clock` that takes ticks and a pattern.
+9. **CSS subset surprises.** `font-family` on the root does not reach `text` (only a rule on
+   `text` applied the font); a hidden element still takes its place in the layout (three medal
+   images pushed the results off screen until stacked absolutely); no grouped, descendant or
+   compound selectors; no negative offsets; every element needs an id. Each was found by a
+   failed `ara check` or a wrong picture. *Smallest change:* list the supported subset in
+   `ara docs` and make a hidden element leave the flow (or add `display: none`).
+10. **Feedback sounds are heard at the entity that carries the counter, and cannot be
+    verified headless.** A `sounds` route attenuates by the distance from the listener to that
+    entity, so a counter on the run director (which has no place) is silent; the fall and
+    finish counters live on the camera (`RunFeedback`) for that reason. `captureAudio` renders
+    the scene's `AudioSource`s and the score but not these one-shots, so they are untested by
+    ear or by evidence. *Smallest change:* a `spatial: false` on a route, and feedback
+    one-shots in `captureAudio`.
+11. **`ara capture` does not wait for model imports.** The first capture after a build draws
+    magenta placeholders. *Workaround:* a throwaway capture first. *Smallest change:* wait for
+    the scene's pending imports (or fail with a code that says so).
+12. **The importer fails on a large flat mesh.** A 500 m slab failed with `patch charts:
+    FragmentLimit` (250 m imported). *Workaround:* small kits scaled by the entity.
+    *Smallest change:* a diagnostic that names the limit and the mesh, and a way to skip chart
+    generation for a mesh that needs none.
+13. **Emissive transmission glass does not assemble.** A glass material with an emissive
+    factor failed with `ARA7300: a transparent material's program with Parameters is not
+    assembled`. Not needed in the end.
+14. **Strongly flattened spheres draw dark triangles.** High clouds scaled to a third of
+    their height showed black facets where spheres meet; at 0.7 they are clean. Not chased.
+15. **Particles do not draw on the Mac** (`ARA_RENDERLAB_UNSUPPORTED particle emitters`), so
+    the spark trail exists in the scene and in no still. Known.
+16. **No debug views on Renderlab** (`ARA_VIEW_MODE_UNAVAILABLE`), and no way to ask what
+    occludes a point: the sun-disc shadow (item 5) was found by arithmetic on the scene file. *Smallest change:* `ara why <entity> in shadow`, listing the occluders of a
+    point toward a light.
+
+## P2: friction
+
+17. **The `--game` shell is Outpost-shaped.** It needs `levels/menu.scene` with two points
+    named `e_gamemenueye` and `e_gamemenutarget`; the loading label and window title say
+    Outpost; a solo game passes through a co-op lobby page that needs a Ready click (restyled
+    here as the course page); the UI actions and the input actions are fixed lists (restart is
+    `Interact`). *Smallest change:* read the title and the menu scene from the project, and
+    let a project skip the lobby.
+18. **The menu click must be an Ogg file** (`MediaDecoder::open(.., "ogg")`); a synthesised WAV
+    cannot be used and the tooling has no encoder, so Glint's menus are silent.
+19. **`clean` in the sample builder does not know mixers**, so a second build failed with
+    `ARA1602` until the mixer was created once and updated after.
+20. **Gravity is not readable from a script** (*from reading*: nothing named gravity in
+    `Ara.Runtime`), so the cannon's arc repeats 9.81 in the build and in C#.
+21. **`FollowCamera` has no "follow the route" mode.** A script turns its yaw toward a
+    polyline of waypoint entities (`CourseCamera`); spline or path components would do this.
+22. **Small ones:** `ara_play read` takes `paths`, `status` takes no world, `events` takes no
+    limit (each rejected with a good message); entity ids must be `prefix_base32`;
+    `HeightFog.falloff` has no stated unit in its range error; the capture JSON's pass list
+    needs a script to read.
+
+## Where the engine was bypassed
+
+- **Geometry** is written as glTF by the sample builder's `Kit` (boxes, cylinders, spheres),
+  not modelled in Ara: there is no mesh authoring command.
+- **Sounds** are synthesised to WAV by the builder: there is no procedural audio asset
+  (`ara-audio` has `SignalSource`, but nothing authors one).
+- **Icons** are rasterised by the builder from distance fields: the UI draws no shapes.
+- **The UI markup** is generated text written to disk, not `ara do` commands.
+- **The autopilot** is a Python script speaking MCP over stdio: `ara` has no command that runs
+  a plan of timed inputs and writes a replay (`ara-samples glint-replay` is this sample's own).
+- **The title screen** was never seen (item 6).
+
+## Renderer notes for the threads using this level
+
+- Cost by view and what moved it are in the README: the cloud deck and far world put geometry
+  under nearly every pixel, and the indirect cache went from about nothing to about 18 ms.
+- Glossy surface on screen: the start view about 15 percent (the pad's polished disc and the
+  ball), the straights 5 to 8 percent (the 1.1 m inlay and the ball), the goal about 20 percent
+  (its mirror floor). Estimated from the stills, not measured.
+- The plain alpha film (the ball's old contact shadow) is gone; nothing in the level uses
+  `BLEND` now. The rails are transmission glass.

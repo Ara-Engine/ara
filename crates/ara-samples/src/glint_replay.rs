@@ -131,7 +131,9 @@ pub fn run(request: &Request<'_>) -> Result<()> {
         return Ok(());
     }
     match replay.expect {
-        Some(expect) if expect == got => println!("replay matches: identical finish time and state hash"),
+        Some(expect) if expect == got => {
+            println!("replay matches: identical finish time and state hash")
+        }
         Some(expect) => bail!("replay diverged: expected {expect:?}, got {got:?}"),
         None => bail!("the replay has no `expect`; run once with --record"),
     }

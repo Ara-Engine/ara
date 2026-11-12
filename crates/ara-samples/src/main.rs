@@ -303,6 +303,7 @@ fn main() -> Result<()> {
                 "outpost" => build::outpost::generate(&root, &lock)?,
                 "showcase" => build::showcase::generate(&root, &lock)?,
                 "atelier" => build::atelier::generate(&root, &lock)?,
+                "glint" => build::glint::generate(&root, &lock)?,
                 _ => {
                     println!("{project} has no generated kits");
                     return Ok(());

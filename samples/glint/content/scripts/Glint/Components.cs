@@ -142,3 +142,16 @@ public partial struct Ball
     /// <summary>Fastest downward speed since the ball left a surface, for the landing thud.</summary>
     public float FallSpeed;
 }
+
+/// <summary>
+/// The run's one-shot counters, carried by the camera: presentation plays a counter's sound at
+/// the entity that holds it, and the director has no place in the world.
+/// </summary>
+[Component]
+public partial struct RunFeedback
+{
+    /// <summary>Tick of the last fall.</summary>
+    [Replicate] public ulong FallTick;
+    /// <summary>Tick the run finished.</summary>
+    [Replicate] public ulong FinishTick;
+}

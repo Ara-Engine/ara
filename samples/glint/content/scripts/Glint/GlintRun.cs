@@ -91,6 +91,16 @@ public sealed partial class GlintRun : Behaviour
     [Property, Replicate] public partial bool HasBest { get; set; }
     /// <summary>Where the ball starts and restarts.</summary>
     [Property] public partial Vector3 Start { get; set; }
+    /// <summary>How hard the run is going, 0 to 1: the music follows it.</summary>
+    [Property, Replicate] public partial float Intensity { get; set; }
+    /// <summary>The best medal still in reach at the current time: 3 gold .. 0 none.</summary>
+    [Property, Replicate] public partial int Target { get; set; }
+    /// <summary>Whether the clock and counters show (not over the results).</summary>
+    [Property, Replicate] public partial bool ShowHud { get; set; }
+    /// <summary>Whether the key prompts show: before the first input, and after a long idle.</summary>
+    [Property, Replicate] public partial bool ShowKeys { get; set; }
+    /// <summary>Ticks since the last input.</summary>
+    [Property] public partial int IdleTicks { get; set; }
 
     static void Parts(int ticks, out int minutes, out int seconds, out int hundredths)
     {
@@ -113,9 +123,12 @@ public sealed partial class GlintRun : Behaviour
         // Fall: the controller already put the ball back; this fades the screen and counts.
         if (control.Falls != Falls)
         {
-            if (control.Falls > Falls) { FadeTicks = 40; FallTick = tick.Frame; }
+            if (control.Falls > Falls) { FadeTicks = 40; FallTick = tick.Frame; Feedback().FallTick = tick.Frame; }
             Falls = control.Falls;
         }
+        // The music's intensity eases toward the ball's pace while the clock runs.
+        var pace = State == 1 ? 0.3f + 0.7f * Math.Clamp(control.Speed / 9f, 0f, 1f) : State == 2 ? 0.25f : 0.1f;
+        Intensity += (pace - Intensity) * 0.03f;
         if (FadeTicks > 0) FadeTicks--;
         FadeFull = FadeTicks > 26;
         FadeHalf = FadeTicks is > 13 and <= 26;
@@ -124,12 +137,17 @@ public sealed partial class GlintRun : Behaviour
 
         IsReady = State == 0;
         HasBest = BestTicks > 0;
+        var active = Input.Axis2(player, "Move") != Vector2.Zero || Input.Button(player, "Jump");
+        IdleTicks = active ? 0 : IdleTicks + 1;
+        ShowHud = State != 2;
+        ShowKeys = State == 0 || (State == 1 && IdleTicks > 420);
+        Target = Ticks <= GoldTicks ? 3 : Ticks <= SilverTicks ? 2 : Ticks <= BronzeTicks ? 1 : 0;
         var interact = Input.Button(player, "Interact");
         var pressed = interact && !control.RestartHeld;
         control.RestartHeld = interact;
         if (State == 0)
         {
-            if (Input.Axis2(player, "Move") != Vector2.Zero || Input.Button(player, "Jump")) State = 1;
+            if (active) State = 1;
             else { Digits(); return; }
         }
         if (State == 2)
@@ -188,6 +206,7 @@ public sealed partial class GlintRun : Behaviour
                 State = 2;
                 Finished = true;
                 FinishTick = tick.Frame;
+                Feedback().FinishTick = tick.Frame;
                 BestTicks = BestTicks == 0 ? Ticks : Math.Min(BestTicks, Ticks);
                 Medal = Ticks <= GoldTicks ? 3 : Ticks <= SilverTicks ? 2 : Ticks <= BronzeTicks ? 1 : 0;
                 IsGold = Medal == 3;
@@ -197,6 +216,9 @@ public sealed partial class GlintRun : Behaviour
         }
         Digits();
     }
+
+    /// <summary>The camera's feedback counters (heard where the listener is).</summary>
+    static ref RunFeedback Feedback() => ref World.Get<RunFeedback>(World.Find("Camera"));
 
     void Digits()
     {

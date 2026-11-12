@@ -7,9 +7,9 @@ namespace Glint;
 public sealed partial class BallFx : Behaviour
 {
     /// <summary>Speed in m/s where sparks begin.</summary>
-    [Property, Default(8f)] public partial float SparkStart { get; set; }
+    [Property, Default(5f)] public partial float SparkStart { get; set; }
     /// <summary>Speed in m/s where sparks and the roll sound are at full strength.</summary>
-    [Property, Default(18f)] public partial float SparkFull { get; set; }
+    [Property, Default(9.5f)] public partial float SparkFull { get; set; }
 
     /// <inheritdoc/>
     protected override void OnTick(in Tick tick)
@@ -30,8 +30,8 @@ public sealed partial class BallFx : Behaviour
         {
             var k = control.Grounded ? Math.Clamp(control.Speed / SparkFull, 0f, 1f) : 0f;
             ref var audio = ref Get<AudioSource>();
-            audio.Gain = 0.9f * k;
-            audio.Pitch = 0.7f + 0.9f * k;
+            audio.Gain = 0.4f * k;
+            audio.Pitch = 0.6f + 0.6f * k;
         }
     }
 }
