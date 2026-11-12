@@ -84,13 +84,12 @@ fn target(args: &[OsString]) -> Result<(&'static str, &'static str, &'static str
         Some("editor" | "ara-editor") => {
             Ok(("ara-editor-hotpatch", "ara-editor-hotpatch", "hotpatch"))
         }
-        Some("render-probe") => Ok(("ara-hotpatch-probe", "ara-hotpatch-probe", "hotpatch")),
         Some("sim-probe") => Ok((
             "ara-hotpatch-sim-probe",
             "ara-hotpatch-sim-probe",
             "hotpatch",
         )),
-        _ => bail!("use ara-dev hotpatch -- player|editor [native arguments]"),
+        _ => bail!("use ara-dev hotpatch -- player|editor|sim-probe [native arguments]"),
     }
 }
 
@@ -103,7 +102,7 @@ pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
         Some("lab") => {
             ensure!(
                 options.cranelift_crate.is_none(),
-                "ARA7600: lab uses stable LLVM; --cranelift-crate targets player/editor/probes"
+                "ARA7600: lab uses stable LLVM; --cranelift-crate targets player/editor"
             );
             ensure!(
                 options.args.len() == 1,

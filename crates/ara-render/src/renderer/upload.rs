@@ -50,7 +50,7 @@ pub(super) struct Content {
 
 impl Renderer {
     pub(super) fn upload_scene(
-        mut gpu: GpuDevice,
+        mut gpu: super::GpuHold,
         pipelines: Pipelines,
         targets: Targets,
         scene: Scene,
