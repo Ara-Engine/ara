@@ -329,11 +329,12 @@ impl Bridge {
                 nonrt.then_some(known),
                 &mut self.gaps,
             )?;
-            let (foliage, foliage_key) = self.terrain.foliage();
+            let (foliage, lods, foliage_key) = self.terrain.foliage();
             self.scene.sync(
                 &mut self.engine,
                 frame,
                 foliage,
+                lods,
                 foliage_key,
                 tiles,
                 &mut self.gaps,

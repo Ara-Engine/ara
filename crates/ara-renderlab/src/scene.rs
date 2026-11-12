@@ -384,7 +384,11 @@ fn see_through(draw: &Draw, coverage: &mut Coverage) -> bool {
     }
 }
 
-fn geometry_key(draw: &Draw, coverage: &mut Coverage) -> u64 {
+/// A foliage level of detail that draws nothing: the instance projects under `min_pixels`.
+pub(crate) const CULLED: u8 = u8::MAX;
+
+/// The mesh a draw at cooked level of detail `lod` (0: the finest) uploads, keyed by content.
+fn geometry_key(draw: &Draw, lod: u8, coverage: &mut Coverage) -> u64 {
     let hash = match &draw.geometry {
         Geometry::Shape { shape, size } => size.iter().fold(fnv(FNV, &[*shape as u8]), |h, v| {
             fnv(h, &v.to_bits().to_le_bytes())
@@ -394,7 +398,7 @@ fn geometry_key(draw: &Draw, coverage: &mut Coverage) -> u64 {
             &(*primitive as u64).to_le_bytes(),
         ),
     };
-    let hash = fnv(hash, &[u8::from(normal_mapped(draw))]);
+    let hash = fnv(hash, &[u8::from(normal_mapped(draw)), lod]);
     // Cut geometry belongs to its mask as much as to its triangles: the material key
     // names the mask's texture, opacity and cutoff.
     match cut(draw, coverage) {
@@ -542,8 +546,10 @@ fn influence(v: &ModelVertex, joints: usize) -> Influence {
 /// The draw's model-space vertices and indices.
 type Triangles<'a> = (Cow<'a, [ModelVertex]>, Cow<'a, [u32]>);
 
-/// The draw's model-space vertices and indices.
-fn triangles(draw: &Draw) -> Result<Triangles<'_>> {
+/// The draw's model-space vertices and indices, at cooked level of detail `lod` (0: the
+/// finest; `n`: `Primitive::lods[n - 1]`, sharing the vertices; a level the model lacks
+/// draws the finest).
+fn triangles(draw: &Draw, lod: u8) -> Result<Triangles<'_>> {
     Ok(match &draw.geometry {
         Geometry::Shape { shape, size } => {
             let source = ara_runtime_render::geometry::shape(*shape, *size);
@@ -554,7 +560,11 @@ fn triangles(draw: &Draw) -> Result<Triangles<'_>> {
                 .primitives
                 .get(*primitive)
                 .context("primitive out of range")?;
-            (p.vertices.as_slice().into(), p.indices.as_slice().into())
+            let indices = match usize::from(lod).checked_sub(1).and_then(|n| p.lods.get(n)) {
+                Some(level) => &level.indices,
+                None => &p.indices,
+            };
+            (p.vertices.as_slice().into(), indices.as_slice().into())
         }
     })
 }
@@ -570,14 +580,15 @@ impl Scene {
 
     /// Makes Renderlab's objects equal `frame.draws` followed by `static_draws`
     /// (draws the bridge derives itself, such as foliage). `static_key` names the
-    /// content of `static_draws`: while it is unchanged, draws already placed are not
-    /// looked at again. `reserved` mesh-material groups are in use elsewhere (terrain
+    /// content of `static_draws` and `static_lods` (each draw's cooked level of detail, or
+    /// `CULLED`): while it is unchanged, draws already placed are not looked at again. `reserved` mesh-material groups are in use elsewhere (terrain
     /// tiles) and come off this frame's budget.
     pub fn sync(
         &mut self,
         engine: &mut Engine,
         frame: &RenderFrame,
         static_draws: &[Draw],
+        static_lods: &[u8],
         static_key: u64,
         reserved: usize,
         gaps: &mut Gaps,
@@ -593,14 +604,20 @@ impl Scene {
         let draws = frame
             .draws
             .iter()
-            .map(|draw| (draw, false))
-            .chain(static_draws.iter().map(|draw| (draw, true)))
-            .filter(|(draw, _)| {
+            .map(|draw| (draw, false, 0))
+            .chain(
+                static_draws
+                    .iter()
+                    .zip(static_lods.iter().copied().chain(std::iter::repeat(0)))
+                    .map(|(draw, lod)| (draw, true, lod)),
+            )
+            .filter(|(_, _, lod)| *lod != CULLED)
+            .filter(|(draw, _, _)| {
                 let drawable = drawable(&draw.world);
                 singular += usize::from(!drawable);
                 drawable
             });
-        for (draw, fixed) in draws {
+        for (draw, fixed, lod) in draws {
             let placed = self
                 .objects
                 .get(&draw.entity)
@@ -609,7 +626,7 @@ impl Scene {
             let (mesh, material) = placed.unwrap_or_else(|| {
                 let mesh = match draw.skin {
                     Some(_) => MeshKey::Skinned(draw.entity),
-                    None => MeshKey::Static(geometry_key(draw, &mut self.coverage)),
+                    None => MeshKey::Static(geometry_key(draw, lod, &mut self.coverage)),
                 };
                 (mesh, material_key(draw, &mut self.coverage))
             });
@@ -625,21 +642,21 @@ impl Scene {
                 groups.len() - 1
             });
             groups[group].objects += 1;
-            keyed.push((draw, mesh, material, placed.is_some(), group));
+            keyed.push((draw, lod, mesh, material, placed.is_some(), group));
         }
         let fates = batch::plan(&groups, budget);
 
         let mut live = HashSet::with_capacity(keyed.len());
-        let mut merged: HashMap<u64, Vec<&Draw>> = HashMap::new();
+        let mut merged: HashMap<u64, Vec<(&Draw, u8)>> = HashMap::new();
         let mut dropped = 0usize;
-        for (draw, mesh, material, placed, group) in keyed {
+        for (draw, lod, mesh, material, placed, group) in keyed {
             match fates[group] {
                 Fate::Dropped => {
                     dropped += 1;
                     continue;
                 }
                 Fate::Merged => {
-                    merged.entry(material).or_default().push(draw);
+                    merged.entry(material).or_default().push((draw, lod));
                     continue;
                 }
                 Fate::Own => {}
@@ -654,7 +671,7 @@ impl Scene {
                     "the mesh keeps its own colours",
                 );
             }
-            self.place(engine, frame, draw, mesh, material, gaps)?;
+            self.place(engine, frame, draw, lod, mesh, material, gaps)?;
         }
         self.static_key = Some(static_key);
         if singular > 0 {
@@ -739,7 +756,7 @@ impl Scene {
     fn sync_batches(
         &mut self,
         engine: &mut Engine,
-        merged: HashMap<u64, Vec<&Draw>>,
+        merged: HashMap<u64, Vec<(&Draw, u8)>>,
         gaps: &mut Gaps,
     ) -> Result<()> {
         let gone: Vec<u64> = self
@@ -752,16 +769,20 @@ impl Scene {
             self.remove_batch(engine, material)?;
         }
         for (material, members) in merged {
-            let content = members
-                .iter()
-                .fold(fnv(FNV, &material.to_le_bytes()), |h, draw| {
-                    let h = fnv(h, &geometry_key(draw, &mut self.coverage).to_le_bytes());
-                    let h = fnv(h, &draw.entity.to_le_bytes());
-                    cleaned(&draw.world)
-                        .to_cols_array()
-                        .iter()
-                        .fold(h, |h, v| fnv(h, &v.to_bits().to_le_bytes()))
-                });
+            let content =
+                members
+                    .iter()
+                    .fold(fnv(FNV, &material.to_le_bytes()), |h, (draw, lod)| {
+                        let h = fnv(
+                            h,
+                            &geometry_key(draw, *lod, &mut self.coverage).to_le_bytes(),
+                        );
+                        let h = fnv(h, &draw.entity.to_le_bytes());
+                        cleaned(&draw.world)
+                            .to_cols_array()
+                            .iter()
+                            .fold(h, |h, v| fnv(h, &v.to_bits().to_le_bytes()))
+                    });
             if self
                 .batches
                 .get(&material)
@@ -770,12 +791,12 @@ impl Scene {
                 continue;
             }
             self.remove_batch(engine, material)?;
-            let first = members[0];
+            let first = members[0].0;
             let wanted = normal_mapped(first);
             let (mut vertices, mut indices) = (Vec::new(), Vec::new());
             let mut layout = Vec::with_capacity(members.len());
-            for draw in &members {
-                let (mut source, mut triangles) = triangles(draw)?;
+            for (draw, lod) in &members {
+                let (mut source, mut triangles) = triangles(draw, *lod)?;
                 if wanted {
                     split_handedness(source.to_mut(), triangles.to_mut());
                 }
@@ -829,6 +850,7 @@ impl Scene {
         engine: &mut Engine,
         frame: &RenderFrame,
         draw: &Draw,
+        lod: u8,
         mesh: MeshKey,
         material: u64,
         gaps: &mut Gaps,
@@ -843,7 +865,7 @@ impl Scene {
 
             let (mesh_id, skin, tangents) = match (mesh, joints) {
                 (MeshKey::Static(key), _) => {
-                    let (id, tangents) = self.mesh(engine, draw, key, gaps)?;
+                    let (id, tangents) = self.mesh(engine, draw, lod, key, gaps)?;
                     (id, None, tangents)
                 }
                 (MeshKey::Skinned(_), joints) => {
@@ -933,6 +955,7 @@ impl Scene {
         &mut self,
         engine: &mut Engine,
         draw: &Draw,
+        lod: u8,
         key: u64,
         gaps: &mut Gaps,
     ) -> Result<(MeshId, bool)> {
@@ -941,7 +964,7 @@ impl Scene {
             return Ok((shared.id, *tangents));
         }
         let wanted = normal_mapped(draw);
-        let (mut source, mut indices) = triangles(draw)?;
+        let (mut source, mut indices) = triangles(draw, lod)?;
         let label = format!("`{}`", draw.label);
         // A mask that hides nothing is no cut: the mesh uploads as it is, below.
         if let Some(c) = cut(draw, &mut self.coverage)
@@ -1445,7 +1468,7 @@ fn skinned_mesh(
             "those primitives draw opaque, without cutouts",
         );
     }
-    let (mut source, mut indices) = triangles(draw)?;
+    let (mut source, mut indices) = triangles(draw, 0)?;
     if normal_mapped(draw) {
         split_handedness(source.to_mut(), indices.to_mut());
     }
@@ -1589,6 +1612,26 @@ mod tests {
             receives_decals: true,
             paint: None,
         }
+    }
+
+    #[test]
+    fn a_coarser_level_draws_its_own_indices_and_keys_its_own_mesh() {
+        let mut model = Arc::into_inner(leaf_model(&[255])).expect("one owner");
+        model.primitives[0].indices = vec![0, 1, 2, 0, 2, 1];
+        model.primitives[0].lods = vec![ara_runtime::model::ModelLod {
+            indices: vec![0, 1, 2],
+            error: 0.01,
+        }];
+        let draw = leaf_draw(&Arc::new(model), 0);
+        let mut coverage = Coverage::default();
+        assert_eq!(triangles(&draw, 0).expect("finest").1.len(), 6);
+        assert_eq!(triangles(&draw, 1).expect("coarser").1.len(), 3);
+        // A level the model lacks draws the finest.
+        assert_eq!(triangles(&draw, 5).expect("lacking").1.len(), 6);
+        assert_ne!(
+            geometry_key(&draw, 0, &mut coverage),
+            geometry_key(&draw, 1, &mut coverage)
+        );
     }
 
     #[test]

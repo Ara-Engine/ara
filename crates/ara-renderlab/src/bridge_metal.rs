@@ -133,11 +133,12 @@ impl Bridge {
         let (tiles, _) =
             self.terrain
                 .sync(&mut self.engine, view, MAX_GROUPS / 2, None, &mut self.gaps)?;
-        let (foliage, foliage_key) = self.terrain.foliage();
+        let (foliage, lods, foliage_key) = self.terrain.foliage();
         self.scene.sync(
             &mut self.engine,
             frame,
             foliage,
+            lods,
             foliage_key,
             tiles,
             &mut self.gaps,

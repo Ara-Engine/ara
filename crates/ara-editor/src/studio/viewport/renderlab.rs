@@ -18,6 +18,10 @@ pub(super) type Revision = Option<(u64, u64, u64, u64)>;
 
 /// Distance in metres to which terrain layers use their detail maps: the High preset's.
 const TERRAIN_DETAIL: f32 = 150.;
+/// The High view-distance tier's level-of-detail error and instance cull, in pixels
+/// (`Quality::lod_pixels`, `Quality::min_pixels`).
+const LOD_PIXELS: f32 = 1.;
+const MIN_PIXELS: f32 = 1.5;
 
 /// A frame submitted and not yet taken: what the overlays and the ids need to agree with it.
 struct Flight {
@@ -116,6 +120,8 @@ impl RenderlabScene {
             debug_switches: false,
             foliage_percent: 100,
             terrain_detail: TERRAIN_DETAIL,
+            lod_pixels: LOD_PIXELS,
+            min_pixels: MIN_PIXELS,
         };
         // The ids belong to the frame as submitted, whatever the editor extracts meanwhile.
         let flight = Flight {
