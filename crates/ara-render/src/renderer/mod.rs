@@ -30,7 +30,8 @@ use crate::{
 };
 use anyhow::{Result, ensure};
 use ara_gpu::{
-    Access, Buffer, Device, GpuDevice, Image, Pipeline, Queue, Resource, vk, vulkan::PassTiming,
+    Access, Buffer, Device, GpuDevice, GpuLease, Image, Pipeline, Queue, Resource, vk,
+    vulkan::PassTiming,
 };
 pub use debug::{ReferenceTrace, ReflectionView, RenderDebug};
 pub use frame::temporal_phases;
@@ -120,11 +121,82 @@ pub struct HdrExposure {
     pub fallback: f32,
 }
 
+/// The device a renderer records on.
+///
+/// An owned hold boxes the device so its address stays put when the renderer
+/// moves. A leased hold shares the caller's [`GpuLease`]: the allocation does
+/// not move, and the device is destroyed only when the last lease drops.
+struct GpuHold {
+    owned: Option<Box<GpuDevice>>,
+    lease: Option<GpuLease>,
+    ptr: *mut GpuDevice,
+}
+
+impl GpuHold {
+    fn owned(gpu: GpuDevice) -> Self {
+        let mut owned = Box::new(gpu);
+        let ptr = owned.as_mut() as *mut GpuDevice;
+        Self {
+            owned: Some(owned),
+            lease: None,
+            ptr,
+        }
+    }
+
+    fn leased(lease: GpuLease) -> Self {
+        let ptr = lease.as_mut_ptr();
+        Self {
+            owned: None,
+            lease: Some(lease),
+            ptr,
+        }
+    }
+
+    fn device(&self) -> &GpuDevice {
+        // SAFETY: `ptr` addresses this hold's box or its lease, for this hold's life.
+        unsafe { &*self.ptr }
+    }
+
+    fn device_mut(&mut self) -> &mut GpuDevice {
+        // SAFETY: `ptr` addresses this hold's box or its lease, for this hold's life.
+        // One thread records, so this is the only live mutable use.
+        unsafe { &mut *self.ptr }
+    }
+}
+
+impl Drop for GpuHold {
+    fn drop(&mut self) {
+        // The owned box is the device. A lease drops here too: the device
+        // itself is destroyed only when this was the last lease.
+        drop(self.owned.take());
+        drop(self.lease.take());
+    }
+}
+
+impl std::ops::Deref for GpuHold {
+    type Target = GpuDevice;
+    fn deref(&self) -> &GpuDevice {
+        self.device()
+    }
+}
+
+impl std::ops::DerefMut for GpuHold {
+    fn deref_mut(&mut self) -> &mut GpuDevice {
+        self.device_mut()
+    }
+}
+
+// SAFETY: the pointer addresses this hold's own box, or the heap allocation its
+// `GpuLease` keeps alive. `GpuDevice` itself is `Send`, and a lease moves with
+// the renderer. One thread records.
+unsafe impl Send for GpuHold {}
+
 /// Vulkan renderer with persistent extracted scene resources and per-view histories.
 /// Calls are serialized for v0 diagnostics; logical queue transfers remain explicit.
 pub struct Renderer {
-    /// GPU ownership and native window integration surface.
-    gpu: GpuDevice,
+    /// Device this renderer records on. Owned, or a lease shared with the caller
+    /// (`on_device`).
+    gpu: GpuHold,
     /// Display size: TAA history, output and captures.
     size: [u32; 2],
     /// Render size of the scene passes (G-buffer, depth, HDR, IDs, motion); smaller
@@ -350,7 +422,20 @@ impl Renderer {
     }
     /// Prepare targets and pipelines on an existing exclusive GPU owner. Native
     /// window integrations can retain their swapchain while this runs on a worker.
-    pub fn with_device(scene: Scene, size: [u32; 2], mut gpu: GpuDevice) -> Result<Self> {
+    pub fn with_device(scene: Scene, size: [u32; 2], gpu: GpuDevice) -> Result<Self> {
+        Self::open_on(GpuHold::owned(gpu), scene, size)
+    }
+
+    /// Build this renderer on a device the caller also holds.
+    ///
+    /// The renderer keeps this lease. Moving the caller's lease does not move
+    /// the device, and dropping the caller's lease does not destroy it while
+    /// this renderer still holds one. One thread records.
+    pub fn on_device(scene: Scene, size: [u32; 2], device: GpuLease) -> Result<Self> {
+        Self::open_on(GpuHold::leased(device), scene, size)
+    }
+
+    fn open_on(mut gpu: GpuHold, scene: Scene, size: [u32; 2]) -> Result<Self> {
         ensure!(!size.contains(&0), "Render extent is zero");
         #[cfg(feature = "fidelity-lab")]
         crate::lab::declare(gpu.lab_params_mut())?;
@@ -365,30 +450,33 @@ impl Renderer {
             compiler: metadata.compiler,
             binding_layout_hash: metadata.binding_layout_hash,
         };
-        let mut load = |name: &str| -> Result<_> {
-            let cooked: ara_gpu::cooked::CookedPipeline =
-                serde_json::from_slice(&std::fs::read(artifacts.join(format!("{name}.json")))?)?;
-            ensure!(
-                cooked.key == shader_metadata.content_key,
-                "Baseline cook is incomplete; recook the pipeline manifest"
-            );
-            Ok(gpu.create_pipeline(&cooked, &artifacts)?)
-        };
-        let pipelines = Pipelines {
-            shadow: load("shadow")?,
-            gbuffer: load("gbuffer")?,
-            tile: load("tile")?,
-            lighting: load("lighting")?,
-            lighting_high: load("lighting_high")?,
-            lighting_gi: load("lighting_gi")?,
-            lighting_high_gi: load("lighting_high_gi")?,
-            lighting_refl: load("lighting_refl")?,
-            lighting_high_refl: load("lighting_high_refl")?,
-            forward: load("forward")?,
-            taa: load("taa")?,
-            tonemap: load("tonemap")?,
-            wire_composite: load("wire_composite")?,
-            outline_composite: load("outline_composite")?,
+        let pipelines = {
+            let mut load = |name: &str| -> Result<_> {
+                let cooked: ara_gpu::cooked::CookedPipeline = serde_json::from_slice(
+                    &std::fs::read(artifacts.join(format!("{name}.json")))?,
+                )?;
+                ensure!(
+                    cooked.key == shader_metadata.content_key,
+                    "Baseline cook is incomplete; recook the pipeline manifest"
+                );
+                Ok(gpu.create_pipeline(&cooked, &artifacts)?)
+            };
+            Pipelines {
+                shadow: load("shadow")?,
+                gbuffer: load("gbuffer")?,
+                tile: load("tile")?,
+                lighting: load("lighting")?,
+                lighting_high: load("lighting_high")?,
+                lighting_gi: load("lighting_gi")?,
+                lighting_high_gi: load("lighting_high_gi")?,
+                lighting_refl: load("lighting_refl")?,
+                lighting_high_refl: load("lighting_high_refl")?,
+                forward: load("forward")?,
+                taa: load("taa")?,
+                tonemap: load("tonemap")?,
+                wire_composite: load("wire_composite")?,
+                outline_composite: load("outline_composite")?,
+            }
         };
         let targets = Self::targets(&mut gpu, size, size)?;
         Self::upload_scene(

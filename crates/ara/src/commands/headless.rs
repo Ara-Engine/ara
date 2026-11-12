@@ -76,14 +76,6 @@ pub struct CaptureArgs {
     /// sky magenta).
     #[arg(long, value_parser = ["reflections", "sources"])]
     reflections: Option<String>,
-    /// Render the path-traced ground truth (unbiased, undenoised) with this many
-    /// samples per pixel, to judge the real-time lighting against. Needs a GPU with
-    /// hardware ray tracing; ignores the project's ray-tracing setting.
-    #[arg(long, num_args = 0..=1, default_missing_value = "1024")]
-    reference: Option<u32>,
-    /// Scattering events per reference path (with `--reference`).
-    #[arg(long, default_value_t = 8, requires = "reference")]
-    bounces: u32,
     /// Lock exposure at this EV100 (manual, no compensation) over every post-process
     /// volume, so captures from different renderers compare at the same brightness.
     /// Without it a scene with no post-process volume is metered automatically like one
@@ -119,7 +111,7 @@ impl CaptureArgs {
             "ticks":self.ticks,"seed":self.seed,"marks":self.marks,"stability":self.stability,
             "video":self.video,"videoMove":self.video_move,"videoYaw":self.video_yaw,
             "renderDebug":render_debug(&self.without, self.full_resolution, self.reflections.as_deref(),
-                self.reference.map(|samples| (samples, self.bounces)), self.ev100, self.view.as_deref())})),
+                self.ev100, self.view.as_deref())})),
             summary: protocol::pretty,
         }
     }
@@ -140,20 +132,18 @@ fn camel(value: &str) -> String {
 }
 
 /// `capture`'s `renderDebug` for `--without`, `--full-resolution`,
-/// `--reflections`, `--reference`, `--ev100` and `--view`; omitted when every
-/// effect stays at its default.
+/// `--reflections`, `--ev100` and `--view`; omitted when every effect stays at
+/// its default. The path-traced reference is gone; the image is the player's.
 fn render_debug(
     without: &[String],
     full_resolution: bool,
     reflections: Option<&str>,
-    reference: Option<(u32, u32)>,
     ev100: Option<f32>,
     view: Option<&str>,
 ) -> serde_json::Value {
     if without.is_empty()
         && !full_resolution
         && reflections.is_none()
-        && reference.is_none()
         && ev100.is_none()
         && view.is_none()
     {
@@ -172,7 +162,6 @@ fn render_debug(
         "screenGi": on("screen-gi"),
         "fullResolution": full_resolution,
         "reflections": reflections.unwrap_or("lit"),
-        "reference": reference.map(|(samples, bounces)| json!({"samples": samples, "bounces": bounces})),
         "exposure": ev100,
         // kebab-case flag values name the camelCase BufferView variants.
         "view": view.map_or_else(|| "lit".to_owned(), camel),
@@ -182,26 +171,16 @@ fn render_debug(
 #[cfg(test)]
 mod tests {
     use super::render_debug;
-    use serde_json::json;
 
     #[test]
     fn capture_debug_flags_map_to_render_debug() {
-        assert!(render_debug(&[], false, None, None, None, None).is_null());
-        let debug = render_debug(
-            &["shadows".into()],
-            false,
-            None,
-            Some((2048, 6)),
-            Some(-2.),
-            None,
-        );
+        assert!(render_debug(&[], false, None, None, None).is_null());
+        let debug = render_debug(&["shadows".into()], false, None, Some(-2.), None);
         assert_eq!(debug["shadows"], false);
         assert_eq!(debug["ambientOcclusion"], true);
         assert_eq!(debug["volumetricFog"], true);
-        assert_eq!(debug["reference"], json!({"samples": 2048, "bounces": 6}));
         assert_eq!(debug["exposure"], -2.);
-        let lock = render_debug(&[], false, None, None, Some(7.), Some("gi-diffuse"));
-        assert!(lock["reference"].is_null());
+        let lock = render_debug(&[], false, None, Some(7.), Some("gi-diffuse"));
         assert_eq!(lock["exposure"], 7.);
         assert_eq!(lock["view"], "giDiffuse");
         assert_eq!(debug["view"], "lit");

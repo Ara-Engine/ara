@@ -1,6 +1,6 @@
 [package]
 name = "ara-samples"
-description = "Sample projects with real CC0 art: pinned asset fetch, scene authoring through the ara CLI, fidelity captures and timings."
+description = "Sample projects with real CC0 art: pinned asset fetch, scene authoring through the ara CLI, and the player's Renderlab capture."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -15,23 +15,14 @@ ara-asset = { path = "../ara-asset" }
 ara-components.workspace = true
 ara-diag.workspace = true
 ara-doc.workspace = true
-ara-foliage = { path = "../ara-foliage" }
-ara-gpu = { path = "../ara-gpu" }
 ara-ops.workspace = true
 ara-proto.workspace = true
 ara-rpc.workspace = true
 ara-play = { path = "../ara-play" }
 ara-play-host = { path = "../ara-play-host" }
-ara-pathtrace = { path = "../ara-pathtrace" }
-ara-frame = { path = "../ara-frame" }
-ara-render = { path = "../ara-render" }
-ara-render-fidelity = { path = "../ara-render-fidelity" }
 ara-runtime = { path = "../ara-runtime" }
-ara-runtime-render = { path = "../ara-runtime-render" }
 ara-schema.workspace = true
 ara-terrain = { path = "../ara-terrain" }
-ara-vfx = { path = "../ara-vfx" }
-ara-vfx-gpu = { path = "../ara-vfx-gpu" }
 blake3 = { workspace = true, default-features = true }
 clap = { workspace = true, features = ["derive"] }
 glam.workspace = true

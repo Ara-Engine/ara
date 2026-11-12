@@ -69,7 +69,7 @@ Use CARGO_BUILD_JOBS=2. `cargo test -p ara-render-fidelity`,
 `cargo fmt -p ara-render-fidelity -- --check`.
 Cook offline with `cargo run -p ara-shader-cook --
 crates/ara-render-fidelity/shaders/pipelines.json crates/ara-render-fidelity/cooked`.
-GPU sequence/golden/performance gates live in ara-pathtrace.
+GPU sequence/golden/performance gates lived in ara-pathtrace, which is deleted.
 `cargo run --release -p ara-render-fidelity --example native_motion -- native`
 measures shared rigid motion; `native-skin` measures one changed skin, and no
 argument measures the legacy world-vertex update. JSON goes under target/.
@@ -106,8 +106,8 @@ Keep the first 28 target slots, FILTER0=12 and the frame's seven read/write rows
 stable for features/VFX. Reservoir guides and histories append private slots.
 Reference transport remains independent; never enable reservoirs in Reference mode.
 Frames currently serialize because the merged GPU API serializes diagnostics.
-After changing the sheen BRDF, run ara-pathtrace's `bake_sheen` example before
-cooking; its 16 KiB directional-albedo asset participates in the shader cohort.
+After changing the sheen BRDF, the 16 KiB directional-albedo asset still
+participates in the shader cohort. `ara-pathtrace`'s `bake_sheen` example is gone.
 Release resources using `destroy` before dropping the external device.
 See README for unsupported backend contracts and measured gates; do not claim
 unmeasured refit, NRD, FSR2, DLSS, or async overlap.
