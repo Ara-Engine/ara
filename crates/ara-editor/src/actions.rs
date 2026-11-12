@@ -2,7 +2,6 @@
 use crate::state::{EditorState, Navigation, Tool};
 use ara_diag::Diagnostic;
 use ara_host::{Cx, Method, Service, parse};
-use ara_render_fidelity::presets::QualityPreset;
 use ara_schema::{Schema, SchemaDb};
 use ara_ui::docking::{Axis, DockDrop, DockLayout, DockNode};
 use glam::Vec3;
@@ -660,20 +659,6 @@ impl EditorService {
                     self.settings
                         .set("appearance.reduceMotion", Some(json!(v)), author.clone())?;
                 }
-                if let Some(v) = p.quality {
-                    let low = |c| state.resolve_quality(c) == Some(QualityPreset::Low);
-                    let quality = match (v, low(state.project_quality())) {
-                        (false, _) => "low",
-                        (true, false) => "project",
-                        (true, true) => "auto",
-                    };
-                    self.settings
-                        .set("viewport.quality", Some(json!(quality)), author.clone())?;
-                }
-                if let Some(quality) = p.render_quality {
-                    self.settings
-                        .set("viewport.quality", Some(json!(quality)), author)?;
-                }
                 sync_settings(&mut state, &self.settings);
             }
             "editor.settings.set" => {
@@ -711,15 +696,6 @@ impl EditorService {
             }
             "editor.view" => {
                 let p: EditorView = parse(params)?;
-                if let Some(mode) = p.view_mode {
-                    if !crate::studio::viewport::VIEW_MODES
-                        .iter()
-                        .any(|(name, ..)| *name == mode)
-                    {
-                        return Err(vec![crate::invalid(format!("unknown view mode `{mode}`"))]);
-                    }
-                    state.view_mode = mode;
-                }
                 if let Some(v) = p.game_view {
                     state.game_view = v;
                 }

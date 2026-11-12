@@ -389,14 +389,10 @@ impl Editor {
             changed = true;
         }
         while let Ok(mut state) = self.updates.try_recv() {
-            // GPU detection belongs to this window, not to navigation history: keep
-            // it and re-derive `quality` from the incoming settings before comparing.
-            // Otherwise every update (each camera step of an orbit, each commit) looked
-            // like a panel change and rebuilt the whole shell.
+            // GPU detection belongs to this window, not to navigation history: keep it,
+            // or every update (each camera step of an orbit, each commit) looks like a
+            // panel change and rebuilds the whole shell.
             state.detected_quality = self.state.detected_quality;
-            // Rendering Debug switches are session-only (never in the navigation
-            // record), so every incoming state would otherwise turn them back on.
-            state.render_debug = self.state.render_debug;
             state.apply_settings();
             // The theme is not here: it only tints deletion ghosts (none since D24),
             // and re-extracting a large scene for it took seconds.
