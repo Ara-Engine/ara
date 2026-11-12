@@ -2141,7 +2141,7 @@
           {
             "exposure": "auto",
             "ev100": 10,
-            "compensation": -1.5,
+            "compensation": -1.0,
             "minEv100": -2,
             "maxEv100": 16,
             "adaptationSpeed": 2
