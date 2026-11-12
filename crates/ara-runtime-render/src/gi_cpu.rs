@@ -13,10 +13,13 @@
 //! with [`bounce_albedo`]; alpha-tested and blended surfaces let rays through by the
 //! [`Cutout`] texel each hit lands on.
 use anyhow::{Context, Result, ensure};
-use ara_frame::{instanced::{Geometry, Scene}, look::gi::{
+use ara_frame::{
+    instanced::{Geometry, Scene},
+    look::gi::{
         MOMENT_VECTORS, ProbeLattice, ProbeLayout, ProbeSurfaces, STATIC_VECTORS, SURFACE_TEXELS,
         moment_limit, pack_moments,
-    }};
+    },
+};
 use ara_render_fidelity::probes::ProbeVolume;
 use glam30::{Mat3, Mat4, Vec2, Vec3};
 use std::{

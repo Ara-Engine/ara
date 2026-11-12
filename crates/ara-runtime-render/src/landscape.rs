@@ -5,10 +5,13 @@
 //! drawn over the scene carries over onto terrain as its colour delta. Detail pages
 //! follow the resident `TerrainChunk`s (a coarse 8 m fallback covers the rest).
 use anyhow::{Context, Result, ensure};
+use ara_frame::{
+    capture::{Capture, CaptureRequest},
+    scene::CameraSpec,
+};
 use ara_gpu::{Access, Device, Queue, Resource, commands::Command, vk};
 use ara_landscape::{Landscape, View, sample::LandscapeData};
-use ara_frame::{capture::{Capture, CaptureRequest}, scene::CameraSpec};
-use ara_render::{Renderer};
+use ara_render::Renderer;
 use ara_runtime::{extract::RenderFrame, terrain::TerrainData};
 use ara_terrain::TileCoord;
 use image::RgbaImage;

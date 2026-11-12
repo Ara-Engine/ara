@@ -1,9 +1,12 @@
 use super::*;
 use crate::material::Source;
-use ara_frame::{instanced::NO_TEXTURE, scene::{
+use ara_frame::{
+    instanced::NO_TEXTURE,
+    scene::{
         BASE_COLOR_DECODE_SRGB, DOUBLE_SIDED, EMISSIVE_DECODE_SRGB, VERTEX_COLOR_TINT,
         VERTEX_PAINT_LAYERS,
-    }};
+    },
+};
 use ara_runtime::model::TextureTransform;
 use ara_texture_stream::{NativeSource, NativeView};
 
