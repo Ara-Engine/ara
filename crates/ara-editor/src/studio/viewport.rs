@@ -64,6 +64,8 @@ pub(crate) struct SceneView {
     scene_drawn: Option<scene_frame::Drawn>,
     /// Passes Renderlab still draws after the last change (`scene_frame`).
     scene_settle: u32,
+    /// The Renderlab image `published` was last copied from.
+    published_from: Option<ara_gpu::Image>,
     /// The Scene has drawn a frame the compositor can show.
     active: bool,
     revision: Option<(u64, u64, u64, u64)>,
@@ -142,7 +144,15 @@ impl SceneView {
     }
     /// Whether the next pass has work: a frame being extracted, or Renderlab still settling.
     pub fn needs_frame(&self) -> bool {
-        self.scene_settle > 0 || self.content_job.is_some() || self.content_ready.is_some()
+        self.scene_settle > 0
+            || self.content_job.is_some()
+            || self.content_ready.is_some()
+            || self.renderlab.as_ref().is_some_and(|r| r.in_flight())
+    }
+    /// The camera the Scene image on screen was drawn from. The overlays draw from it, so the
+    /// grid, gizmos and icons agree with the picture while a newer frame is still drawing.
+    pub(super) fn shown_camera(&self) -> Option<crate::state::Camera> {
+        self.renderlab.as_ref().and_then(|r| r.shown_camera())
     }
     /// Why Renderlab could not draw the Scene, once it failed: the Scene panel shows it.
     pub(super) fn renderlab_error(&self) -> Option<&str> {

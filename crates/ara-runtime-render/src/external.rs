@@ -91,6 +91,22 @@ pub trait ExternalRenderer: Send {
     fn settle_frames(&self) -> u32;
     /// Releases what it created on `gpu`, before that device is destroyed.
     fn release(&mut self, gpu: &mut GpuDevice) -> Result<()>;
+    /// Starts drawing `view` and returns without waiting for the GPU, for a host that must not
+    /// block on a frame: `Ok(true)` when it did (take the result with [`Self::finish`]; one frame
+    /// is in flight at a time, see [`Self::in_flight`]), `Ok(false)` when the renderer cannot
+    /// split a frame and the host calls [`Self::render`] instead.
+    fn begin(&mut self, _gpu: &mut GpuDevice, _view: &ExternalView<'_>) -> Result<bool> {
+        Ok(false)
+    }
+    /// Whether a frame was begun and not yet taken.
+    fn in_flight(&self) -> bool {
+        false
+    }
+    /// Takes the frame [`Self::begin`] started once the GPU has finished it; `None` while it is
+    /// still drawing. Never waits for the GPU.
+    fn finish(&mut self, _gpu: &mut GpuDevice) -> Result<Option<ExternalFrame>> {
+        Ok(None)
+    }
     /// The id of the frontmost surface (glass included) under `pixel` of the last frame, from
     /// the renderer's own id pass: what a click picks. `0` is nothing and `0xFFFF_FFFF` a surface
     /// without an id. `None`: it has no ids, or could not answer in time, and the host reads

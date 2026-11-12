@@ -64,17 +64,17 @@ struct Target {
 }
 
 impl Ids {
-    /// Brings the channels up to `frame` seen at `size`, and the texels to `delivered` (the
+    /// Brings the channels up to those of a frame (`entities`) seen at `size`, and the texels to `delivered` (the
     /// engine's `id_texels`, when it has them): uploads them when they changed. Uploads outside
     /// any deferred completion scope: it waits for the copy.
     pub(super) fn update(
         &mut self,
         gpu: &mut GpuDevice,
-        frame: &RenderFrame,
+        entities: Vec<(u64, String)>,
         size: [u32; 2],
         delivered: Option<Vec<u8>>,
     ) -> Result<()> {
-        self.entities = entities(frame);
+        self.entities = entities;
         self.ready = true;
         let delivered = delivered.filter(|t| t.len() == size[0] as usize * size[1] as usize * 4);
         let Some(texels) = delivered else {
