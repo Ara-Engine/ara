@@ -62,6 +62,14 @@ pub struct SceneCaptureParams {
     pub video_move: Option<[f32; 3]>,
     /// Camera turn over the clip, in degrees about the vertical axis.
     pub video_yaw: Option<f32>,
+    /// Cut the camera once inside the clip: from this clip frame (0-based) on, the camera
+    /// jumps by `videoCutMove` and turns by `videoCutYaw` on top of its path. Needs `video`.
+    #[ara(range(min = 0, max = 3599))]
+    pub video_cut_at: Option<u32>,
+    /// World-space jump of the cut, in metres.
+    pub video_cut_move: Option<[f32; 3]>,
+    /// Turn of the cut, in degrees about the vertical axis.
+    pub video_cut_yaw: Option<f32>,
 }
 
 fn tick_count(ticks: Option<u32>, duration: Option<f64>, hz: u32) -> Result<u32, Vec<Diagnostic>> {
@@ -216,6 +224,7 @@ impl PlayService {
                     "path":path,"width":size[0],"height":size[1],"marks":p.marks.unwrap_or(40),
                     "camera":p.camera,"preset":p.preset,"stability":p.stability,
                     "video":p.video,"videoMove":p.video_move,"videoYaw":p.video_yaw,
+                    "videoCutAt":p.video_cut_at,"videoCutMove":p.video_cut_move,"videoCutYaw":p.video_cut_yaw,
                 }),
                 false,
             )?;

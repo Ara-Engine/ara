@@ -44,11 +44,6 @@ pub(super) fn style(
 }
 
 impl FidelityContent {
-    /// The progress epoch is separate: changes patch placeholder factors without
-    /// making decoded-model or geometry publication revisions advance.
-    pub(crate) fn progress_pending(&self) -> bool {
-        self.progress.revision != self.reader.progress_revision()
-    }
     pub(super) fn refresh_progress(&mut self) -> bool {
         let revision = self.reader.progress_revision();
         if self.progress.revision == revision {
@@ -176,7 +171,7 @@ mod tests {
         let view = editor.view().map_err(|e| anyhow::anyhow!("{e}"))?;
         assert_eq!(view.entities().len(), 3);
         let mut content = FidelityContent::new(&root)?;
-        let mut frame = content.frame(
+        let mut frame = content.frame_with_poses(
             &view,
             editor.host.store().workspace(),
             editor.host.store().schema(),
@@ -230,7 +225,7 @@ mod tests {
         for (draw, instance) in frame.draws.iter().zip(&prepared.scene.instances) {
             assert_eq!(
                 prepared.scene.materials[instance.material].pbr.flags[1]
-                    & ara_render::scene::MODEL_BOUNDS
+                    & ara_frame::scene::MODEL_BOUNDS
                     != 0,
                 draw.address != "e_authored01",
                 "editor fallback metadata must reach the native corner-mark material"

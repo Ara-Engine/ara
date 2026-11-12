@@ -14,11 +14,7 @@ impl SceneView {
         keep: impl Fn(&str) -> bool,
         rotation: Quat,
     ) -> Option<[Vec3; 2]> {
-        let scene = self
-            .raster
-            .as_ref()
-            .and_then(ara_runtime_render::RasterView::scene)
-            .or_else(|| self.prepared.as_ref().map(|prepared| &prepared.scene))?;
+        let scene = &self.prepared.as_ref()?.scene;
         let into = Mat4::from_quat(rotation.inverse());
         scene
             .instances

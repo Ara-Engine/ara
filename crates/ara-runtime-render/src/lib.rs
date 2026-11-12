@@ -1,7 +1,8 @@
 //! Native raster presentation shared by Scene, Play and installed players.
 //! [`RasterView`] consumes local shared geometry, compressed textures and moving
 //! instances; terrain and foliage enter the same G-buffer and authored look.
-//! [`Presenter`] owns the device and completed last-good output. Experimental RT
+//! [`Presenter`] owns a [`PresentationDevice`] and completed last-good output. The
+//! bootstrap renderer holds a lease on that device. Experimental RT
 //! is explicitly enabled through [`RenderOptions`], before device creation.
 #![warn(missing_docs)]
 
@@ -9,6 +10,8 @@ extern crate glam34 as glam;
 
 mod captures;
 mod composite;
+mod device;
+pub use device::PresentationDevice;
 mod emitters;
 mod external;
 pub use external::{EXTERNAL_PASSES, ExternalFrame, ExternalRenderer, ExternalView};
@@ -39,11 +42,11 @@ pub mod two_d;
 pub mod vfx;
 
 use anyhow::{Context, Result, ensure};
-use ara_render::{
-    Renderer,
+use ara_frame::{
     capture::{Capture, CaptureRequest, ViewMode},
     scene::{self, CameraSpec, Scene, Vertex},
 };
+use ara_render::Renderer;
 use ara_runtime::{
     components::Environment,
     extract::{Draw, Geometry, RenderFrame},
@@ -99,7 +102,7 @@ pub struct PresentStats {
     pub external_handoff_ms: Option<f64>,
 }
 
-/// Owns the renderer and the per-draw upload state.
+/// Owns the presentation device and the per-draw upload state.
 pub struct Presenter {
     graphics: Option<ara_graphics_settings::Settings>,
     graphics_plan_key: Option<([u32; 2], bool, bool, Option<u64>)>,
@@ -111,6 +114,8 @@ pub struct Presenter {
     published_quality: Option<QualityPreset>,
     failure: Option<String>,
     renderer: Option<Renderer>,
+    /// The device `renderer` holds a lease on. External renderers draw on it too.
+    device: Option<PresentationDevice>,
     initial_device: Option<ara_gpu::GpuDevice>,
     effects: vfx::Effects,
     landscapes: landscape::Landscapes,
@@ -249,6 +254,7 @@ impl Presenter {
             graphics_plan_key: None,
             failure: None,
             renderer: None,
+            device: None,
             initial_device: None,
             effects: vfx::Effects::default(),
             landscapes: landscape::Landscapes::default(),
@@ -615,9 +621,14 @@ impl Presenter {
         self.size = size;
         self.present(frame)?;
         let output = self.output.context("composited output missing")?;
+        let extent = self.renderer.as_ref().context("renderer missing")?.size();
         readback::replace(
-            self.renderer.as_mut().context("renderer missing")?,
+            self.renderer
+                .as_mut()
+                .context("renderer missing")?
+                .gpu_mut(),
             output,
+            extent,
             &mut capture,
         )?;
         self.resize(original_size)?;
@@ -996,7 +1007,7 @@ pub fn environment_at(
     frame: &RenderFrame,
     eye: glam30::Vec3,
 ) -> ara_render_fidelity::environment::FrameEnvironment {
-    use ara_render::look::atmosphere::{AtmosphereLight, LightAtmosphere};
+    use ara_frame::look::atmosphere::{AtmosphereLight, LightAtmosphere};
     let settings = |a: ara_runtime::extract::AtmosphereLightView| LightAtmosphere {
         disc_scale: a.disc_scale,
         per_pixel_transmittance: a.per_pixel_transmittance,

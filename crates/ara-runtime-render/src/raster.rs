@@ -5,9 +5,9 @@ use crate::{
     vfx,
 };
 use anyhow::{Context, Result, ensure};
-use ara_render::capture::{Capture, CaptureRequest, ViewMode};
-use ara_render::look::gi::ProbeUpdate;
-use ara_render::scene::CameraSpec;
+use ara_frame::capture::{Capture, CaptureRequest, ViewMode};
+use ara_frame::look::gi::ProbeUpdate;
+use ara_frame::scene::CameraSpec;
 use ara_render_fidelity::{environment::FrameEnvironment, presets::RasterPlan};
 use ara_runtime::extract::RenderFrame;
 use std::path::PathBuf;
@@ -54,7 +54,7 @@ pub struct RasterView {
     emitters: Option<crate::emitters::Emitters>,
     /// The emitter search for the current content, running off this thread.
     emitter_search: crate::emitters::Search,
-    emitter_lights: Vec<ara_render::scene::Light>,
+    emitter_lights: Vec<ara_frame::scene::Light>,
     cache: PathBuf,
     key: u64,
     pending_gi: bool,
@@ -62,7 +62,7 @@ pub struct RasterView {
     /// The colour lookup table the renderer holds (`FrameEnvironment::lut`).
     lut: Option<std::sync::Arc<ara_components::post::ColorLut>>,
     fades: fade::Fades,
-    placeholder_changes: ara_render::instanced::Changes,
+    placeholder_changes: ara_frame::instanced::Changes,
     /// Reflection captures: authored, or placed over the current generation.
     captures: crate::captures::Placement,
     /// Reflection-probe capture jobs and their retained state (`crate::probes`).
@@ -82,7 +82,7 @@ impl RasterView {
     }
     /// Borrow the currently prepared native scene for host picking and surface snapping.
     /// Geometry remains owned by this view and must not be retained across publication.
-    pub fn scene(&self) -> Option<&ara_render::instanced::Scene> {
+    pub fn scene(&self) -> Option<&ara_frame::instanced::Scene> {
         self.prepared.as_ref().map(|prepared| &prepared.scene)
     }
     /// A rejected preparation discards its CPU snapshot. Interactive callers
@@ -539,7 +539,7 @@ impl RasterView {
             match &mut self.emitters {
                 Some(emitters) => {
                     let budget = (plan.quality.emitter_lights as usize).min(
-                        ara_render::scene::MAX_LOCAL_LIGHTS
+                        ara_frame::scene::MAX_LOCAL_LIGHTS
                             .saturating_sub(prepared.scene.lights.len()),
                     );
                     if let Some(lights) = emitters.update(&prepared.scene, budget) {
@@ -559,7 +559,7 @@ impl RasterView {
                 .scene
                 .lights
                 .extend_from_slice(&self.emitter_lights);
-            let unchanged = ara_render::instanced::Changes::default();
+            let unchanged = ara_frame::instanced::Changes::default();
             let updated = renderer.update_native_changed(
                 &prepared.scene,
                 if snapshot_changed {
@@ -732,14 +732,14 @@ impl RasterView {
         if let Some(prepared) = &mut self.prepared {
             if let Some(emitters) = &mut self.emitters {
                 let budget = (renderer.quality().emitter_lights as usize).min(
-                    ara_render::scene::MAX_LOCAL_LIGHTS.saturating_sub(prepared.scene.lights.len()),
+                    ara_frame::scene::MAX_LOCAL_LIGHTS.saturating_sub(prepared.scene.lights.len()),
                 );
                 if let Some(lights) = emitters.update(&prepared.scene, budget) {
                     self.emitter_lights = lights;
                 }
             }
             with_emitter_lights(&mut prepared.scene, &self.emitter_lights, |scene| {
-                renderer.update_native_changed(scene, &ara_render::instanced::Changes::default())
+                renderer.update_native_changed(scene, &ara_frame::instanced::Changes::default())
             })?;
         }
         if let Some(gi) = &mut self.gi {
@@ -867,9 +867,9 @@ fn emitter_job(prepared: &Prepared) -> crate::emitters::Job {
 /// every upload (prepare, arrival fades, placeholder styling) keeps them; the
 /// scene's own list is restored afterwards.
 fn with_emitter_lights<T>(
-    scene: &mut ara_render::instanced::Scene,
-    lights: &[ara_render::scene::Light],
-    upload: impl FnOnce(&mut ara_render::instanced::Scene) -> Result<T>,
+    scene: &mut ara_frame::instanced::Scene,
+    lights: &[ara_frame::scene::Light],
+    upload: impl FnOnce(&mut ara_frame::instanced::Scene) -> Result<T>,
 ) -> Result<T> {
     let own = scene.lights.len();
     scene.lights.extend_from_slice(lights);

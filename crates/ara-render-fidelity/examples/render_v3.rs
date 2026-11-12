@@ -7,8 +7,6 @@ mod coverage;
 mod fixture;
 #[path = "render_v3/geometry.rs"]
 mod geometry;
-#[path = "render_v3/metrics.rs"]
-mod metrics;
 #[path = "render_v3/polar.rs"]
 mod polar;
 #[path = "render_v3/replay.rs"]

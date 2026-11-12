@@ -74,33 +74,26 @@ pub(super) struct Job {
     pub thread: JoinHandle<anyhow::Result<PreparedScene>>,
 }
 
-/// One CPU-complete candidate, retained while its native allocations are prepared.
+/// One CPU-complete candidate.
 pub(super) struct Publication {
     pub key: Key,
     pub scene: PreparedScene,
-    pub ready: bool,
 }
 
-/// Poll only; live calls never join an unfinished extraction or wait for native
-/// allocations. Superseded candidates cancel their resources before being dropped.
+/// Poll only; live calls never join an unfinished extraction. A candidate that no longer shows
+/// progress is dropped.
 pub(super) fn poll(
     job: &mut Option<Job>,
     publication: &mut Option<Publication>,
     current: Key,
     shown: Option<Key>,
-    renderer: &mut ara_render::Renderer,
     wait: bool,
 ) -> anyhow::Result<()> {
     if publication
         .as_ref()
         .is_some_and(|p| !p.key.shows_progress(current, shown))
     {
-        publication
-            .take()
-            .expect("superseded publication")
-            .scene
-            .raster
-            .destroy(renderer)?;
+        *publication = None;
     }
     if job
         .as_ref()
@@ -115,47 +108,39 @@ pub(super) fn poll(
             *publication = Some(Publication {
                 key: job.key,
                 scene: result?,
-                ready: false,
             });
-        }
-    }
-    if let Some(candidate) = publication {
-        match candidate.scene.raster.preallocate(renderer) {
-            Ok(ready) => candidate.ready = ready,
-            Err(error) => {
-                publication
-                    .take()
-                    .expect("failed publication")
-                    .scene
-                    .raster
-                    .destroy(renderer)?;
-                return Err(error);
-            }
         }
     }
     Ok(())
 }
 
+/// The editor's state a content job snapshots when it starts.
+fn snapshot<'a>(
+    editor: &'a crate::Editor,
+    view: &'a crate::world::DocumentView,
+) -> crate::world::gltf::SnapshotInput<'a> {
+    let store = editor.host.store();
+    crate::world::gltf::SnapshotInput {
+        view,
+        workspace: store.workspace(),
+        schema: store.schema(),
+        gesture: editor.gesture.as_ref(),
+        hidden: &editor.state.hidden,
+        camera: editor.state.camera,
+    }
+}
+
 impl Job {
+    /// Starts extracting the Scene's frame for `key` on the content worker.
     pub fn start(
         key: Key,
         content: &crate::world::gltf::FidelityContent,
         editor: &crate::Editor,
         view: &crate::world::DocumentView,
-        renderer: &ara_render::Renderer,
-        quality: ara_render::look::Quality,
     ) -> anyhow::Result<Self> {
-        let store = editor.host.store();
         Ok(Self {
             key,
-            thread: content.prepare_async(
-                view,
-                store.workspace(),
-                store.schema(),
-                editor.gesture.as_ref(),
-                &editor.state.hidden,
-                renderer.native_seed_for_quality(&quality)?,
-            )?,
+            thread: content.prepare_async(snapshot(editor, view))?,
         })
     }
 }

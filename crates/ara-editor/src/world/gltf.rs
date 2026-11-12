@@ -1,14 +1,15 @@
 //! Cooked model access; the viewport never discovers or imports source glTF files.
 use anyhow::Context;
-use ara_render::scene::{Mesh, Vertex};
+use ara_frame::scene::{Mesh, Vertex};
 use ara_runtime::assets::AssetSource;
 use glam::Vec3;
 use std::collections::BTreeMap;
 use std::path::Path;
-mod patch;
 mod pending;
 mod prepare;
-pub(crate) use prepare::PreparedScene;
+pub(crate) use prepare::{PreparedScene, SnapshotInput, camera_view};
+#[cfg(test)]
+pub(crate) use prepare::{FrameInputs, extract_frame};
 
 /// Project-owned decoded generations. Publication changes invalidate by digest;
 /// document transforms and repeated prefab instances do not read model payloads.
@@ -72,32 +73,6 @@ impl ModelCache {
     }
 }
 
-/// One-shot thumbnail worker entry: the published generation of a source model,
-/// with its materials and textures, or `None` while its import has not published (a
-/// pending import is not an error; the caller asks again when import progress moves).
-/// Scene extraction uses its persistent cache instead.
-pub(crate) fn published(
-    path: &Path,
-) -> anyhow::Result<Option<std::sync::Arc<ara_runtime::model::Model>>> {
-    let root = path
-        .ancestors()
-        .find(|root| root.join("ara.project.json").is_file())
-        .context("model has no project root")?;
-    let mut sidecar = path.as_os_str().to_os_string();
-    sidecar.push(".import.json");
-    let value = ara_json::parse(&std::fs::read_to_string(sidecar)?)?;
-    let asset = value["id"]
-        .as_str()
-        .context("model sidecar has no asset ID")?;
-    let mut cache = ModelCache::new(root)?;
-    cache.revision();
-    let source = cache
-        .snapshot
-        .as_deref()
-        .map(|snapshot| snapshot as &dyn AssetSource);
-    Ok(cache.decoded.get(source, asset)?.cloned())
-}
-
 #[derive(Default)]
 struct DecodedModels {
     models: ara_runtime::assets::Models,
@@ -126,27 +101,6 @@ impl DecodedModels {
         }
         Ok(self.models.get(asset))
     }
-}
-
-/// Reads the transactional project default, including unsaved typed settings edits.
-pub(crate) fn render_quality(
-    workspace: &ara_doc::Workspace,
-) -> anyhow::Result<ara_runtime_render::QualityChoice> {
-    Ok(render_settings(workspace)?.quality.into())
-}
-
-/// Project rendering policy, read without discovering or importing any assets.
-pub(crate) fn render_settings(
-    workspace: &ara_doc::Workspace,
-) -> anyhow::Result<ara_components::render::RenderSettings> {
-    Ok(workspace
-        .doc("pj_project")
-        .and_then(|doc| doc.record("p_settings"))
-        .and_then(|record| record.get("settings"))
-        .and_then(|settings| settings.get("rendering"))
-        .map(serde::Deserialize::deserialize)
-        .transpose()?
-        .unwrap_or_default())
 }
 
 fn mesh(
@@ -231,17 +185,7 @@ impl FidelityContent {
     pub(crate) fn revision(&self) -> u64 {
         self.reader.revision()
     }
-    pub(crate) fn frame(
-        &mut self,
-        view: &super::DocumentView,
-        workspace: &ara_doc::Workspace,
-        schema: &ara_schema::SchemaDb,
-        preview: Option<&super::gesture::Gesture>,
-        hidden: &std::collections::BTreeSet<String>,
-    ) -> anyhow::Result<ara_runtime::extract::RenderFrame> {
-        self.frame_with_poses(view, workspace, schema, preview.map(|p| &p.current), hidden)
-    }
-    fn frame_with_poses(
+    pub(crate) fn frame_with_poses(
         &mut self,
         view: &super::DocumentView,
         workspace: &ara_doc::Workspace,

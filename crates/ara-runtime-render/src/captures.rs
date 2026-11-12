@@ -1,12 +1,12 @@
-//! Reflection captures for the raster renderer (`ara_render::look::captures`): the
+//! Reflection captures for the raster renderer (`ara_frame::look::captures`): the
 //! frame's enabled authored `ReflectionProbe` components in world space, or, without
 //! any and when the quality opts in, automatic placement: from what the probe volume
-//! saw once its probes arrive (`ara_render::look::placement`), over the published
+//! saw once its probes arrive (`ara_frame::look::placement`), over the published
 //! content's bounds until then (computed once per generation and probe delivery).
-use ara_render::instanced::Scene;
-use ara_render::look::captures::{CaptureSpec, auto_place};
-use ara_render::look::gi::{ProbeLayout, ProbeUpdate};
-use ara_render::look::placement::{ProbeSight, place_from_probes};
+use ara_frame::instanced::Scene;
+use ara_frame::look::captures::{CaptureSpec, auto_place};
+use ara_frame::look::gi::{ProbeLayout, ProbeUpdate};
+use ara_frame::look::placement::{ProbeSight, place_from_probes};
 use ara_runtime::extract::{ProbeView, RenderFrame};
 use glam30::{Quat, Vec3};
 

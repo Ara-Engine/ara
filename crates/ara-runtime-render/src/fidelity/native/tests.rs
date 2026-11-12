@@ -144,7 +144,7 @@ fn native_material_retains_each_uv_channel_and_never_folds_maps_into_factors() {
     }
     assert_eq!(
         out.pbr.flags[1],
-        ara_render::scene::BASE_COLOR_DECODE_SRGB | ara_render::scene::EMISSIVE_DECODE_SRGB
+        ara_frame::scene::BASE_COLOR_DECODE_SRGB | ara_frame::scene::EMISSIVE_DECODE_SRGB
     );
 }
 

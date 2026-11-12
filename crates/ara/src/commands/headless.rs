@@ -76,14 +76,6 @@ pub struct CaptureArgs {
     /// sky magenta).
     #[arg(long, value_parser = ["reflections", "sources"])]
     reflections: Option<String>,
-    /// Render the path-traced ground truth (unbiased, undenoised) with this many
-    /// samples per pixel, to judge the real-time lighting against. Needs a GPU with
-    /// hardware ray tracing; ignores the project's ray-tracing setting.
-    #[arg(long, num_args = 0..=1, default_missing_value = "1024")]
-    reference: Option<u32>,
-    /// Scattering events per reference path (with `--reference`).
-    #[arg(long, default_value_t = 8, requires = "reference")]
-    bounces: u32,
     /// Lock exposure at this EV100 (manual, no compensation) over every post-process
     /// volume, so captures from different renderers compare at the same brightness.
     /// Without it a scene with no post-process volume is metered automatically like one
@@ -109,6 +101,21 @@ pub struct CaptureArgs {
     /// Camera turn over the clip in degrees about the vertical axis.
     #[arg(long, allow_hyphen_values = true)]
     video_yaw: Option<f32>,
+    /// Cut the camera once inside the clip: from this clip frame (0-based) on, the camera
+    /// jumps by `--video-cut-move` and turns by `--video-cut-yaw` on top of its path.
+    #[arg(long, requires = "video")]
+    video_cut_at: Option<u32>,
+    /// World-space jump of the cut in metres, `x,y,z`.
+    #[arg(
+        long,
+        value_delimiter = ',',
+        allow_hyphen_values = true,
+        requires = "video_cut_at"
+    )]
+    video_cut_move: Option<Vec<f32>>,
+    /// Turn of the cut in degrees about the vertical axis.
+    #[arg(long, allow_hyphen_values = true, requires = "video_cut_at")]
+    video_cut_yaw: Option<f32>,
 }
 impl CaptureArgs {
     pub fn call(self) -> Call {
@@ -118,8 +125,9 @@ impl CaptureArgs {
             "path":self.path,"width":self.width,"height":self.height,"preset":self.preset,
             "ticks":self.ticks,"seed":self.seed,"marks":self.marks,"stability":self.stability,
             "video":self.video,"videoMove":self.video_move,"videoYaw":self.video_yaw,
+            "videoCutAt":self.video_cut_at,"videoCutMove":self.video_cut_move,"videoCutYaw":self.video_cut_yaw,
             "renderDebug":render_debug(&self.without, self.full_resolution, self.reflections.as_deref(),
-                self.reference.map(|samples| (samples, self.bounces)), self.ev100, self.view.as_deref())})),
+                self.ev100, self.view.as_deref())})),
             summary: protocol::pretty,
         }
     }
@@ -140,20 +148,18 @@ fn camel(value: &str) -> String {
 }
 
 /// `capture`'s `renderDebug` for `--without`, `--full-resolution`,
-/// `--reflections`, `--reference`, `--ev100` and `--view`; omitted when every
-/// effect stays at its default.
+/// `--reflections`, `--ev100` and `--view`; omitted when every effect stays at
+/// its default. The path-traced reference is gone; the image is the player's.
 fn render_debug(
     without: &[String],
     full_resolution: bool,
     reflections: Option<&str>,
-    reference: Option<(u32, u32)>,
     ev100: Option<f32>,
     view: Option<&str>,
 ) -> serde_json::Value {
     if without.is_empty()
         && !full_resolution
         && reflections.is_none()
-        && reference.is_none()
         && ev100.is_none()
         && view.is_none()
     {
@@ -172,7 +178,6 @@ fn render_debug(
         "screenGi": on("screen-gi"),
         "fullResolution": full_resolution,
         "reflections": reflections.unwrap_or("lit"),
-        "reference": reference.map(|(samples, bounces)| json!({"samples": samples, "bounces": bounces})),
         "exposure": ev100,
         // kebab-case flag values name the camelCase BufferView variants.
         "view": view.map_or_else(|| "lit".to_owned(), camel),
@@ -182,28 +187,73 @@ fn render_debug(
 #[cfg(test)]
 mod tests {
     use super::render_debug;
-    use serde_json::json;
 
     #[test]
     fn capture_debug_flags_map_to_render_debug() {
-        assert!(render_debug(&[], false, None, None, None, None).is_null());
-        let debug = render_debug(
-            &["shadows".into()],
-            false,
-            None,
-            Some((2048, 6)),
-            Some(-2.),
-            None,
-        );
+        assert!(render_debug(&[], false, None, None, None).is_null());
+        let debug = render_debug(&["shadows".into()], false, None, Some(-2.), None);
         assert_eq!(debug["shadows"], false);
         assert_eq!(debug["ambientOcclusion"], true);
         assert_eq!(debug["volumetricFog"], true);
-        assert_eq!(debug["reference"], json!({"samples": 2048, "bounces": 6}));
         assert_eq!(debug["exposure"], -2.);
-        let lock = render_debug(&[], false, None, None, Some(7.), Some("gi-diffuse"));
-        assert!(lock["reference"].is_null());
+        let lock = render_debug(&[], false, None, Some(7.), Some("gi-diffuse"));
         assert_eq!(lock["exposure"], 7.);
         assert_eq!(lock["view"], "giDiffuse");
         assert_eq!(debug["view"], "lit");
+    }
+
+    /// `ara capture` parsed from `args`, as the protocol call it makes.
+    fn capture_call(args: &[&str]) -> Result<serde_json::Value, clap::Error> {
+        #[derive(clap::Parser)]
+        struct Cli {
+            #[command(flatten)]
+            capture: super::CaptureArgs,
+        }
+        let cli = <Cli as clap::Parser>::try_parse_from(
+            std::iter::once("capture").chain(args.iter().copied()),
+        )?;
+        Ok(cli.capture.call().params)
+    }
+
+    #[test]
+    fn capture_cut_flags_reach_the_request() {
+        let params = capture_call(&[
+            "--video",
+            "120",
+            "--video-move",
+            "4,0,-4",
+            "--video-yaw",
+            "12",
+            "--video-cut-at",
+            "60",
+            "--video-cut-move",
+            "-20,0,15",
+            "--video-cut-yaw",
+            "140",
+        ])
+        .expect("parses");
+        assert_eq!(params["videoCutAt"], 60);
+        assert_eq!(params["videoCutMove"], serde_json::json!([-20., 0., 15.]));
+        assert_eq!(params["videoCutYaw"], 140.);
+        // No cut flags, no cut params.
+        let plain = capture_call(&["--video", "6"]).expect("parses");
+        assert!(plain.get("videoCutAt").is_none() && plain.get("videoCutMove").is_none());
+    }
+
+    #[test]
+    fn a_cut_needs_a_clip_and_its_frame() {
+        assert!(capture_call(&["--video-cut-at", "3"]).is_err());
+        assert!(capture_call(&["--video", "10", "--video-cut-yaw", "90"]).is_err());
+        assert!(
+            capture_call(&[
+                "--video",
+                "10",
+                "--video-cut-at",
+                "3",
+                "--video-cut-yaw",
+                "90"
+            ])
+            .is_ok()
+        );
     }
 }

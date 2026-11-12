@@ -1206,8 +1206,8 @@ fn content(s: &Studio, id: &str, vertical: bool) -> El<Studio> {
 /// flip it.
 type Switch = (
     &'static str,
-    fn(&ara_render::RenderDebug) -> bool,
-    fn(&mut ara_render::RenderDebug),
+    fn(&ara_play::RenderDebug) -> bool,
+    fn(&mut ara_play::RenderDebug),
 );
 const EFFECTS: [Switch; 9] = [
     (
@@ -1251,7 +1251,7 @@ const EFFECTS: [Switch; 9] = [
 
 /// Flips one render debug switch: the Scene view reads it each frame, a running Play
 /// gets it at once, and each Play start carries it.
-pub(super) fn flip_effect(s: &mut Studio, flip: fn(&mut ara_render::RenderDebug)) {
+pub(super) fn flip_effect(s: &mut Studio, flip: fn(&mut ara_play::RenderDebug)) {
     flip(&mut s.editor.state.render_debug);
     if let Some(world) = s.editor.play_world.clone() {
         let debug = s.editor.state.render_debug;
@@ -1325,14 +1325,15 @@ fn draw_mode_items(s: &Studio) -> Vec<El<Studio>> {
                 let on = s.editor.state.view_mode == *name
                     || (s.editor.state.view_mode.is_empty() && *name == "lit");
                 let name = *name;
-                out = out.child(
-                    menu_check(l, &format!("scene/draw-mode/{name}"), title, on).on_press(
-                        move |s: &mut Studio| {
-                            s.local.overlay_settings = None;
-                            s.act("editor.view", json!({"viewMode": name}));
-                        },
-                    ),
-                );
+                let item = menu_check(l, &format!("scene/draw-mode/{name}"), title, on);
+                out = out.child(if super::unavailable::view_mode_available(name) {
+                    item.on_press(move |s: &mut Studio| {
+                        s.local.overlay_settings = None;
+                        s.act("editor.view", json!({"viewMode": name}));
+                    })
+                } else {
+                    enabled(item, false).tooltip(super::unavailable::SOON)
+                });
             }
         }
         out
@@ -1340,10 +1341,12 @@ fn draw_mode_items(s: &Studio) -> Vec<El<Studio>> {
     let mut second = column(&["Lighting", "Performance"]).child(menu_heading(l, "Effects"));
     for (title, on, flip) in EFFECTS {
         let checked = on(&s.editor.state.render_debug);
-        second = second.child(
-            menu_check(l, &format!("scene/effect/{title}"), title, checked)
-                .on_press(move |s: &mut Studio| flip_effect(s, flip)),
-        );
+        let item = menu_check(l, &format!("scene/effect/{title}"), title, checked);
+        second = second.child(if super::unavailable::effect_available(title) {
+            item.on_press(move |s: &mut Studio| flip_effect(s, flip))
+        } else {
+            enabled(item, false).tooltip(super::unavailable::SOON)
+        });
     }
     vec![column(&["Shading", "Material"]), second]
 }

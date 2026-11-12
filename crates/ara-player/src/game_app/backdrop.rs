@@ -125,10 +125,10 @@ impl App {
         let content = backdrop.world.fidelity_content(&self.frame)?;
         let mut capture = self.presenter.capture_with(
             &self.frame,
-            &ara_render::capture::CaptureRequest {
+            &ara_frame::capture::CaptureRequest {
                 camera: ara_runtime_render::camera(&self.frame)?,
                 size,
-                mode: ara_render::capture::ViewMode::Lit,
+                mode: ara_frame::capture::ViewMode::Lit,
                 deterministic: true,
                 exposure: self.frame.environment.exposure,
                 settle_frames: 24,

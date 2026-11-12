@@ -709,7 +709,7 @@ pub(crate) fn start_params(e: &Editor) -> Value {
     }
     // View > Rendering Debug: only sent when something is turned off.
     let debug = e.state.render_debug;
-    if debug != ara_render::RenderDebug::default() {
+    if debug != ara_play::RenderDebug::default() {
         params["renderDebug"] = json!(debug);
     }
     params

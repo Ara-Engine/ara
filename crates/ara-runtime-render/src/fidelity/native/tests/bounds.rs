@@ -1,9 +1,9 @@
 use super::*;
-use ara_render::{
-    Renderer,
+use ara_frame::{
     capture::{CaptureRequest, ViewMode},
     scene::CameraSpec,
 };
+use ara_render::Renderer;
 
 #[test]
 fn model_bounds_style_never_marks_authored_shapes_with_the_same_colour() {
@@ -26,8 +26,8 @@ fn model_bounds_style_never_marks_authored_shapes_with_the_same_colour() {
             .pbr
             .flags[1]
     };
-    assert_ne!(flags(0) & ara_render::scene::MODEL_BOUNDS, 0);
-    assert_eq!(flags(1) & ara_render::scene::MODEL_BOUNDS, 0);
+    assert_ne!(flags(0) & ara_frame::scene::MODEL_BOUNDS, 0);
+    assert_eq!(flags(1) & ara_frame::scene::MODEL_BOUNDS, 0);
 }
 
 #[test]
@@ -89,12 +89,12 @@ fn pending_model_bounds_leave_the_view_open_and_failed_models_stay_solid() -> Re
     };
     let bounds = prepared.scene.instances[0].material;
     // Keep a paired view of the old filled fallback for visual review.
-    prepared.scene.materials[bounds].pbr.flags[1] &= !ara_render::scene::MODEL_BOUNDS;
+    prepared.scene.materials[bounds].pbr.flags[1] &= !ara_frame::scene::MODEL_BOUNDS;
     renderer.update_native(&prepared.scene)?;
     renderer
         .capture(&request)?
         .write(&root.join("filled-before.png"))?;
-    prepared.scene.materials[bounds].pbr.flags[1] |= ara_render::scene::MODEL_BOUNDS;
+    prepared.scene.materials[bounds].pbr.flags[1] |= ara_frame::scene::MODEL_BOUNDS;
     renderer.update_native(&prepared.scene)?;
     let pending = renderer.capture(&request)?;
     pending.write(&root.join("pending.png"))?;

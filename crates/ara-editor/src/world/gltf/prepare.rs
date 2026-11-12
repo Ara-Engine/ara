@@ -2,9 +2,75 @@
 use super::*;
 use std::{collections::BTreeSet, sync::Arc, thread::JoinHandle};
 
+/// What the content worker returns: the extracted frame and the CPU scene that picking,
+/// snapping and bounds read.
 pub(crate) struct PreparedScene {
     pub content: FidelityContent,
-    pub raster: ara_runtime_render::RasterContent,
+    pub frame: ara_runtime::extract::RenderFrame,
+    pub scene: ara_runtime_render::fidelity::native::Prepared,
+}
+
+/// What the content worker snapshots (the editor's state at the moment the job starts).
+pub(crate) struct SnapshotInput<'a> {
+    pub view: &'a crate::world::DocumentView,
+    pub workspace: &'a ara_doc::Workspace,
+    pub schema: &'a ara_schema::SchemaDb,
+    pub gesture: Option<&'a crate::world::gesture::Gesture>,
+    pub hidden: &'a BTreeSet<String>,
+    pub camera: crate::state::Camera,
+}
+
+/// What the Scene's frame is extracted from. The frame holds no selection: outlines and gizmos
+/// are the editor's overlays, drawn from its own state.
+pub(crate) struct FrameInputs<'a> {
+    /// The document as the Scene shows it (drafts included).
+    pub view: &'a crate::world::DocumentView,
+    /// The project's workspace and schema (the store's).
+    pub workspace: &'a ara_doc::Workspace,
+    pub schema: &'a ara_schema::SchemaDb,
+    /// Entity poses while a gizmo drag is live.
+    pub poses: Option<&'a BTreeMap<String, glam::Mat4>>,
+    /// Entities hidden in the Hierarchy.
+    pub hidden: &'a BTreeSet<String>,
+    /// The editor's camera: the frame's own camera view.
+    pub camera: &'a crate::state::Camera,
+}
+
+/// Extracts the Scene's `RenderFrame` from the world: models, shapes, lights, terrain, the
+/// environment, and the camera. It holds no renderer and no raster state; `content` is the
+/// asset caches it reuses between extractions.
+pub(crate) fn extract_frame(
+    content: &mut FidelityContent,
+    inputs: FrameInputs<'_>,
+) -> anyhow::Result<ara_runtime::extract::RenderFrame> {
+    let mut frame = content.frame_with_poses(
+        inputs.view,
+        inputs.workspace,
+        inputs.schema,
+        inputs.poses,
+        inputs.hidden,
+    )?;
+    frame.camera = camera_view(&inputs.camera.spec());
+    Ok(frame)
+}
+
+/// The view `camera` (the editor's look-at camera) as the extracted frame carries it; the
+/// orthographic and framing requests have none yet.
+pub(crate) fn camera_view(
+    camera: &ara_frame::scene::CameraSpec,
+) -> Option<ara_runtime::extract::CameraView> {
+    match camera {
+        ara_frame::scene::CameraSpec::LookAt {
+            position,
+            target,
+            vertical_fov,
+        } => Some(ara_runtime::extract::CameraView {
+            position: position.to_array(),
+            forward: (*target - *position).try_normalize()?.to_array(),
+            fov: vertical_fov.to_degrees(),
+        }),
+        _ => None,
+    }
 }
 
 impl FidelityContent {
@@ -21,13 +87,16 @@ impl FidelityContent {
     /// can keep using this cache while the worker prepares its replacement.
     pub(crate) fn prepare_async(
         &self,
-        view: &crate::world::DocumentView,
-        workspace: &ara_doc::Workspace,
-        schema: &ara_schema::SchemaDb,
-        gesture: Option<&crate::world::gesture::Gesture>,
-        hidden: &BTreeSet<String>,
-        native_seed: ara_render::NativeSeed,
+        input: SnapshotInput<'_>,
     ) -> anyhow::Result<JoinHandle<anyhow::Result<PreparedScene>>> {
+        let SnapshotInput {
+            view,
+            workspace,
+            schema,
+            gesture,
+            hidden,
+            camera,
+        } = input;
         ara_gpu::cpu_scope!("SceneContent.snapshot");
         let mut library = ara_runtime::animation::Library::default();
         library.models = self.library.models.clone();
@@ -64,17 +133,31 @@ impl FidelityContent {
                         .context("Scene worker priority")?;
                 }
                 ara_gpu::cpu_scope!("SceneContent.prepare");
-                let frame = content.frame_with_poses(
-                    &view,
-                    &workspace,
-                    &schema,
-                    poses.as_ref(),
-                    &hidden,
+                let frame = extract_frame(
+                    &mut content,
+                    FrameInputs {
+                        view: &view,
+                        workspace: &workspace,
+                        schema: &schema,
+                        poses: poses.as_ref(),
+                        hidden: &hidden,
+                        camera: &camera,
+                    },
                 )?;
                 let resolved = content.content(&frame, &workspace, &schema)?;
-                let raster =
-                    ara_runtime_render::RasterContent::new_reusing(frame, resolved, native_seed)?;
-                Ok(PreparedScene { content, raster })
+                let scene = ara_runtime_render::fidelity::native::prepare(
+                    &frame,
+                    resolved,
+                    ara_runtime_render::fidelity::native::NativeConfig {
+                        resident_bytes: 1 << 30,
+                        upload_bytes: 16 << 20,
+                    },
+                )?;
+                Ok(PreparedScene {
+                    content,
+                    frame,
+                    scene,
+                })
             })
             .context("Scene content worker")
     }

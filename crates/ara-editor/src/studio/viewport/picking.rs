@@ -1,6 +1,6 @@
 //! Read-only picking over the same retained native geometry the viewport presents.
 use super::SceneView;
-use ara_render::instanced::Scene;
+use ara_frame::instanced::Scene;
 use ara_ui::paint::Box2;
 use glam::Vec3;
 use std::collections::BTreeSet;
@@ -25,16 +25,7 @@ impl SceneView {
     /// The retained geometry belongs to this document. A previous scene's
     /// last-good image may stay visible, but cannot accept authoring snap input.
     pub(crate) fn snap_ready(&self, doc: &str) -> bool {
-        if self
-            .raster
-            .as_ref()
-            .and_then(ara_runtime_render::RasterView::scene)
-            .is_some()
-        {
-            self.raster_scene.as_deref() == Some(doc)
-        } else {
-            self.prepared.is_some() && self.fidelity_scene.as_deref() == Some(doc)
-        }
+        self.prepared.is_some() && self.scene_doc.as_deref() == Some(doc)
     }
 
     /// Pick through selected geometry while retaining the presented target mesh.
@@ -83,10 +74,7 @@ impl SceneView {
     }
 
     fn presented_scene(&self) -> Option<&Scene> {
-        self.raster
-            .as_ref()
-            .and_then(ara_runtime_render::RasterView::scene)
-            .or_else(|| self.prepared.as_ref().map(|prepared| &prepared.scene))
+        self.prepared.as_ref().map(|prepared| &prepared.scene)
     }
 }
 
@@ -214,7 +202,7 @@ fn triangle_hit(origin: Vec3, direction: Vec3, a: Vec3, b: Vec3, c: Vec3) -> Opt
 mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
-    use ara_render::instanced::{Geometry, Instance, Lod, Vertex};
+    use ara_frame::instanced::{Geometry, Instance, Lod, Vertex};
     use glam::Mat4;
     pub(super) fn scene(worlds: &[Mat4]) -> Scene {
         Scene {

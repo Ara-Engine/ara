@@ -1,6 +1,6 @@
 //! Two-phase image ownership across native content generations.
 use super::*;
-use ara_render::instanced::Textures;
+use ara_frame::instanced::Textures;
 use std::any::Any;
 
 impl NativeResidency {

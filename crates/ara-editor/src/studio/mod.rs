@@ -24,9 +24,10 @@ mod compositor;
 mod compound;
 mod create;
 mod curve;
+mod device;
 mod dock;
 mod game;
-mod game_preview;
+
 mod gizmo;
 mod graph;
 pub mod headless;
@@ -42,8 +43,7 @@ mod player;
 mod portals;
 mod preferences;
 mod present;
-pub(crate) mod probes;
-mod profiler;
+pub(crate) mod profiler;
 mod quit;
 mod rect_tool;
 mod references;
@@ -85,10 +85,9 @@ const VERTEX_KEY: u16 = 0x56;
 /// The Scene view's native layer.
 pub(crate) const SCENE_LAYER: &str = "scene";
 
-/// How long closing waits for running probe work to retire (it is cancelled first, so this
-/// is normally the time its in-flight GPU work needs). Past it the GPU objects are left to
-/// the process exit rather than destroyed under that work.
-const CLOSE_DRAIN: Duration = Duration::from_secs(5);
+/// How long a bounded run (`--frames`, `--screenshot`) may count no frame, once the import gate
+/// is open, before it gives up.
+const BOUNDED_STALL: Duration = Duration::from_secs(60);
 
 /// Open the project in the studio and run until its window closes.
 pub fn run(options: Options) -> anyhow::Result<()> {
@@ -113,14 +112,19 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     // a Vulkan surface over Wayland subsurfaces on Linux.
     #[cfg(any(windows, target_os = "linux"))]
     stillkit::platform::set_render(stillkit::platform::Render::Gpu);
-    let mut surface = Surface::new(Kind::App { min: (1024, 640) }, &title, Role::Window)?;
+    let mut surface = Surface::new(Kind::App { min: MIN_WINDOW }, &title, Role::Window)?;
     surface.set_caption(Caption::Compact);
     let platform = surface.scale();
     let (sw, sh) = stillkit::platform::current::host::screen_size();
     // A bounded run opens at the requested size in device pixels (`--size`); otherwise the
     // studio's own.
     let (want_w, want_h) = if options.bounded() {
-        (options.size[0] as f32, options.size[1] as f32)
+        // Never below the studio's minimum, as a person's window cannot be: a capture at a
+        // smaller `--size` is the minimum's, on every platform.
+        (
+            (options.size[0] as f32).max(MIN_WINDOW.0 as f32 * platform),
+            (options.size[1] as f32).max(MIN_WINDOW.1 as f32 * platform),
+        )
     } else {
         (1600.0 * platform, 1000.0 * platform)
     };
@@ -169,35 +173,16 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         [r.width().max(64.0) as u32, r.height().max(64.0) as u32]
     });
     let started = Instant::now();
-    let (scene, ray_tracing, quality) = rt.touch(|s| -> anyhow::Result<_> {
-        let view = s.editor.view()?;
-        let settings = crate::world::gltf::render_settings(s.editor.host.store().workspace())?;
-        let scene = view.scene(
-            s.editor.host.root(),
-            &s.editor.state,
-            None,
-            &mut s.editor.models,
-        )?;
-        Ok((scene, settings.ray_tracing, settings.quality.into()))
-    })?;
     let cache = rt.state().editor.host.root().join(".ara/gpu");
     let mut quit = false;
-    let renderer = viewport::prepare_renderer(
-        scene,
-        extent,
-        present_extensions(),
-        cache,
-        ray_tracing,
-        quality,
-        |_| {
-            rt.touch(|s| {
-                server.pump(&mut s.editor);
-                s.editor.tick();
-            });
-            quit |= pump(&mut rt, &mut surface, &mut portals, started, None)?;
-            Ok(!quit)
-        },
-    )
+    let renderer = device::prepare(present_extensions(), cache, extent, |_| {
+        rt.touch(|s| {
+            server.pump(&mut s.editor);
+            s.editor.tick();
+        });
+        quit |= pump(&mut rt, &mut surface, &mut portals, started, None)?;
+        Ok(!quit)
+    })
     .map_err(|e| anyhow::anyhow!("{e}"))?;
     let Some(mut renderer) = renderer else {
         return Ok(());
@@ -207,27 +192,25 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         s.local.scene = state::SceneStatus {
             ready: true,
             message: String::new(),
+            failed: false,
             fps: None,
         };
         s.local.device = device;
     });
     let mut view = rt.touch(|s| s.editor.view())?;
     let mut scene_view = SceneView::default();
-    let mut sync =
-        rt.touch(|s| SceneSync::new(s.editor.models.revision(), s.editor.host.store().revision()));
+    let mut sync = SceneSync::new();
     let mut revision = rt.state().editor.host.store().revision();
     let mut extraction = rt.state().editor.extraction_revision;
-    // SAFETY: the renderer outlives the compositor (retired and dropped below, before
-    // it); this thread submits for both.
+    // SAFETY: the device outlives the compositor (retired and dropped below, before it);
+    // this thread submits for both.
     let mut compositor =
-        unsafe { compositor::Compositor::new(&renderer, rt.state().editor.state.light)? };
+        unsafe { compositor::Compositor::new(renderer.gpu(), rt.state().editor.state.light)? };
     // SAFETY: as the compositor's.
     let mut game = unsafe { game::Game::new(&renderer)? };
     // SAFETY: as the compositor's.
     let mut graph_layer = unsafe { layer::Layer::new(&renderer, [])? };
     let mut shown_extent = [0, 0];
-    // The tag of the Scene frame last composited (`Renderer::shown_frame_tag`).
-    let mut shown_tag = u64::MAX;
     // The running drag's snap source, captured at its first snapped move.
     let mut snap: Option<snapping::Snap> = None;
     // The selection the Rect tool's bounds were last read for.
@@ -239,8 +222,6 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     // The Scene's size while a resize is under way, and when it last changed.
     let mut sizing: Option<([u32; 2], Instant)> = None;
     let mut overlay_key = 0_u64;
-    // Derived probe jobs (`render.probe.*`): served against the Scene view rendered here.
-    let mut probe_owner = probes::Owner::default();
     // Native layers placed on the last pass: one shown again presents at once (on Wayland
     // a hidden layer loses its picture).
     let mut placed: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
@@ -253,11 +234,13 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     // given). Presented Scene frames count when the window shows; hidden, the loop's own.
     let frame_limit = options.bounded().then(|| options.frames.unwrap_or(60));
     let mut frames = 0_u64;
+    // When a bounded run last counted a frame (or last waited on the import gate): a run that
+    // counts none for `BOUNDED_STALL` ends with an error instead of waiting forever.
+    let mut counted_at = Instant::now();
     let mut last_frame = Instant::now();
     let mut fps = 0.0_f32;
     let mut camera = rt.state().editor.state.camera;
     let mut logs_at = Instant::now() - Duration::from_secs(1);
-    let mut probe_report_at = Instant::now() - Duration::from_secs(1);
     let mut last_fly = Instant::now();
     let (mut profile_at, mut was_recording) = (Instant::now(), false);
     // `--panel NAME`: open it the studio's way (tool pages dock in the centre).
@@ -276,11 +259,10 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     loop {
         // Vulkan's Scene may run on its own queue: finish external reads before recycling images.
         #[cfg(any(windows, target_os = "linux"))]
-        if !compositor.scene_ready(&renderer)? {
-            // Cancelling a bake must not wait for the GPU reads this gate waits on.
+        if !compositor.scene_ready(renderer.gpu())? {
             rt.touch(|s| {
                 server.pump(&mut s.editor);
-                agent_work::deliver_cancellations(&mut s.editor, &mut probe_owner, &mut scene_view);
+                s.editor.tick();
             });
             if pump(
                 &mut rt,
@@ -329,18 +311,8 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         pass.phase("studio.authority");
         // The authority: protocol requests, imports, agent work.
         let (changed, sync_changed) = rt.touch(|s| {
-            // A Scene switch reaches the probe jobs before requests about the new one.
-            for _ in 0..2 {
-                if !probe_owner.invalidate_scene(&mut s.editor) {
-                    break;
-                }
-                s.editor.tick();
-            }
             server.pump(&mut s.editor);
             s.editor.tick();
-            // Cancellation reaches a running bake before the next Scene GPU work.
-            scene_dirty |=
-                probe_owner.poll_cancellations(&mut s.editor, &mut scene_view, &mut renderer);
             (
                 s.editor.host.store().revision() != revision,
                 s.editor.sync(),
@@ -423,24 +395,13 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         }
         pass.mark("assets+logs");
         pass.phase("studio.scene_sync");
-        let idle = last_frame.elapsed() >= Duration::from_millis(250);
-        if rt.touch(|s| sync.refresh(&view, &mut s.editor, &mut renderer, &mut scene_view, idle)) {
-            scene_dirty = true;
-        }
-        if changed {
+                if changed {
             let next = rt.touch(|s| {
                 revision = s.editor.host.store().revision();
                 s.editor.view()
             })?;
-            let stages = rt.touch(|s| {
-                sync.commit(&view, &next, &mut s.editor, &mut renderer, &mut scene_view)
-            });
-            trace::log(|| {
-                format!(
-                    "scene commit: patched {} native {}, {:.1} ms",
-                    stages.patched, stages.native, stages.upload_ms
-                )
-            });
+            let stages = sync.commit(&mut scene_view);
+            trace::log(|| format!("scene commit: native {}", stages.native));
             view = next;
             rt.update(Studio::resolve);
             scene_dirty = true;
@@ -448,20 +409,12 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         if rt.state().editor.extraction_revision != extraction {
             extraction = rt.state().editor.extraction_revision;
             view = rt.touch(|s| s.editor.view())?;
-            rt.touch(|s| sync.rebuild(&view, &mut s.editor, &mut renderer, &mut scene_view));
+            sync.commit(&mut scene_view);
             scene_dirty = true;
         }
         // The gizmo drag or the scrubbed field, shown before it commits.
         let preview = rt.touch(|s| inspector::Preview::of(s));
-        if rt.touch(|s| {
-            sync.preview(
-                &view,
-                &mut s.editor,
-                &preview,
-                &mut renderer,
-                &mut scene_view,
-            )
-        }) {
+        if rt.touch(|s| sync.preview(&view, &s.editor, &preview, &mut scene_view)) {
             scene_dirty = true;
         }
         // The Rect tool's bounds: the selection's presented geometry (selected parents take
@@ -476,7 +429,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         });
         match wanted {
             Some(selection) if scene_dirty || rect_for.as_ref() != Some(&selection) => {
-                let channels = compositor.channels(&renderer, &view, revision);
+                let channels = compositor.channels(scene_view.entities(), &view, revision);
                 let entities = view.entities();
                 let rotation = rect_tool::frame_rotation(entities, &selection);
                 let bounds = scene_view
@@ -531,47 +484,40 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             overlay_key = key;
             let render = camera_moved
                 || scene_dirty
-                || scene_view.needs_frame(rt.state().editor.state.quality)
+                || scene_view.needs_frame()
                 || shown_extent != extent;
             if render {
-                renderer
-                    .resize(extent)
-                    .map_err(|e| anyhow::anyhow!("{e}"))?;
-                agent_work::render(
-                    &mut rt,
-                    &mut probe_owner,
-                    &mut scene_view,
-                    &mut renderer,
-                    &view,
-                );
+                renderer.resize(extent);
+                agent_work::render(&mut rt, &mut scene_view, &mut renderer, &view);
             }
             pass.mark(if render {
                 "scene render"
             } else {
                 "scene check"
             });
+            // Renderlab is the Scene view and has no fallback: its error is the panel's.
+            if let Some(error) = scene_view.renderlab_error()
+                && !rt.state().local.scene.failed
+            {
+                let message = format!("Renderlab could not draw the Scene: {error}");
+                rt.update(|s| {
+                    s.local.scene = state::SceneStatus {
+                        ready: false,
+                        message,
+                        failed: true,
+                        fps: None,
+                    }
+                });
+            }
             pass.phase("studio.composite");
-            // An asynchronous Scene frame lands passes after it was submitted: show it then.
-            let landed = renderer.shown_frame_tag() != shown_tag;
-            composite |= render || restyled || landed;
-            let layer = (composite && renderer.presentation_ready())
+            composite |= render || restyled;
+            let layer = (composite && scene_view.presentable())
                 .then(|| layer_target(&surface, SCENE_LAYER, &mut rt, &mut layer_failure))
                 .flatten();
             if let Some(layer) = layer {
                 let scale = rt.scale();
                 let shown = rt.touch(|s| {
-                    // Overlays draw with the camera and drag pose of the frame on screen,
-                    // so a lagging frame carries its gizmos and grid with it.
-                    let mut gizmo = gizmo_state(s);
-                    let live = s.editor.state.camera;
-                    if let Some(shown) = scene_view.shown_frame(&renderer) {
-                        s.editor.state.camera = shown.camera;
-                        gizmo.offset = if shown.revision == s.editor.host.store().revision() {
-                            shown.offset
-                        } else {
-                            glam::Mat4::IDENTITY
-                        };
-                    }
+                    let gizmo = gizmo_state(s);
                     let changed = s.editor.agent_tints();
                     // SAFETY: the layer is the Scene view's own, alive while the window is.
                     let done = unsafe {
@@ -589,7 +535,6 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                         )
                     };
                     drop(changed);
-                    s.editor.state.camera = live;
                     done
                 })?;
                 if !shown {
@@ -597,11 +542,6 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                     pass.mark("composite skipped");
                 } else {
                     composite = false;
-                    if landed {
-                        let tag = renderer.shown_frame_tag();
-                        trace::log(|| format!("scene frame {tag} shown"));
-                    }
-                    shown_tag = renderer.shown_frame_tag();
                     shown_extent = extent;
                     if render {
                         let dt = last_frame.elapsed().as_secs_f32().max(1e-4);
@@ -627,7 +567,14 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                     ((pick.u * size[0] as f32) as u32).min(size[0].saturating_sub(1)),
                     ((pick.v * size[1] as f32) as u32).min(size[1].saturating_sub(1)),
                 ];
-                let entity = match compositor.pick(&mut renderer, &view, revision, at) {
+                // The engine's own answer (glass included), else the delivered ids.
+                let front = scene_view.pick_front(at);
+                let entity = match compositor.pick(
+                    scene_view.id_host().map(|host| host.with_front(front)),
+                    &view,
+                    revision,
+                    at,
+                ) {
                     Ok(entity) => entity,
                     Err(error) => {
                         rt.touch(|s| s.editor.report_failure(&*error));
@@ -651,41 +598,17 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                     }
                 });
             }
-        } else if agent_work::needs_unpresented_render(&probe_owner, shown_extent) {
-            // A probe bake advances only through Scene renders. With the Scene covered (the
-            // Lighting page in front) or the window hidden, render at the size last shown and
-            // present nothing; the frame shows if the Scene comes back.
-            if scene_dirty || scene_view.needs_frame(rt.state().editor.state.quality) {
-                renderer
-                    .resize(shown_extent)
-                    .map_err(|e| anyhow::anyhow!("{e}"))?;
-                agent_work::render(
-                    &mut rt,
-                    &mut probe_owner,
-                    &mut scene_view,
-                    &mut renderer,
-                    &view,
-                );
-                scene_dirty = false;
-            }
-            pass.mark("scene unpresented");
         }
         // Probe jobs and agents' captures are served every pass, the Scene shown or not.
         pass.phase("studio.agents");
         // The Scene is "presented" once a frame of it has been composited into its layer.
         let presented = shown_extent != [0, 0] && scene_presented;
-        scene_dirty |= agent_work::serve(
-            &mut rt,
-            &mut probe_owner,
-            &mut scene_view,
-            &mut renderer,
-            presented,
-        );
+        agent_work::serve(&mut rt, &mut scene_view, &mut renderer, presented);
         pass.mark("agents");
         pass.phase("studio.game");
         // A move with vertex or surface snapping: the presented geometry answers it.
         if let Some(request) = rt.touch(|s| s.local.snap.take()) {
-            let channels = compositor.channels(&renderer, &view, revision);
+            let channels = compositor.channels(scene_view.entities(), &view, revision);
             let target_of = |id: u64| channels.target_of(id).map(str::to_owned);
             rt.update(|s| {
                 if snap.as_ref().is_none_or(|c| !c.live(&s.editor, &view)) {
@@ -717,7 +640,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         }
         // Drop to Surface (End): the presented geometry answers its rays.
         if rt.touch(|s| std::mem::take(&mut s.local.drop_to_surface)) {
-            let channels = compositor.channels(&renderer, &view, revision);
+            let channels = compositor.channels(scene_view.entities(), &view, revision);
             rt.update(|s| {
                 let planned =
                     crate::surface_drop::plan(&s.editor, &scene_view, |id| channels.target_of(id));
@@ -843,7 +766,10 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                     .map(|layer| (layer, [r.width() as u32, r.height() as u32])),
                 None => None,
             };
-        if game_layer.is_some() || rt.touch(|s| game.wants_frame(&s.editor, &renderer, &scene_view))
+        // The Game view has a layer to present into this pass: it is what the view area
+        // shows when the Game tab is in front.
+        let game_shown = game_layer.is_some();
+        if game_layer.is_some() || rt.touch(|s| game.wants_frame(&s.editor))
         {
             let scale = rt.scale();
             // Input goes to the client Play's controls act on.
@@ -855,9 +781,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                 unsafe {
                     game.frame(
                         &mut renderer,
-                        &mut scene_view,
                         &mut s.editor,
-                        &view,
                         &resolved,
                         revision,
                         game_layer,
@@ -889,7 +813,6 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             };
             let extent = [r.width() as u32, r.height() as u32];
             rt.touch(|s| graph::sync(s, domain));
-            rt.touch(graph::previews);
             if (rt.state().graph.dirty || graph_extent != (name, extent))
                 && graph_layer.ready(&renderer)?
                 && let Some(layer) = layer_target(&surface, name, &mut rt, &mut layer_failure)
@@ -948,22 +871,6 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         if rt.touch(|s| s.local.agent_setups.poll()) {
             rt.update(|_| {});
         }
-        // The Lighting page reads the renderer's probe report while it shows, so Recapture
-        // knows whether this quality can capture (and says why when it cannot).
-        if probe_report_at.elapsed() >= Duration::from_secs(1)
-            && rt.find("lighting/probe/refresh").is_some()
-        {
-            probe_report_at = Instant::now();
-            let version = |s: &Studio| s.local.probe_status.as_ref().map(|r| r.version);
-            let before = version(rt.state());
-            if rt.touch(|s| lighting::refresh_probes(s).is_ok()) && version(rt.state()) != before {
-                rt.update(|_| {});
-            }
-        }
-        let vfx_visible = rt.find("vfx/preview").is_some();
-        if rt.touch(|s| vfx::update(s, vfx_visible)) {
-            rt.update(|_| {});
-        }
         pass.mark("game");
         pass.phase("studio.fly");
         // Fly: right button held, WASD (and Q/E down and up) move the camera at the view
@@ -1009,9 +916,26 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             rt.update(|s| s.local.profiling = recording);
         }
         was_recording = recording;
+        if frame_limit.is_some()
+            && let Some(error) = scene_view.renderlab_error()
+        {
+            anyhow::bail!("Renderlab could not draw the Scene and a bounded run cannot finish: {error}");
+        }
         if let Some(limit) = frame_limit {
-            if options.hidden() || presented {
+            // A frame counts when whichever view the view area shows (the Scene or the Game)
+            // was presented, so the window is captured as it is laid out.
+            if options.hidden() || presented || game_shown {
                 frames += 1;
+                counted_at = Instant::now();
+            } else if gated {
+                // Loading is the import gate's wait, which ends itself.
+                counted_at = Instant::now();
+            } else if counted_at.elapsed() >= BOUNDED_STALL {
+                anyhow::bail!(
+                    "a bounded run counted no frame for {} s: it counts a frame when the view area's Scene or Game is composited, and neither was (window visible {visible}, Scene rect {rect:?}, Game rect {game_rect:?}, Scene drawn {}, Scene extent shown {shown_extent:?})",
+                    BOUNDED_STALL.as_secs(),
+                    scene_view.presentable()
+                );
             }
             if frames >= limit {
                 if options.screenshot {
@@ -1025,13 +949,9 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             }
         }
         let busy = flying
-            || scene_view.needs_frame(rt.state().editor.state.quality)
-            || renderer.scene_frame_pending()
+            || scene_view.needs_frame()
             || composite
-            // A job wakes the loop only while the Scene can render for it.
-            || agent_work::needs_unpresented_render(&probe_owner, shown_extent)
-            || rt.touch(|s| vfx::running(s))
-            || rt.touch(|s| game.wants_frame(&s.editor, &renderer, &scene_view));
+            || rt.touch(|s| game.wants_frame(&s.editor));
         // One wake for the runtime's timers or the next scene frame; none when idle.
         let next = [
             rt.wake_at().map(|at| started + at),
@@ -1050,47 +970,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         // Sleep until an event, that wake, or an animation frame: never spin.
         wait();
     }
-    // Probe work retires with the Scene view it read, before the renderer goes. The window
-    // goes first so the wait is never an unresponsive window, and it is bounded.
     surface.hide();
-    rt.touch(|s| probe_owner.begin_drain(&mut s.editor));
-    let draining = Instant::now();
-    let mut retired = true;
-    loop {
-        let done = rt.touch(|s| -> ara_ui::Result<bool> {
-            server.pump(&mut s.editor);
-            s.editor.tick();
-            probe_owner.poll(&mut s.editor, &mut scene_view, &mut renderer)?;
-            s.editor.tick();
-            Ok(!probe_owner.busy() && !s.editor.probe_captures.busy())
-        });
-        match done {
-            Ok(true) => break,
-            Ok(false) if draining.elapsed() < CLOSE_DRAIN => {
-                std::thread::sleep(Duration::from_millis(8))
-            }
-            Ok(false) => {
-                eprintln!(
-                    "ara-editor: probe work did not retire: {}",
-                    ara_json::to_canonical_string(&probe_owner.resource_report())
-                );
-                retired = false;
-                break;
-            }
-            Err(error) => {
-                eprintln!("ara-editor: probe work failed while closing: {error}");
-                retired = false;
-                break;
-            }
-        }
-    }
-    if !retired {
-        // A bake still has work on the GPU: destroying its renderer under it is worse than
-        // leaving the GPU objects to the process exit, which follows at once.
-        std::mem::forget((scene_view, graph_layer, compositor, game, renderer));
-        return Ok(());
-    }
-    renderer.wait_scene_frame().ok();
     rt.touch(|s| game.retire(&mut s.editor, &mut renderer));
     graph_layer.retire(&renderer);
     compositor.retire(&renderer);
@@ -1282,6 +1162,11 @@ pub(super) fn click(s: &mut Studio, e: &stillkit::el::PointerEvent) -> bool {
 pub(super) fn note(s: &mut Studio, message: impl Into<String>) {
     s.local.note = Some((message.into(), Instant::now()));
 }
+
+/// The smallest window the studio opens or is resized to, in logical px (the window with its
+/// frame: Windows' client area is a little less, 1008x632). The title bar fits it at every zoom
+/// step (`the_title_bar_fits_the_window_at_every_zoom_step`); `--size` captures never go below it.
+pub(crate) const MIN_WINDOW: (u32, u32) = (1024, 640);
 
 /// The window's own controls: the system's on macOS, drawn ones elsewhere.
 fn frame(surface: &Surface, scale: f32) -> state::Frame {

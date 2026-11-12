@@ -33,8 +33,6 @@ impl From<RpcError> for EditorError {
 pub struct Editor {
     pub(crate) interaction: crate::interaction::Interaction,
     asset_updates: Receiver<()>,
-    /// Published model generations retained across document and transform edits.
-    pub(crate) models: crate::world::gltf::ModelCache,
     /// Shared engine host. UI content mutations go through this protocol endpoint.
     pub host: Host,
     /// Current native view snapshot, updated by editor action notifications.
@@ -61,7 +59,6 @@ pub struct Editor {
     /// GPU job results returned to the capture service.
     pub(crate) completed: mpsc::Sender<CaptureCompletion>,
     /// Session-owned derived probe jobs bridged to the render-boundary owner.
-    pub(crate) probe_captures: crate::probe_capture::Bridge,
     updates: Receiver<EditorState>,
     controls: Receiver<Control>,
     pub(crate) view_revision: u64,
@@ -218,8 +215,7 @@ impl Editor {
         let (completed, results) = mpsc::channel();
         host.register(Box::new(CaptureService::new(tasks, results)))
             .map_err(|d| anyhow::anyhow!(d.to_string()))?;
-        let (probes, probe_captures) = crate::probe_capture::channel();
-        host.register(Box::new(probes))
+        host.register(Box::new(crate::probe_capture::ProbeService))
             .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         host.register(Box::new(
             crate::validation_service::ValidationService::default(),
@@ -250,7 +246,6 @@ impl Editor {
         let mut editor = Self {
             interaction,
             asset_updates,
-            models: crate::world::gltf::ModelCache::new(root)?,
             host,
             state,
             session,
@@ -263,7 +258,6 @@ impl Editor {
             play_profiling,
             captures,
             completed,
-            probe_captures,
             updates,
             controls,
             view_revision: 0,

@@ -36,6 +36,8 @@ pub struct SceneStatus {
     pub ready: bool,
     /// Why it isn't, or what it is doing ("Preparing the scene renderer…").
     pub message: String,
+    /// The renderer failed (`message` says why): the panel shows the error, not a spinner.
+    pub failed: bool,
     /// Smoothed frames per second and frame time in ms, while frames run.
     pub fps: Option<(f32, f32)>,
 }
@@ -109,7 +111,7 @@ pub struct ScenePointer {
     pub window: (f32, f32),
 }
 
-/// Asset tile pictures: the legacy pipeline's off-thread renders (cached by content under
+/// Asset tile pictures: texture thumbnails decoded off-thread (cached by content under
 /// `.ara/cache/thumbnails`), turned into stillkit images as they land.
 #[derive(Default)]
 pub(crate) struct Previews {
@@ -128,10 +130,9 @@ pub(crate) struct Previews {
 impl Previews {
     /// Whether a file of `kind` has a picture worth rendering.
     pub fn previewable(kind: &str) -> bool {
-        matches!(
-            kind,
-            "png" | "jpg" | "jpeg" | "hdr" | "exr" | "glb" | "gltf" | "fbx" | "material" | "graph"
-        )
+        // Textures only: models, materials and effects have no picture until the renderer can
+        // draw them, and their tiles show the type's glyph.
+        matches!(kind, "png" | "jpg" | "jpeg" | "hdr" | "exr")
     }
 
     /// Asks for `paths` not asked for yet.
@@ -429,8 +430,6 @@ pub struct Local {
     pub history_page: usize,
     /// The last Assets search cleared this session (Restore Removed Assets Search).
     pub assets_cleared_query: Option<String>,
-    /// The renderer's latest reflection probe report (Lighting › Refresh Probe Status).
-    pub(crate) probe_status: Option<ara_runtime_render::probes::ProbeSnapshot>,
     /// A floating window being moved or resized.
     pub float_drag: Option<FloatDrag>,
     /// The press under way: when it went down and the farthest the pointer has travelled

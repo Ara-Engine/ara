@@ -47,7 +47,7 @@ fn noon_dusk_goldens_streamed_pages_and_indirect_contracts() -> Result<()> {
             pixels.save(&golden)?;
         }
         let baseline = image::open(&golden)?.to_rgba8();
-        let result = ara_render::capture::compare(&pixels, &baseline, 0.005)?;
+        let result = ara_frame::capture::compare(&pixels, &baseline, 0.005)?;
         if !result.passed {
             result.diff.save(output.join(format!("{name}-diff.png")))?;
         }
@@ -128,7 +128,7 @@ fn noon_dusk_goldens_streamed_pages_and_indirect_contracts() -> Result<()> {
             color_cutoff: [1., 1., 1., 0.5],
             billboard: true,
         }),
-        textures: vec![ara_render::scene::Texture {
+        textures: vec![ara_frame::scene::Texture {
             size: [2, 2],
             rgba: vec![
                 220, 30, 10, 255, 220, 30, 10, 0, 220, 30, 10, 255, 220, 30, 10, 0,

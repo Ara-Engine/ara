@@ -18,6 +18,7 @@ ara-hotpatch = { path = "../ara-hotpatch", optional = true, features = ["runtime
 ara-json.workspace = true
 ara-profile = { path = "../ara-profile", optional = true, features = ["instrumentation"] }
 ara-bvh = { path = "../ara-bvh" }
+ara-frame = { path = "../ara-frame" }
 ara-gpu = { path = "../ara-gpu" }
 ara-patch-charts = { path = "../ara-patch-charts" }
 ara-platform = { path = "../ara-platform" }
@@ -31,12 +32,5 @@ image = { workspace = true, features = ["png", "hdr", "jpeg"] }
 sha2 = { workspace = true }
 
 [dev-dependencies]
-ara-pathtrace = { path = "../ara-pathtrace" }
-ara-render-fidelity = { path = "../ara-render-fidelity" }
 ash.workspace = true
 gltf = { workspace = true, default-features = true }
-
-[[example]]
-name = "transport_g3"
-path = "src/look/transport/solve/bench/main.rs"
-required-features = ["fidelity-lab"]

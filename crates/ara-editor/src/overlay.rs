@@ -36,15 +36,9 @@ pub struct Outlines {
     upload: Option<ara_ui_render::gpu::Image>,
     /// Scene gizmos (icons and component shapes); clicks on icons select.
     pub icons: gizmos::Gizmos,
-    /// Each outlined channel (index + 1) and its colour group, for the renderer.
-    channel_groups: Vec<(u32, u8)>,
-    /// Whether the Scene frame draws the outlines itself (a raster Scene: whole
-    /// silhouettes, hidden parts faint, `ara_render::Outlines`). Otherwise the UI
-    /// overlay outlines the visible pixels of the entity-ID image.
-    pub in_scene: bool,
-    /// The outline key last handed to the renderer, and outlines waiting for it.
-    sent: Option<u64>,
-    pending: Option<ara_render::Outlines>,
+    /// Where the pointer rests over the Scene, normalised: the hovered object outlines.
+    /// Only the capture switch `ARA_SCENE_HOVER=u,v` sets it today.
+    pub hover: Option<[f32; 2]>,
 }
 impl Outlines {
     /// Refresh the channel map and group table; the outline overlays, one per colour group.
@@ -53,11 +47,10 @@ impl Outlines {
         view: &DocumentView,
         revision: u64,
         state: &EditorState,
-        renderer: &ara_render::Renderer,
+        entities: &[(u64, String)],
         changed: &std::collections::BTreeMap<u64, &str>,
         selection: bool,
     ) {
-        let entities = renderer.entities();
         self.channels.update(view.entities(), revision, entities);
         let key = state
             .selection
@@ -83,7 +76,6 @@ impl Outlines {
             .map(|a| selection && state.selection.contains(a))
             .collect();
         let mut groups = vec![("accent".to_owned(), false)];
-        self.channel_groups.clear();
         // Texel 0 is the background; channel `n` is texel `n + 1`, as the renderer writes.
         let width = 4096usize;
         let height = (entities.len() + 1).div_ceil(width).max(1);
@@ -110,7 +102,6 @@ impl Outlines {
             };
             if colour > 0 {
                 groups[colour - 1].1 = true;
-                self.channel_groups.push((n as u32 + 1, colour as u8));
             }
             // Hover groups are 16-bit: a scene past 65 535 entities hovers single channels.
             let hover = channels.targets[n]
@@ -130,11 +121,6 @@ impl Outlines {
             height: height as u32,
             rgba,
         });
-    }
-    /// Outlines for the Scene frame since the last call (`in_scene`): hand them to
-    /// `Renderer::set_outlines` and render a frame to show them.
-    pub fn take_scene_outlines(&mut self) -> Option<ara_render::Outlines> {
-        self.pending.take()
     }
     /// Upload a rebuilt group table and point the outline shader at it.
     pub fn upload(
@@ -567,7 +553,7 @@ pub fn build(
     view: &DocumentView,
     state: &EditorState,
     rect: Box2,
-    renderer: &ara_render::Renderer,
+    entities: &[(u64, String)],
     changed: &std::collections::BTreeMap<u64, &str>,
     gizmo: GizmoState,
     outlines: &mut Outlines,
@@ -620,35 +606,22 @@ pub fn build(
         view,
         revision,
         state,
-        renderer,
+        entities,
         changed,
         show("viewport.outline"),
     );
-    if outlines.in_scene {
-        // The Scene frame draws them: one logical pixel each side, in display pixels.
-        if outlines.sent != Some(outlines.key) {
-            outlines.sent = Some(outlines.key);
-            let colours = outlines
-                .groups
-                .iter()
-                .map(|(token, _)| color(token, 1.))
-                .collect::<ara_ui::Result<Vec<_>>>()?;
-            outlines.pending = Some(ara_render::Outlines {
-                channels: outlines.channel_groups.clone(),
-                colours,
-                width: renderer.size()[0] as f32 / rect.w.max(1.),
-                hidden: 0.35,
+    if let Some(uv) = outlines.hover {
+        overlays.push(Overlay::Hover {
+            uv,
+            color: color("accent", 0.35)?,
+        });
+    }
+    for (n, (token, used)) in outlines.groups.iter().enumerate() {
+        if *used {
+            overlays.push(Overlay::Outline {
+                index: n as u32 + 1,
+                color: color(token, 1.)?,
             });
-        }
-    } else {
-        outlines.sent = None;
-        for (n, (token, used)) in outlines.groups.iter().enumerate() {
-            if *used {
-                overlays.push(Overlay::Outline {
-                    index: n as u32 + 1,
-                    color: color(token, 1.)?,
-                });
-            }
         }
     }
     // Component gizmos read their own switches (`viewport.gizmos`, `viewport.icons`...).

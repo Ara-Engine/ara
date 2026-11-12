@@ -29,7 +29,7 @@ pub(super) struct Sample {
 }
 
 /// One vertex-colour channel term per channel R, G, B, A of a paint-layer weight:
-/// 0 unused, 1 the channel `c`, 2 `1 - c` (ara_render::scene::PaintWeight).
+/// 0 unused, 1 the channel `c`, 2 `1 - c` (ara_frame::scene::PaintWeight).
 pub(super) type Terms = [u8; 4];
 
 #[derive(Debug, Clone)]

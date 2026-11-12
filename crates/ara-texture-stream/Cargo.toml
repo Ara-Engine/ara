@@ -8,6 +8,7 @@ publish.workspace = true
 [dependencies]
 anyhow = { workspace = true }
 ara-gpu = { path = "../ara-gpu" }
+ara-frame = { path = "../ara-frame" }
 ara-render = { path = "../ara-render" }
 ara-asset-format = { path = "../ara-asset-format" }
 bytemuck = { workspace = true, features = ["derive"] }

@@ -1,6 +1,6 @@
 use super::*;
 use crate::material::Source;
-use ara_render::{
+use ara_frame::{
     instanced::NO_TEXTURE,
     scene::{
         BASE_COLOR_DECODE_SRGB, DOUBLE_SIDED, EMISSIVE_DECODE_SRGB, VERTEX_COLOR_TINT,

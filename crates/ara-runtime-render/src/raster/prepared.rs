@@ -46,7 +46,7 @@ impl RasterContent {
         // restore this exact scene before any Prepared pose/material operation.
         let scene = std::mem::replace(
             &mut prepared.scene,
-            ara_render::instanced::Scene {
+            ara_frame::instanced::Scene {
                 geometry: Vec::new(),
                 instances: Vec::new(),
                 materials: Vec::new(),

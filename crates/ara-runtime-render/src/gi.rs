@@ -13,11 +13,11 @@
 use crate::fidelity::native::{self, Content, NativeConfig};
 use crate::gi_cpu::{self, Tracer};
 use anyhow::{Context, Result, ensure};
-use ara_gpu::GpuDevice;
-use ara_render::instanced::Scene;
-use ara_render::look::gi::{
+use ara_frame::instanced::Scene;
+use ara_frame::look::gi::{
     ProbeLattice, ProbeLayout, ProbeSurfaces, ProbeUpdate, STATIC_VECTORS, SURFACE_TEXELS,
 };
+use ara_gpu::GpuDevice;
 use ara_render_fidelity::{FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, Upscaler};
 use ara_runtime::extract::RenderFrame;
 use glam30::Mat4;
@@ -684,7 +684,7 @@ fn decode(bytes: &[u8]) -> Result<ProbeSurfaces> {
     };
     let lattices = u32::from_le_bytes(word(0)?) as usize;
     ensure!(
-        (1..=ara_render::look::gi::MAX_LATTICES).contains(&lattices),
+        (1..=ara_frame::look::gi::MAX_LATTICES).contains(&lattices),
         "invalid probe GI cache lattices"
     );
     let mut all = Vec::with_capacity(lattices);
@@ -746,7 +746,7 @@ pub(crate) fn emission(prepared: &native::Prepared) -> Vec<crate::gi_cpu::Shadin
 /// [`shading`] (`surface`) or [`emission`]. Each map's mean and each cutout's
 /// coverage is decoded once per call, however many materials share the map.
 fn shade(prepared: &native::Prepared, surface: bool) -> Vec<crate::gi_cpu::Shading> {
-    use ara_render::{
+    use ara_frame::{
         instanced::NO_TEXTURE,
         scene::{BASE_COLOR_DECODE_SRGB, EMISSIVE_DECODE_SRGB},
     };
@@ -772,7 +772,7 @@ fn shade(prepared: &native::Prepared, surface: bool) -> Vec<crate::gi_cpu::Shadi
     // (coverage, tint, Fresnel), as the ray-traced bake's nativeAccept.
     const CUTOUT_SIDE: u32 = 256;
     let mut cutouts = HashMap::new();
-    let mut cutout = |m: &ara_render::instanced::Material| {
+    let mut cutout = |m: &ara_frame::instanced::Material| {
         let (mode, alpha, cutoff) = (m.pbr.flags[0], m.pbr.base_color[3], m.pbr.surface[3]);
         let glass = glass_share(m);
         if mode == 0 && glass == 0. {
@@ -875,12 +875,12 @@ fn shade(prepared: &native::Prepared, surface: bool) -> Vec<crate::gi_cpu::Shadi
 /// The share of light glass passes straight on at normal incidence besides its tint:
 /// its transmissive layer less the interface's reflection at its IOR (zero without
 /// transmission). Probe-surface rays pass glass by this times the tint's luminance.
-fn glass_share(m: &ara_render::instanced::Material) -> f32 {
+fn glass_share(m: &ara_frame::instanced::Material) -> f32 {
     let transmission = m.extras.transmission_factor.clamp(0., 1.);
     if transmission == 0. {
         return 0.;
     }
-    let (ior, _, _) = ara_render::instanced::Volume::unpack(m.extras.volume);
+    let (ior, _, _) = ara_frame::instanced::Volume::unpack(m.extras.volume);
     let f0 = ((ior - 1.) / (ior + 1.)).powi(2);
     transmission * (1. - m.pbr.surface[0].clamp(0., 1.)) * (1. - f0)
 }
@@ -980,12 +980,12 @@ mod tests {
 
     #[test]
     fn glass_passes_its_straight_transmittance_to_probe_rays() {
-        let mut glass = ara_render::instanced::Material::default();
+        let mut glass = ara_frame::instanced::Material::default();
         glass.extras.transmission_factor = 1.;
         glass.pbr.surface[0] = 0.;
         // IOR 1.5 reflects 4% at normal incidence; 1.33 (water) 2%.
         assert!((glass_share(&glass) - 0.96).abs() < 1e-4);
-        glass.extras.volume = ara_render::instanced::Volume {
+        glass.extras.volume = ara_frame::instanced::Volume {
             ior: 1.33,
             ..Default::default()
         }
@@ -994,7 +994,7 @@ mod tests {
         // Metals and opaque materials pass nothing.
         glass.pbr.surface[0] = 1.;
         assert_eq!(glass_share(&glass), 0.);
-        assert_eq!(glass_share(&ara_render::instanced::Material::default()), 0.);
+        assert_eq!(glass_share(&ara_frame::instanced::Material::default()), 0.);
     }
 
     fn lattice(origin: f32) -> ProbeSurfaces {
@@ -1135,7 +1135,7 @@ mod tests {
 
     #[test]
     fn emission_is_shadings_emission_without_its_surface() -> Result<()> {
-        use ara_render::{instanced::NO_TEXTURE, scene::EMISSIVE_DECODE_SRGB};
+        use ara_frame::{instanced::NO_TEXTURE, scene::EMISSIVE_DECODE_SRGB};
         let mut prepared = yard(0.)?;
         // One emissive map read raw, then by a material that decodes its sRGB
         // itself (a graph view), and a terrain splat layering those two.

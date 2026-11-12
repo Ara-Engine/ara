@@ -15,11 +15,6 @@
 //! feature reports `ARA_RENDERLAB_UNSUPPORTED` once when a frame uses it.
 #![warn(missing_docs)]
 
-// On Apple, Renderlab's ara-gpu backend is a separate revision (Cargo.toml); it is
-// `renderlab` to every module, as the wgpu revision is elsewhere.
-#[cfg(target_vendor = "apple")]
-extern crate renderlab_metal as renderlab;
-
 mod atmosphere;
 mod batch;
 mod cutout;
@@ -37,6 +32,8 @@ mod bridge_metal;
 mod grade;
 #[cfg(all(test, not(target_vendor = "apple")))]
 mod id_slot;
+#[cfg(not(target_vendor = "apple"))]
+mod id_target;
 mod lighting;
 mod meter;
 mod scene;
@@ -90,6 +87,10 @@ pub struct Options {
     /// Light the scene with a constant sky of the sky image's mean radiance instead of
     /// the image itself. For A/B measurement of what a sky map costs in Renderlab.
     pub constant_sky: bool,
+    /// Write the view's object ids beside each frame (`ExternalFrame::id`, `id_texels`):
+    /// the Scene host's outlines, hover and clicks. Draws carry their index in the frame's
+    /// `draws` plus one. Off: no id pass runs.
+    pub scene_ids: bool,
 }
 
 /// Renderlab behind Ara's presenter.
@@ -103,9 +104,15 @@ pub struct Renderlab {
 impl Renderlab {
     /// Creates Renderlab's engine: on its own Vulkan device through wgpu, or on Apple
     /// on the presenter's Metal device through Renderlab's ara-gpu backend. Fails with
-    /// `ARA_RENDERLAB_UNAVAILABLE` when this machine cannot run the requested path; the
-    /// host then keeps Ara's renderer.
+    /// `ARA_RENDERLAB_UNAVAILABLE` when this machine cannot run the requested path, and
+    /// always while `ARA_RENDERLAB_FAIL_START` is set non-empty (to see what a host shows when
+    /// the engine does not start).
     pub fn new(options: &Options) -> Result<Self> {
+        if std::env::var_os("ARA_RENDERLAB_FAIL_START").is_some_and(|v| !v.is_empty()) {
+            anyhow::bail!(
+                "ARA_RENDERLAB_UNAVAILABLE: Renderlab was told not to start (ARA_RENDERLAB_FAIL_START)"
+            );
+        }
         #[cfg(not(target_vendor = "apple"))]
         let bridge = bridge::Bridge::new(options)?;
         #[cfg(target_vendor = "apple")]
@@ -143,5 +150,9 @@ impl ExternalRenderer for Renderlab {
 
     fn release(&mut self, gpu: &mut GpuDevice) -> Result<()> {
         self.bridge.release(gpu)
+    }
+
+    fn pick_id(&mut self, pixel: [u32; 2]) -> Result<Option<u32>> {
+        self.bridge.pick_id(pixel)
     }
 }

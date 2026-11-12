@@ -589,6 +589,16 @@ pub struct CaptureParams {
     /// Camera turn over the clip in degrees.
     #[serde(default)]
     pub video_yaw: Option<f32>,
+    /// Clip frame (0-based) at which the camera cuts: from it on, the camera is
+    /// moved by `video_cut_move` and turned by `video_cut_yaw` on top of its path.
+    #[serde(default)]
+    pub video_cut_at: Option<u32>,
+    /// World-space jump of the cut, in metres.
+    #[serde(default)]
+    pub video_cut_move: Option<[f32; 3]>,
+    /// Turn of the cut in degrees about the vertical axis.
+    #[serde(default)]
+    pub video_cut_yaw: Option<f32>,
 }
 fn width() -> u32 {
     1280

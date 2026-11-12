@@ -4,7 +4,7 @@
 //!
 //! Ownership: `patches`, `links`, `reverse` belong to the A2 track; `changes` to A3;
 //! `solve` and `media` to B3.
-pub(crate) mod changes;
+pub(crate) use ara_frame::change_feed as changes;
 pub(crate) mod links;
 pub(crate) mod media;
 pub(crate) mod patches;
