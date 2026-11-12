@@ -7658,3 +7658,40 @@ fn the_title_bar_fits_the_window_at_every_zoom_step() {
         }
     }
 }
+
+/// The Scene's frame is extracted from the world by a free function that holds no renderer, and
+/// it is the frame the content store builds: the same draws, in the same order, with the
+/// editor's camera in it.
+#[test]
+fn the_scene_frame_is_extracted_from_the_world_without_a_renderer() {
+    use crate::world::gltf::{FidelityContent, FrameInputs, extract_frame};
+    let rt = open();
+    let s = rt.state();
+    let view = s.editor.view().unwrap();
+    let store = s.editor.host.store();
+    let hidden = std::collections::BTreeSet::new();
+    let mut content = FidelityContent::new(s.editor.host.root()).unwrap();
+    let frame = extract_frame(
+        &mut content,
+        FrameInputs {
+            view: &view,
+            workspace: store.workspace(),
+            schema: store.schema(),
+            poses: None,
+            hidden: &hidden,
+            camera: &s.editor.state.camera,
+        },
+    )
+    .unwrap();
+    let mut other = FidelityContent::new(s.editor.host.root()).unwrap();
+    let direct = other
+        .frame_with_poses(&view, store.workspace(), store.schema(), None, &hidden)
+        .unwrap();
+    assert!(!frame.draws.is_empty(), "the Box draws");
+    assert_eq!(
+        format!("{:?}", frame.draws),
+        format!("{:?}", direct.draws),
+        "identical draws"
+    );
+    assert!(frame.camera.is_some(), "the editor's camera is the frame's");
+}
