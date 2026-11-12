@@ -39,8 +39,12 @@ pub(crate) fn install(presenter: &mut Presenter, cache: &Path) -> Result<()> {
     if presenter.external_renderer().is_some() {
         return Ok(());
     }
+    // `ARA_RENDERLAB_PIPELINE=1`: present one frame behind, so the CPU records the next frame
+    // while the GPU draws the last (a frame of latency; off by default until measured).
+    let pipeline = std::env::var("ARA_RENDERLAB_PIPELINE").is_ok_and(|value| value == "1");
     let options = Options {
         path,
+        frames_in_flight: if pipeline { 2 } else { 1 },
         pipeline_cache: Some(cache.join("renderlab")),
         // An A/B switch for Renderlab's traced-reflection band (`Options`).
         max_reflection_roughness: std::env::var("ARA_RENDERLAB_REFLECTION_ROUGHNESS")
@@ -53,6 +57,7 @@ pub(crate) fn install(presenter: &mut Presenter, cache: &Path) -> Result<()> {
         // The player draws no Scene overlays: no id pass.
         scene_ids: false,
     };
+    presenter.set_external_pipelined(pipeline);
     Renderlab::new(&options)
         .and_then(|renderlab| presenter.set_external_renderer(Some(Box::new(renderlab))))
         .map_err(|error| {
