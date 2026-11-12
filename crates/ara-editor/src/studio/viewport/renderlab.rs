@@ -168,7 +168,12 @@ impl RenderlabScene {
 
     /// Publishes a finished frame: its image, its ids and the camera it was drawn from. A frame
     /// of another size than the one asked for since (a resize) is dropped.
-    fn adopt(&mut self, gpu: &mut GpuDevice, rendered: ExternalFrame, flight: Flight) -> Result<()> {
+    fn adopt(
+        &mut self,
+        gpu: &mut GpuDevice,
+        rendered: ExternalFrame,
+        flight: Flight,
+    ) -> Result<()> {
         PresentationImage::publish(&mut self.published, gpu, rendered.image, flight.size)?;
         if let Some(id) = rendered.id {
             PresentationImage::publish(&mut self.published_ids, gpu, id, flight.size)?;
