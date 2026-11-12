@@ -30,6 +30,8 @@ use std::time::{Duration, Instant};
 
 /// Longest a present waits for its frame before reading it back regardless.
 const FRAME_WAIT: Duration = Duration::from_secs(5);
+/// How long a click waits for the engine's id readback.
+const PICK_WAIT: Duration = Duration::from_millis(250);
 /// Mesh-material groups terrain tiles may take; each resident tile is its own group (its own
 /// weights texture, so tiles never merge by material). Outpost's 144 tiles need 144; entity
 /// draws and foliage get `MAX_GROUPS - TERRAIN_GROUPS`, merged by material when they exceed it.
@@ -190,6 +192,33 @@ impl Bridge {
 
     pub fn cut(&mut self) {
         self.cut = true;
+    }
+
+    /// The frontmost id under `pixel` of the view's last frame (`Engine::request_ids`), waiting
+    /// briefly for the copy: a click's answer, glass included. `None` without ids, before a
+    /// frame, when all the request slots are busy or when the copy does not land in time.
+    pub fn pick_id(&mut self, pixel: [u32; 2]) -> Result<Option<u32>> {
+        let (Some(view), true) = (self.view, self.scene_ids) else {
+            return Ok(None);
+        };
+        let Ok(request) = self
+            .engine
+            .request_ids(view, renderlab::IdRect::pixel(pixel[0], pixel[1]))
+        else {
+            return Ok(None);
+        };
+        let started = Instant::now();
+        while started.elapsed() < PICK_WAIT {
+            let events = self.engine.poll()?;
+            if let Some(read) = events.ids.iter().find(|read| read.request == request) {
+                return Ok(Some(read.at(0, 0).front));
+            }
+            if events.ids_lost.iter().any(|lost| lost.request == request) {
+                return Ok(None);
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        Ok(None)
     }
 
     pub fn render(

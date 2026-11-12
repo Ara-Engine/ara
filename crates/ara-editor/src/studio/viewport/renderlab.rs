@@ -103,6 +103,17 @@ impl RenderlabScene {
         Ok(())
     }
 
+    /// The engine's id under `pixel` for a click (frontmost, glass included), when it has one.
+    pub(super) fn pick_id(&mut self, pixel: [u32; 2]) -> Option<u32> {
+        match self.engine.pick_id(pixel) {
+            Ok(id) => id,
+            Err(error) => {
+                eprintln!("ARA_SCENE_RENDERER: Renderlab could not answer the click ({error:#})");
+                None
+            }
+        }
+    }
+
     /// The packed id image for the same frame as [`Self::image`] (`IdSource::Packed`).
     pub(super) fn id_image(&self) -> Option<Image> {
         self.published_ids

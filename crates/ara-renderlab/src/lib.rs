@@ -146,4 +146,8 @@ impl ExternalRenderer for Renderlab {
     fn release(&mut self, gpu: &mut GpuDevice) -> Result<()> {
         self.bridge.release(gpu)
     }
+
+    fn pick_id(&mut self, pixel: [u32; 2]) -> Result<Option<u32>> {
+        self.bridge.pick_id(pixel)
+    }
 }

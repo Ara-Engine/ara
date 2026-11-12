@@ -157,6 +157,7 @@ impl Ids {
             entities: &self.entities,
             texels: &self.texels,
             size: self.size,
+            front: None,
         })
     }
 
@@ -236,10 +237,24 @@ pub(in crate::studio) struct IdHost<'a> {
     pub entities: &'a [(u64, String)],
     texels: &'a [u8],
     size: [u32; 2],
+    /// The engine's own answer for the click, when it gave one (`ExternalRenderer::pick_id`).
+    front: Option<u32>,
+}
+
+impl IdHost<'_> {
+    /// The click's answer from the engine's id pass: it sees through glass, which the
+    /// opaque ids the overlays read do not.
+    pub fn with_front(mut self, front: Option<u32>) -> Self {
+        self.front = front;
+        self
+    }
 }
 
 impl IdPick for IdHost<'_> {
     fn id_at(&mut self, [x, y]: [u32; 2]) -> Result<IdHit> {
+        if let Some(id) = self.front {
+            return Ok(IdHit::from_packed(id.to_le_bytes()));
+        }
         anyhow::ensure!(
             x < self.size[0] && y < self.size[1],
             "pixel ({x}, {y}) is outside the {:?} id image",

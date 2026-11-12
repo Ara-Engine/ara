@@ -91,6 +91,13 @@ pub trait ExternalRenderer: Send {
     fn settle_frames(&self) -> u32;
     /// Releases what it created on `gpu`, before that device is destroyed.
     fn release(&mut self, gpu: &mut GpuDevice) -> Result<()>;
+    /// The id of the frontmost surface (glass included) under `pixel` of the last frame, from
+    /// the renderer's own id pass: what a click picks. `0` is nothing and `0xFFFF_FFFF` a surface
+    /// without an id. `None`: it has no ids, or could not answer in time, and the host reads
+    /// the delivered id image instead.
+    fn pick_id(&mut self, _pixel: [u32; 2]) -> Result<Option<u32>> {
+        Ok(None)
+    }
 }
 
 impl Presenter {

@@ -108,6 +108,11 @@ impl Bridge {
         self.cut = true;
     }
 
+    /// Apple's backend has no object ids yet.
+    pub fn pick_id(&mut self, _pixel: [u32; 2]) -> Result<Option<u32>> {
+        Ok(None)
+    }
+
     pub fn render(
         &mut self,
         gpu: &mut GpuDevice,
