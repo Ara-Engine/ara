@@ -1642,7 +1642,6 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             Ok(())
         }
         // The effect preview has no renderer to run on yet.
-        "vfx.restart" | "vfx.step" | "vfx.rate" => Err(super::unavailable::SOON.into()),
         "vfx.emitter.collapse" | "vfx.emitter.hide" | "vfx.emitter.isolate" => match target {
             Target::Text(name) => {
                 use super::vfx::Emitter;
@@ -1691,14 +1690,7 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                 None => Ok(()),
             }
         }
-        // Lighting: reflection probe captures, and the volumes' look presets.
-        // Reflection probe capture has no renderer to run on yet.
-        "lighting.probe.recapture"
-        | "lighting.probe.cancel"
-        | "lighting.probe.refresh"
-        | "lighting.probe.copy" => {
-            Err(format!("Reflection probe capture: {}", super::unavailable::SOON).into())
-        }
+        // Lighting: the volumes' look presets.
         // History pages through older changes, 300 at a time.
         "history.older" => {
             let total = s.editor.host.store().history().len();
@@ -2149,8 +2141,6 @@ pub(super) fn applies(s: &Studio, id: &str, target: &Target) -> bool {
             .is_some_and(|id| crate::prefab::instance(e.host.store(), &e.state.doc, id).is_some())
     };
     match id {
-        "lighting.probe.recapture" | "lighting.probe.refresh" | "lighting.probe.copy" => false,
-        "lighting.probe.cancel" => false,
         "view.camera.pilot" => record("Camera"),
         "assets.set_main" => matches!(target, Target::Asset(path) if path.ends_with(".scene")),
         "lighting.inspect" => [

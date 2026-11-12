@@ -136,7 +136,7 @@ impl ViewMode {
     }
 }
 /// What this renderer can show beyond Lit, with the reason for anything it cannot
-/// (`Renderer::capabilities`; `render.probes.query` reports it as is). A mode it cannot
+/// (`Renderer::capabilities`). A mode it cannot
 /// show is never drawn as Lit under that mode's name.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
