@@ -12,7 +12,7 @@ impl PatchTransport {
     fn forcing_samples(
         &self,
         scene: &Scene,
-        textures: &[crate::scene::Texture],
+        textures: &[ara_frame::scene::Texture],
         rows: &[u32],
         workers: usize,
     ) -> Vec<Forcing> {
@@ -94,7 +94,7 @@ impl PatchTransport {
     pub(super) fn refresh_forcing(
         &mut self,
         scene: &Scene,
-        textures: &[crate::scene::Texture],
+        textures: &[ara_frame::scene::Texture],
         rows: Option<&[u32]>,
     ) -> Result<()> {
         let all: Vec<_>;

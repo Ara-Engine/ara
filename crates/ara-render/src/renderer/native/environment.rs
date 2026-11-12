@@ -4,11 +4,11 @@ use super::*;
 pub(super) fn snapshot(scene: &NativeScene) -> Scene {
     Scene {
         meshes: Vec::new(),
-        materials: vec![crate::scene::Material {
+        materials: vec![ara_frame::scene::Material {
             textures: [0; 4],
             ..Default::default()
         }],
-        textures: vec![crate::scene::Texture {
+        textures: vec![ara_frame::scene::Texture {
             size: [1, 1],
             rgba: vec![255; 4],
             srgb: false,

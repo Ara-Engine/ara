@@ -30,9 +30,9 @@ impl PatchTransport {
                     if distance >= light.position_range[3] {
                         return false;
                     }
-                    let kind = light.parameters[0] % crate::scene::LIGHT_SHAPED;
+                    let kind = light.parameters[0] % ara_frame::scene::LIGHT_SHAPED;
                     let radius = light.parameters[2];
-                    let extent = if kind >= crate::scene::LIGHT_RECT {
+                    let extent = if kind >= ara_frame::scene::LIGHT_RECT {
                         glam::Vec2::new(light.rect[0], light.rect[1])
                             .length()
                             .max(radius)

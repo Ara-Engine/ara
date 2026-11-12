@@ -43,7 +43,7 @@ fn scene() -> Scene {
         materials: vec![Material::default()],
         textures: 0,
         decals: vec![],
-        lights: vec![crate::scene::Light::ZERO],
+        lights: vec![ara_frame::scene::Light::ZERO],
         sun_direction: Vec3::Y,
         sun_lux: Vec3::ONE,
         environment: vec![],
@@ -220,14 +220,14 @@ fn native_feed_capture_is_byte_identical_and_renderer_accepts_replay() -> Result
         &[],
         root.join("cache"),
     )?;
-    let request = crate::capture::CaptureRequest {
-        camera: crate::scene::CameraSpec::LookAt {
+    let request = ara_frame::capture::CaptureRequest {
+        camera: ara_frame::scene::CameraSpec::LookAt {
             position: Vec3::new(0., 0., 3.),
             target: Vec3::ZERO,
             vertical_fov: 0.8,
         },
         size: [96, 64],
-        mode: crate::capture::ViewMode::Albedo,
+        mode: ara_frame::capture::ViewMode::Albedo,
         deterministic: true,
         exposure: 1.,
         settle_frames: 1,

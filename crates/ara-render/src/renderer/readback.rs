@@ -42,7 +42,7 @@ impl Renderer {
 
     /// The completed overdraw frame's fragment counts (render size, R16F), through
     /// the ID readback buffer; `None` unless the frame drew the overdraw view.
-    pub(super) fn read_overdraw(&mut self) -> Result<Option<crate::capture::OverdrawStats>> {
+    pub(super) fn read_overdraw(&mut self) -> Result<Option<ara_frame::capture::OverdrawStats>> {
         if !self.look.frame_overdraw {
             return Ok(None);
         }
@@ -79,7 +79,7 @@ impl Renderer {
             .0
             .iter()
             .map(|h| half_to_f32(u16::from_le_bytes(*h)).round() as u32);
-        Ok(Some(crate::capture::OverdrawStats::of(counts)))
+        Ok(Some(ara_frame::capture::OverdrawStats::of(counts)))
     }
 }
 

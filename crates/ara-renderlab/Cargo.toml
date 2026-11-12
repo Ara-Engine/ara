@@ -48,5 +48,4 @@ ash038 = { package = "ash", version = "0.38", default-features = false, features
 ara-asset = { path = "../ara-asset" }
 ara-asset-format = { path = "../ara-asset-format" }
 ara-frame = { path = "../ara-frame" }
-ara-render = { path = "../ara-render" }
 image = { workspace = true, features = ["png"] }

@@ -8,7 +8,7 @@ impl PatchTransport {
     pub(super) fn bake_channels(
         &mut self,
         scene: &Scene,
-        textures: &[crate::scene::Texture],
+        textures: &[ara_frame::scene::Texture],
     ) -> Result<()> {
         // Receiver/media coupling is not linear in a fixed surface operator.
         if self.bodies.values().any(|body| !body.owns_links()) {

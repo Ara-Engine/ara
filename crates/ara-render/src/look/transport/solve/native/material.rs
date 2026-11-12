@@ -2,7 +2,7 @@
 use super::*;
 pub(super) struct NativeMaterials<'a> {
     pub(super) scene: &'a Scene,
-    pub(super) textures: &'a [crate::scene::Texture],
+    pub(super) textures: &'a [ara_frame::scene::Texture],
     pub(super) bodies: &'a BTreeMap<u64, BodyClass>,
     pub(super) generations: &'a [u64],
 }
@@ -133,7 +133,7 @@ impl Materials for NativeMaterials<'_> {
     }
 }
 
-fn sample_texture(textures: &[crate::scene::Texture], id: u32, uv: [f32; 2]) -> Vec4 {
+fn sample_texture(textures: &[ara_frame::scene::Texture], id: u32, uv: [f32; 2]) -> Vec4 {
     let Some(texture) = textures.get(id as usize) else {
         return Vec4::ONE;
     };
@@ -244,7 +244,7 @@ mod tests {
 
     #[test]
     fn filtered_white_texture_does_not_create_superunit_reflectance() {
-        let textures = [crate::scene::Texture {
+        let textures = [ara_frame::scene::Texture {
             size: [2, 2],
             rgba: vec![255; 16],
             srgb: true,

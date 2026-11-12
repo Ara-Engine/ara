@@ -201,9 +201,7 @@ impl Agent {
         )
         .unwrap();
         let mut config = PlayConfig::for_project(dir);
-        // These tests assert on the frozen ara-render's output (captures, hashes, presets), so
-        // they name it; the player's own default is Renderlab.
-        config.pool.renderer = Some("ara".to_owned());
+        // The player default is Renderlab. These tests follow that launch.
         config.pool.executable = player;
         if let Some(player) = std::env::var_os("ARA_BENCH_PLAYER") {
             config.pool.executable = player.into();

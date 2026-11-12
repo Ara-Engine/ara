@@ -8,7 +8,7 @@
 use super::scene::{self, Layout};
 use crate::Renderer;
 use crate::look::{LocalShadows, Quality};
-use crate::scene::{Material, Mesh, Scene, Texture, Vertex};
+use ara_frame::scene::{Material, Mesh, Scene, Texture, Vertex};
 use anyhow::Result;
 use ara_gpu::commands::Command;
 use ara_gpu::{Access, Barrier, Device, Queue, Resource};

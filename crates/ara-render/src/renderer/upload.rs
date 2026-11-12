@@ -1,13 +1,13 @@
 use super::transfer::{upload_buffer, upload_image};
 use super::*;
 use crate::graph::{Graph, State};
-use crate::scene::{Light, Vertex};
+use ara_frame::scene::{Light, Vertex};
 use ara_gpu::{RootConstants, vulkan::Command};
 use bytemuck::Zeroable;
 use sha2::{Digest, Sha256};
 
 /// Capacity of the host-visible light lists, matching the tiled culling limit.
-pub(super) const MAX_LIGHTS: usize = crate::scene::MAX_LOCAL_LIGHTS;
+pub(super) const MAX_LIGHTS: usize = ara_frame::scene::MAX_LOCAL_LIGHTS;
 
 /// Everything uploaded from one extraction snapshot. Replacing a scene builds a new
 /// `Content` and retires the old one; the device, pipelines and targets survive.
@@ -56,7 +56,7 @@ impl Renderer {
         scene: Scene,
         size: [u32; 2],
         artifacts: &Path,
-        shader_metadata: crate::capture::ShaderMetadata,
+        shader_metadata: ara_frame::capture::ShaderMetadata,
     ) -> Result<Self> {
         let frame = gpu.create_buffer(
             std::mem::size_of::<frame::Frame>() as u64,
@@ -307,8 +307,8 @@ pub(super) struct Geometry {
 /// texture indices address `texture_indices`. Partial uploads are retired on error.
 pub(super) fn upload_geometry(
     gpu: &mut GpuDevice,
-    materials: Vec<crate::scene::Material>,
-    meshes: Vec<crate::scene::Mesh>,
+    materials: Vec<ara_frame::scene::Material>,
+    meshes: Vec<ara_frame::scene::Mesh>,
     lights: Vec<Light>,
     texture_indices: &[u32],
 ) -> Result<Geometry> {
@@ -433,9 +433,9 @@ pub(super) fn upload_geometry(
 
 /// Validate logical material parameters and resolve their texture slots before upload.
 pub(super) fn prepare_materials(
-    mut materials: Vec<crate::scene::Material>,
+    mut materials: Vec<ara_frame::scene::Material>,
     texture_indices: &[u32],
-) -> Result<Vec<crate::scene::Material>> {
+) -> Result<Vec<ara_frame::scene::Material>> {
     ensure!(
         materials.iter().all(|m| m
             .base_color
@@ -459,7 +459,7 @@ pub(super) fn upload_content(
     gpu: &mut GpuDevice,
     scene: Scene,
     artifacts: &Path,
-    shader_metadata: &crate::capture::ShaderMetadata,
+    shader_metadata: &ara_frame::capture::ShaderMetadata,
     compute_frame: Buffer,
     cached_ibl: Option<[Pipeline; 2]>,
 ) -> Result<Content> {
@@ -491,7 +491,7 @@ pub(super) fn upload_content(
 
 struct Ibl<'a> {
     artifacts: &'a Path,
-    metadata: &'a crate::capture::ShaderMetadata,
+    metadata: &'a ara_frame::capture::ShaderMetadata,
     cached: Option<[Pipeline; 2]>,
 }
 fn upload_content_inner(

@@ -1,12 +1,8 @@
 # ara-renderlab
 
-Renderlab (`github.com/Ara-Engine/renderlab`) as Ara's default renderer (D35, D39).
-`Renderlab` implements `ara_runtime_render::ExternalRenderer`; a host installs it
-with `Presenter::set_external_renderer`, and presents, captures and perf runs then
-draw the extracted `RenderFrame` through Renderlab's `Engine`. The player's switch is
-`--renderer renderlab|ara|renderlab-rt|renderlab-nonrt` (or `ARA_RENDERER`); `renderlab` is the
-default. `ara-render` is frozen and draws where Renderlab cannot start, and the editor's Scene
-view, until Renderlab has more than one view per engine.
+Renderlab (`github.com/Ara-Engine/renderlab`) is Ara's renderer (D35, D39).
+`Renderlab` implements `ara_runtime_render::ExternalRenderer`. Presents, captures and perf runs draw the extracted `RenderFrame` through Renderlab's `Engine`.
+The player selects `--renderer renderlab|renderlab-rt|renderlab-nonrt` (or `ARA_RENDERER`). A start failure is `ARA_RENDERLAB_UNAVAILABLE`. The editor Scene view still draws with `ara-render`.
 
 This is the only crate that names a Renderlab or wgpu type. Keep it that way: the
 GPU layer under Renderlab is being measured against `ara-gpu`, and a swap must touch
@@ -15,7 +11,7 @@ this crate alone.
 ## API
 
 - `Renderlab::new(&Options)`: Renderlab's engine on its own Vulkan device, or on Apple on the
-  presenter's Metal device (ara-gpu backend, RT only). `ARA_RENDERLAB_UNAVAILABLE` keeps Ara's.
+  presenter's Metal device (ara-gpu backend, RT only). A failure to start is `ARA_RENDERLAB_UNAVAILABLE`.
 - `PathChoice::{Auto, HardwareRt, NonRt}`: `Auto` prefers hardware RT. The non-RT
   path prints `ARA_RENDERLAB_NONRT_PATENT` (open patent question on its sun-shadow method).
 - `Renderlab::path()`: the path in use.

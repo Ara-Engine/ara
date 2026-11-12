@@ -103,7 +103,7 @@ fn native_raster_keeps_instances_local_and_tracks_moving_and_skinned_poses_witho
             })
             .collect(),
         materials: vec![instanced::Material {
-            pbr: crate::scene::Material {
+            pbr: ara_frame::scene::Material {
                 base_color: [0.8, 0.1, 0.05, 1.],
                 textures: [u32::MAX; 4],
                 ..Default::default()

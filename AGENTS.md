@@ -39,7 +39,7 @@ M0 is done: every spike decision is in `docs/decisions.md`. M1–M4 tracks are b
 - virtualized geometry and VSM;
 - the physics performance pass;
 - the diagnostics bus and `ara why`;
-- Renderlab as the default renderer behind the presenter (`ara-renderlab`, D35, D39): the player and the editor's Game view use it, `ara-render` is frozen and is the fallback where Renderlab cannot run (`ara-player --renderer ara` selects it).
+- Renderlab is the player's only renderer (`ara-renderlab`): the player and the editor's Game view use it, and a Renderlab start failure is `ARA_RENDERLAB_UNAVAILABLE`. The editor's Scene view still draws with `ara-render`.
 
 Run `ara init` in a scratch dir to try the CLI and MCP.
 

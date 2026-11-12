@@ -26,7 +26,7 @@ fn game_loading_bounds_are_grey_failed_are_magenta_and_publication_replaces_them
             headless: 1,
             windowed: 0,
             size: [320, 240],
-            renderer: Some("ara".to_owned()),
+            renderer: None,
         },
         "pending-game-test".into(),
     )

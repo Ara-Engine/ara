@@ -220,7 +220,7 @@ impl Renderer {
             request.camera,
             request.exposure,
             false,
-            crate::capture::ViewMode::Lit,
+            ara_frame::capture::ViewMode::Lit,
             false,
         )?;
         ensure!(

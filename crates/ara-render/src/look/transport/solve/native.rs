@@ -162,7 +162,7 @@ impl PatchTransport {
     /// publication-local instance IDs. Cache roots must be project/scratch owned.
     pub fn new(
         scene: &Scene,
-        textures: &[crate::scene::Texture],
+        textures: &[ara_frame::scene::Texture],
         bodies: BTreeMap<u64, BodyClass>,
         options: TransportOptions,
         cache_root: Option<&Path>,
@@ -491,7 +491,7 @@ impl PatchTransport {
     pub fn advance(
         &mut self,
         scene: &Scene,
-        textures: &[crate::scene::Texture],
+        textures: &[ara_frame::scene::Texture],
         events: &TransportChanges,
         uncapped: bool,
     ) -> Result<&TransportReport> {
@@ -536,7 +536,7 @@ impl PatchTransport {
         }
         for event in &events.lights {
             if let Some(state) = event.current {
-                let light: crate::scene::Light =
+                let light: ara_frame::scene::Light =
                     bytemuck::pod_read_unaligned(bytemuck::bytes_of(&state.0));
                 self.channels.set_gain(event.id, light_gain(&light))?;
             }
@@ -760,7 +760,7 @@ impl PatchTransport {
                 continue;
             }
             for state in [event.previous, event.current].into_iter().flatten() {
-                let light: crate::scene::Light =
+                let light: ara_frame::scene::Light =
                     bytemuck::pod_read_unaligned(bytemuck::bytes_of(&state.0));
                 let position = Vec3::new(
                     light.position_range[0],

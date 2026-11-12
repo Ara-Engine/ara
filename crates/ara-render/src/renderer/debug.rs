@@ -51,11 +51,11 @@ pub struct RenderDebug {
     /// The debug view presenters draw instead of Lit (live windows and captures):
     /// `ara capture --view` and `play.renderDebug`.
     #[serde(default = "lit")]
-    pub view: crate::capture::ViewMode,
+    pub view: ara_frame::capture::ViewMode,
 }
 
-fn lit() -> crate::capture::ViewMode {
-    crate::capture::ViewMode::Lit
+fn lit() -> ara_frame::capture::ViewMode {
+    ara_frame::capture::ViewMode::Lit
 }
 
 /// The path-traced reference's budget ([`RenderDebug::reference`]).
@@ -108,7 +108,7 @@ impl Default for RenderDebug {
             screen_gi: true,
             reference: None,
             exposure: None,
-            view: crate::capture::ViewMode::Lit,
+            view: ara_frame::capture::ViewMode::Lit,
         }
     }
 }

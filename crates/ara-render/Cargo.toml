@@ -20,6 +20,7 @@ ara-profile = { path = "../ara-profile", optional = true, features = ["instrumen
 ara-bvh = { path = "../ara-bvh" }
 ara-frame = { path = "../ara-frame" }
 ara-gpu = { path = "../ara-gpu" }
+ara-render2d = { path = "../ara-render2d" }
 ara-patch-charts = { path = "../ara-patch-charts" }
 ara-platform = { path = "../ara-platform" }
 ara-vsm = { path = "../ara-vsm" }

@@ -33,7 +33,7 @@ fn quad(key: u8) -> instanced::Geometry {
 
 fn material(base: [f32; 4], roughness: f32) -> instanced::Material {
     instanced::Material {
-        pbr: crate::scene::Material {
+        pbr: ara_frame::scene::Material {
             base_color: base,
             emissive_roughness: [0.0, 0.0, 0.0, roughness],
             textures: [u32::MAX; 4],
@@ -126,7 +126,7 @@ fn request(mode: ViewMode) -> CaptureRequest {
 }
 
 /// Displayed bytes at world point (x, y, 0).
-fn at(capture: &crate::capture::Capture, x: f32, y: f32) -> [u8; 3] {
+fn at(capture: &ara_frame::capture::Capture, x: f32, y: f32) -> [u8; 3] {
     let projection = Mat4::perspective_rh(0.6, SIZE[0] as f32 / SIZE[1] as f32, 0.1, 100.0)
         * Mat4::look_at_rh(Vec3::new(1.5, 0.0, 12.0), Vec3::new(1.5, 0.0, 0.0), Vec3::Y);
     let clip = projection * Vec4::new(x, y, 0.0, 1.0);

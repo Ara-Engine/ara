@@ -7,7 +7,7 @@ use crate::look::lights::Settings;
 use crate::look::lights::gpu::{Capacity, Inputs, LightsGpu, Stats, artifacts, load};
 use crate::look::ltc::LtcTables;
 use crate::look::trace::{NO_MATERIAL, TraceGpu, TraceInstance, TraceMesh, TraceScene};
-use crate::scene::Light;
+use ara_frame::scene::Light;
 use anyhow::Result;
 use ara_gpu::commands::{Command, Recorder};
 use ara_gpu::{
@@ -364,7 +364,7 @@ impl Bench {
 
     fn layout_target(&self) -> Vec3 {
         match self.layout.camera {
-            crate::scene::CameraSpec::LookAt { target, .. } => target,
+            ara_frame::scene::CameraSpec::LookAt { target, .. } => target,
             _ => Vec3::ZERO,
         }
     }

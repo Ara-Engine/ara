@@ -2,7 +2,7 @@
 //! anything it cannot, so hosts disable a debug view or a probe capture truthfully
 //! instead of drawing Lit under its name.
 use super::*;
-use crate::capture::{RenderCapabilities, ViewMode};
+use ara_frame::capture::{RenderCapabilities, ViewMode};
 
 impl Renderer {
     /// Reflection probes, GI diffuse and overdraw availability at the current preset

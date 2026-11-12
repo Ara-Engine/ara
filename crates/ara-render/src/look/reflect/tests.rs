@@ -276,12 +276,12 @@ fn secondary_local_visibility_uses_any_hit_outside_the_screen() -> Result<()> {
     scene.environment = vec![[0., 0., 0., 1.]];
     scene.materials[1].pbr.base_color = [0.7, 0.7, 0.7, 1.];
     scene.materials[1].pbr.emissive_roughness = [0., 0., 0., 1.];
-    scene.lights.push(crate::scene::Light {
+    scene.lights.push(ara_frame::scene::Light {
         position_range: [2., 0., 4., 20.],
         color_lumens: [1., 0., 0., 400.],
         direction_outer: [0., 0., -1., -1.],
         parameters: [0., 1., 0., 1.],
-        ..crate::scene::Light::ZERO
+        ..ara_frame::scene::Light::ZERO
     });
     let mut renderer = Renderer::new_native(
         &scene,

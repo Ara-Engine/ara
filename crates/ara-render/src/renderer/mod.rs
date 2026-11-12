@@ -23,9 +23,9 @@ mod transfer;
 pub(crate) use transfer::upload_image;
 mod upload;
 mod views;
-use crate::{
+use crate::graph::State;
+use ara_frame::{
     capture::{Capture, CaptureRequest},
-    graph::State,
     scene::{CameraSpec, Scene},
 };
 use anyhow::{Result, ensure};
@@ -73,7 +73,7 @@ struct Mesh {
     /// Vertices live in host-visible storage rewritten between frames.
     host: bool,
     /// Last dynamic upload, retained for capture provenance hashing.
-    latest: Option<Vec<crate::scene::Vertex>>,
+    latest: Option<Vec<ara_frame::scene::Vertex>>,
 }
 struct Targets {
     images: Vec<Image>,
@@ -223,7 +223,7 @@ pub struct Renderer {
     /// The quality last requested (`set_quality`), before `debug` removes effects.
     requested_quality: Option<crate::look::Quality>,
     artifacts: PathBuf,
-    shader_metadata: crate::capture::ShaderMetadata,
+    shader_metadata: ara_frame::capture::ShaderMetadata,
     last_timings: Vec<PassTiming>,
     /// The last frame's manual exposure (`HdrExposure::fallback`).
     exposure: f32,
@@ -445,7 +445,7 @@ impl Renderer {
         );
         let metadata: ara_gpu::cooked::CookedPipeline =
             serde_json::from_slice(&std::fs::read(artifacts.join("gbuffer.json"))?)?;
-        let shader_metadata = crate::capture::ShaderMetadata {
+        let shader_metadata = ara_frame::capture::ShaderMetadata {
             content_key: metadata.key,
             compiler: metadata.compiler,
             binding_layout_hash: metadata.binding_layout_hash,
@@ -926,7 +926,7 @@ impl Renderer {
             camera,
             exposure,
             false,
-            crate::capture::ViewMode::Lit,
+            ara_frame::capture::ViewMode::Lit,
             false,
         )?;
         Ok(())
@@ -937,7 +937,7 @@ impl Renderer {
         &mut self,
         camera: &CameraSpec,
         exposure: f32,
-        mode: crate::capture::ViewMode,
+        mode: ara_frame::capture::ViewMode,
     ) -> Result<()> {
         self.render_frame(camera, exposure, false, mode, false)?;
         Ok(())
@@ -1051,7 +1051,7 @@ impl Renderer {
             rgba,
             ids,
             request,
-            crate::capture::CaptureContext {
+            ara_frame::capture::CaptureContext {
                 names: &self.content.entity_names,
                 hash: &hash,
                 device: self.gpu.info(),

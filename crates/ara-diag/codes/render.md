@@ -130,15 +130,15 @@ Fixes:
 owner: ara-renderlab
 shown as: ARA_RENDERLAB_UNAVAILABLE
 
-The launch uses the Renderlab renderer (the default, or `--renderer renderlab*` or `ARA_RENDERER`), but it could not start on this machine. The view renders with Ara's own renderer (`ara-render`, frozen) instead, which is complete on every device, and the player says so once (`Ara presentation: ara-render draws (...)`).
+The launch uses Renderlab (the only renderer, or an explicit `--renderer renderlab*` / `ARA_RENDERER` path), but it could not start on this machine. The player stops with this error. There is no other renderer to draw the view.
 
 Causes:
 - No Vulkan adapter, or the GPU lacks the features the requested Renderlab path needs (hardware ray queries for `renderlab-rt`; 64-bit storage atomics and descriptor indexing for `renderlab-nonrt`).
-- The machine is a Mac: Renderlab renders through Vulkan only and has no Metal path yet.
+- On a Mac, Renderlab's Metal backend (the presenter's device) failed to start.
 - Renderlab's engine failed to create its device or pipelines; the message carries its error.
 
 Fixes:
-- Use `--renderer renderlab` to let it pick the path the GPU supports, or `--renderer ara`.
+- Use `--renderer renderlab` so the launch picks the path the GPU supports, or name `renderlab-rt` / `renderlab-nonrt` only when that path can start.
 - Update the GPU driver, then run `ara doctor`.
 
 ## ARA6121 RENDERLAB_UNSUPPORTED: Feature not rendered by Renderlab
@@ -151,7 +151,7 @@ Causes:
 - The scene uses a feature on the bridge's gap list (`crates/ara-renderlab/AGENTS.md`): for example terrain and foliage, VFX graph effects, decals, emissive materials, environment-map skies or area lights.
 
 Fixes:
-- Nothing is required to keep working: switch to `--renderer ara` to see the feature.
+- The feature stays a gap until Renderlab maps it (`crates/ara-renderlab/AGENTS.md`).
 - To close the gap, map the feature in `ara-renderlab` (its gap list says what each one takes).
 
 ## ARA6122 RENDERLAB_LIMIT: Scene exceeds a Renderlab limit
@@ -167,7 +167,7 @@ Causes:
 
 Fixes:
 - Share materials between static objects: merged batches then fit, and nothing is left out.
-- Share meshes and materials between objects, or render the scene with `--renderer ara`.
+- Share meshes and materials between objects so the frame fits Renderlab's limit.
 - The limits are Renderlab's (`TRACED_DRAWS`, `MAX_PARTICLES`); raising them is a renderer change, not a bridge change.
 
 ## ARA6123 RENDERLAB_NONRT_PATENT: Renderlab non-RT sun shadows await legal review

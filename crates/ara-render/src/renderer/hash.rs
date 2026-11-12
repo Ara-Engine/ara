@@ -1,5 +1,5 @@
 //! Content hashes remain independent of resource addresses and edit history.
-use crate::scene::Scene;
+use ara_frame::scene::Scene;
 use sha2::{Digest, Sha256};
 pub(super) fn scene_hash(scene: &Scene) -> String {
     let mut hash = Sha256::new();
