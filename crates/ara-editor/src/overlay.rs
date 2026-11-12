@@ -594,10 +594,13 @@ pub fn build(
                 spacing,
                 state.camera.distance * 6.,
             ],
-            color: color("muted-foreground", 0.32)?,
+            // Lines are drawn over Renderlab's lit ground (mid grey in the default look), so
+            // they use the foreground tone at an alpha that reads there; the muted tone at 0.32
+            // only showed over the old dark background.
+            color: color("foreground", 0.45)?,
             axes: [
-                color("destructive-foreground", 0.42)?,
-                color("info-foreground", 0.42)?,
+                color("destructive-foreground", 0.7)?,
+                color("info-foreground", 0.7)?,
             ],
         });
     }
