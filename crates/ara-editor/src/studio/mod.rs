@@ -1395,7 +1395,6 @@ fn pump(
         keys.push("scene/view".into());
         keys.push("profiler/track".into());
         keys.push("graph/view".into());
-        keys.push("vfx/preview".into());
         keys.push("game/area".into());
         // The Assets body's height: tiles step down to fit it (`panels::fitting`).
         keys.push("assets/body".into());

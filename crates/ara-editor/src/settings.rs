@@ -225,7 +225,7 @@ pub const DEFS: &[Def] = &[
         User,
         "Viewport",
         "Scene statistics",
-        "Last completed CPU and renderer samples, with unavailable measurements identified.",
+        "Last completed CPU and GPU frame times, with unavailable measurements identified.",
         Kind::Toggle,
         Lit::B(false),
     ),
@@ -547,7 +547,7 @@ pub const DEFS: &[Def] = &[
         Project,
         "Rendering",
         "Quality",
-        "Default quality for Play, exported players and the Scene view. Auto picks High on ray-tracing GPUs (Medium under 8 GiB), Low otherwise; Epic is never automatic.",
+        "Default quality for Play and exported players. Auto picks High on ray-tracing GPUs (Medium under 8 GiB), Low otherwise; Epic is never automatic.",
         Kind::Choice(&[
             ("auto", "Auto"),
             ("low", "Low"),

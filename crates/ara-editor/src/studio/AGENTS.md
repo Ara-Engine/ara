@@ -66,9 +66,8 @@ equivalent.
   draw inline on their pins (`graph::is_default`; click to type), the node search opens
   at a right-click or dropped wire and lists only what fits it, C makes a comment box,
   ⌘D duplicates (`editor.material.node.duplicate`), Delete removes; Details on the right.
-- `vfx.rs`: the VFX page, laid out as Niagara's: preview placeholder tile, no timeline (left), System
-  Overview cards per emitter with coloured stages (middle), the picked module's Selection
-  (right); `crate::vfx_edit::module_edit`.
+- `vfx.rs`: the VFX page, laid out as Niagara's: System Overview cards per emitter with
+  coloured stages (left), the picked module's Selection (right), no preview; `crate::vfx_edit::module_edit`.
 - `asset_create.rs`: Add / `assets.create.*`: folder, scene, material, effect, controller,
   script, at the open folder's authored path (never its storage path), opened where edited.
 - Assets (`panels.rs`): back/forward, Add, type filters across the project (Unreal's

@@ -284,7 +284,7 @@ pub(crate) const COMMANDS: &[Command] = &[
         title: "Reflection Probe",
         icon: "sun",
         keys: "",
-        summary: "Create an authored reflection probe; renderer capabilities determine capture availability.",
+        summary: "Create an authored reflection probe. Renderlab traces reflections, so its capture settings are saved but not used.",
     },
     Command {
         id: "create.camera",
@@ -2002,20 +2002,6 @@ pub(crate) const COMMANDS: &[Command] = &[
         icon: "chevron-down",
         keys: "",
         summary: "Collapse or expand an emitter's stack.",
-    },
-    Command {
-        id: "vfx.emitter.hide",
-        title: "Hide Emitter in Preview",
-        icon: "eye-off",
-        keys: "",
-        summary: "Leave an emitter out of the preview (the effect is unchanged).",
-    },
-    Command {
-        id: "vfx.emitter.isolate",
-        title: "Isolate Emitter",
-        icon: "scan-eye",
-        keys: "",
-        summary: "Preview only this emitter; again to show every emitter.",
     },
     Command {
         id: "component.add",

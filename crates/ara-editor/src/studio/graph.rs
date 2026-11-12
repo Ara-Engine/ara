@@ -861,11 +861,7 @@ fn details(s: &Studio, doc: &str) -> El<Studio> {
                 ),
             );
         }
-        // The canvas draws plain nodes until the renderer can render their values.
-        return out.child(super::unavailable::note(
-            l,
-            "In-node previews are not available yet.",
-        ));
+        return out;
     }
     for id in selection {
         let Some(node) = graph.nodes.get(id) else {
