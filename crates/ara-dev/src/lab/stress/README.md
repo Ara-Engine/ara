@@ -7,9 +7,9 @@ not start/restart a lab daemon, change a renderer default, or build another chec
 and A3's `ARACHG01` binary stream (`changes.bin`). The 57 recipes include all five
 R5-5 contact heights, the pole sweep and eight separate shadowed sources.
 
-The worker was the old renderer's `render_v3` example, deleted with `ara-render`. A gate
-needs a Renderlab worker that implements the contract below: `--runner` takes it, and
-until one exists the gates have nothing to run.
+A gate runs a prebuilt headless worker that implements the contract below (`--runner`).
+There is no Renderlab worker yet, so the gates have nothing to run (a row in the gap table
+in `crates/ara-renderlab/AGENTS.md`).
 
 Build the lab in your own target directory, after checking the overnight quiet-window
 lock. The task coordinator's builder rules govern admission.
@@ -157,7 +157,7 @@ Use `-Cases case-a,case-b` to generate only the next inspection batch.
 ## Focused verification
 
 ```powershell
-cargo clippy -p ara-dev -p ara-render-fidelity -p ara-pathtrace --all-targets -- -D warnings
+cargo clippy -p ara-dev --all-targets -- -D warnings
 cargo test -p ara-dev lab::stress
 ```
 

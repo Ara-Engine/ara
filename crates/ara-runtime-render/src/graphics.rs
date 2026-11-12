@@ -19,7 +19,6 @@ pub fn plan(
         size,
         RenderOptions::default(),
     )?;
-    plan.rt_fallback = options.ray_tracing && !caps.ray_tracing;
     let base = plan.preset;
     let group = |tier: Option<Tier>| tier.map_or(base, preset).raster_quality();
     let groups = settings.groups;
@@ -200,7 +199,6 @@ mod tests {
                 [320, 180],
                 RenderOptions { ray_tracing: true },
             )?;
-            assert!(fallback.rt_fallback);
             assert!(!fallback.raster.hybrid());
         }
         Ok(())

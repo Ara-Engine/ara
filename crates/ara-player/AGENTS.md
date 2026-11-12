@@ -71,20 +71,19 @@ presenter before hello and reuse its device at embed; surface-less services allo
   simulation and uploads cannot suppress liveness. Bounded queues preserve order.
   `tests/watchdog.rs` holds simulation past the watchdog, then checks real silence.
 - Import-state notifications style first-cook bounds translucent grey, failed or
-  missing sources magenta, and retain last-good models during reimport. Native
-  root/foliage arrivals fade over twelve presented frames; captures finish the fade.
+  missing sources magenta, and retain last-good models during reimport.
 - Pools pass `ARA_PLAY_SCRIPTS`; modules and their empty ECS world are warmed before
   hello, then handed to Play without rebinding component IDs or running gameplay early.
 - Windowed frames include GPU-composited foliage/VFX and a native 2D path without
   pixel readbacks. `presented: true` captures read the composited 3D output.
-- Windowed, embedded and headless presentation share the native raster view on
-  every GPU. Project `settings.rendering` travels in PlayScene; `--quality` and
-  `--ray-tracing` override it. Experimental RT requires an explicit opt-in and a
-  capable logical device, selected before warm-up (the pool reads project policy).
-  Preset auto-detection otherwise selects raster tiers. Resolve
-  terrain/prefab assets at content changes, never on ordinary instance motion.
+- Windowed, embedded and headless presentation share one path: the presenter draws every
+  frame through Renderlab (`ExternalRenderer`, installed by `renderer.rs`). Project
+  `settings.rendering` travels in PlayScene; `--quality` and `--ray-tracing` override it
+  (the graphics tier reaches Renderlab as foliage density and terrain detail only).
+  Renderlab picks its own path: `--renderer renderlab|renderlab-rt|renderlab-nonrt`.
+  Resolve terrain/prefab assets at content changes, never on ordinary instance motion.
 - D19 exports `Presenter::output()` at `output_size()`, including retained last-good
-  output; `renderer()` owns the shared GPU but is only the bootstrap raster view.
+  output; `gpu()` is the shared device the renderer's image is copied onto.
 - The first window frame announces bounded GPU warm-up grace; completion restores
   the normal watchdog immediately, after scene-dependent pipelines are prepared.
 - The first presented frame (windowed or embedded) announces `busy("upload")`: real
