@@ -567,6 +567,11 @@ impl SceneView {
                 "ARA_SCENE_RENDERER: Renderlab could not draw the Scene view ({error:#}); ara-render shows it"
             );
             self.renderlab_failed = true;
+            // A failed engine (a lost device, say) shows nothing: its last image goes, so
+            // the Scene is the error, not a stale or black frame.
+            if let Some(scene) = self.renderlab.take() {
+                let _ = scene.release(renderer.gpu_mut());
+            }
         }
     }
     fn render_raster_attempt(

@@ -23,7 +23,7 @@ use renderlab::{
     ViewId,
     engine::{
         Capabilities, Engine, EngineDescriptor, ExperimentalRayQuery, Light, Limits, RenderPath,
-        Sun, ViewDesc, ViewLook, headless_adapter,
+        Sun, ViewDesc, ViewLook, instance_flags,
     },
 };
 use std::time::{Duration, Instant};
@@ -97,9 +97,48 @@ pub(crate) struct Bridge {
     last_view: Option<([f32; 3], [f32; 3])>,
 }
 
+/// A Vulkan adapter for the hosted engine on an instance whose validation follows Ara's one
+/// switch: `ARA_NO_GPU_VALIDATION` set non-empty turns it off (Renderlab's own device
+/// otherwise validates in debug builds whatever Ara's device does).
+fn adapter() -> Result<wgpu::Adapter> {
+    let mut flags = instance_flags();
+    if std::env::var_os("ARA_NO_GPU_VALIDATION").is_some_and(|v| !v.is_empty()) {
+        flags = flags.difference(
+            wgpu::InstanceFlags::VALIDATION
+                | wgpu::InstanceFlags::DEBUG
+                | wgpu::InstanceFlags::VALIDATION_INDIRECT_CALL,
+        );
+    }
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends: wgpu::Backends::VULKAN,
+        flags,
+        ..wgpu::InstanceDescriptor::new_without_display_handle()
+    });
+    let request = instance.request_adapter(&wgpu::RequestAdapterOptions {
+        power_preference: wgpu::PowerPreference::HighPerformance,
+        ..Default::default()
+    });
+    // The request resolves without waiting on anything but the driver.
+    struct Unpark(std::thread::Thread);
+    impl std::task::Wake for Unpark {
+        fn wake(self: std::sync::Arc<Self>) {
+            self.0.unpark();
+        }
+    }
+    let waker = std::sync::Arc::new(Unpark(std::thread::current())).into();
+    let mut context = std::task::Context::from_waker(&waker);
+    let mut request = std::pin::pin!(request);
+    loop {
+        match request.as_mut().poll(&mut context) {
+            std::task::Poll::Ready(adapter) => return Ok(adapter?),
+            std::task::Poll::Pending => std::thread::park(),
+        }
+    }
+}
+
 impl Bridge {
     pub fn new(options: &Options) -> Result<Self> {
-        let adapter = headless_adapter().map_err(|error| {
+        let adapter = adapter().map_err(|error| {
             anyhow!("ARA_RENDERLAB_UNAVAILABLE: Renderlab found no Vulkan adapter: {error}")
         })?;
         let capabilities = Capabilities::query(&adapter);
