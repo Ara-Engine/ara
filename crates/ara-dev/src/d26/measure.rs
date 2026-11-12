@@ -1,12 +1,11 @@
 //! The scoreboard's measurements: each step runs an existing tool and keeps its
 //! output (or why it failed) for `rows`.
 use std::collections::BTreeMap;
-use std::fs::{self, File};
+use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
-use anyhow::{Context as _, Result, ensure};
+use anyhow::{Context as _, Result};
 use serde_json::Value;
 
 use super::{Options, Section};
@@ -244,43 +243,15 @@ impl Context<'_> {
         .map_err(error)
     }
 
-    /// ꟻLIP/RMSE per scene: the visual sweep's capture tool, or `--flip-from`.
+    /// ꟻLIP/RMSE per scene. The path-traced reference is gone, so every row is unmeasured.
     pub fn flip(&self, results: &mut Results) {
+        let _ = self;
         for scene in &SCENES {
-            let measured = match &self.options.flip_from {
-                Some(folder) => timings(folder, scene),
-                None => self.capture(scene),
-            };
-            results.flip.insert(scene.name, measured);
+            results.flip.insert(
+                scene.name,
+                Err("path-traced reference removed with ara-pathtrace".into()),
+            );
         }
-    }
-
-    fn capture(&self, scene: &Scene) -> Measured<Output> {
-        let folder = self.output.join("captures");
-        let captured = (|| -> Result<()> {
-            fs::create_dir_all(&folder)?;
-            let log = folder.join(format!("{}-{}.log", scene.project, scene.look));
-            let mut command = Command::new(self.binary("ara-samples")?);
-            command
-                .current_dir(self.root)
-                .args(["capture", scene.project, scene.look, "--quality", "all"])
-                .args(["--reference", &self.options.reference.to_string()])
-                .env("ARA_CAPTURE_OUTPUT_DIR", &folder)
-                .env("ARA_IMPORT_WORKER", self.binary("ara-import-worker")?)
-                .env("VK_INSTANCE_LAYERS", "")
-                .stdout(File::create(&log)?)
-                .stderr(File::create(log.with_extension("stderr.log"))?);
-            eprintln!("D26: capturing {} / {} (ꟻLIP)", scene.project, scene.look);
-            run(&mut command, Duration::from_secs(2 * 3600), &log)
-        })()
-        .map_err(error);
-        let report = timings(&folder, scene);
-        if let Err(reason) = &report
-            && reason.starts_with(&ara_bench::passes::INVALID_PASS_SET.to_string())
-        {
-            return Err(reason.to_owned());
-        }
-        captured.and(report)
     }
 
     /// The editor probe: a fresh Outpost copy (cold: interactions during imports,
@@ -321,24 +292,8 @@ impl Context<'_> {
     }
 }
 
-/// Run a tool under the GPU lock, bounded by `limit`.
-fn run(command: &mut Command, limit: Duration, log: &Path) -> Result<()> {
-    crate::gpu::locked(4 * 3600, || {
-        let launched = super::validity::unix_ms()?;
-        let outcome = crate::process::run(command, Some(Instant::now() + limit));
-        super::validity::record(&log.with_extension("window.json"), launched)?;
-        let outcome = outcome?;
-        ensure!(
-            outcome.success(),
-            "failed or timed out after {} s; see {}",
-            limit.as_secs(),
-            log.display()
-        );
-        Ok(())
-    })
-}
-
 /// The capture tool's timings for a scene's look under `folder`.
+#[cfg(test)]
 fn timings(folder: &Path, scene: &Scene) -> Measured<Output> {
     let path = folder
         .join(scene.project)

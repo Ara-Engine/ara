@@ -25,7 +25,7 @@ pub(super) fn regions(
     image: &RgbaImage,
     reference: Option<&RgbaImage>,
     matched: Option<&RgbaImage>,
-    repeats: &[RgbaImage],
+    _repeats: &[RgbaImage],
     output: &Path,
 ) -> Result<Vec<Value>> {
     let mut result = Vec::new();
@@ -45,75 +45,23 @@ pub(super) fn regions(
             image::imageops::crop_imm(image, x0, y0, x1 - x0, y1 - y0).to_image()
         };
         let actual = crop(image);
-        let prepared_actual = if reference.is_some() || matched.is_some() {
-            Some(ara_pathtrace::flip::PreparedImage::new(
-                &actual,
-                ara_pathtrace::flip::PIXELS_PER_DEGREE,
-            )?)
-        } else {
-            None
-        };
         let png = output.join(format!("{shot}-{name}.png"));
         actual.save(&png)?;
-        let mut value = json!({"name":name,"rect_pixels":[x0,y0,x1,y1],"png":png,"gate":{"status":"not_measured","reason":"matched-transform reference required","threshold":region["threshold"]},"legacy_ldr":region["legacy_ldr"]});
+        let mut value = json!({"name":name,"rect_pixels":[x0,y0,x1,y1],"png":png,"gate":{"status":"not_measured","reason":"FLIP left with ara-pathtrace","threshold":region["threshold"]},"legacy_ldr":region["legacy_ldr"]});
         if let Some(reference) = reference {
             let truth = crop(reference);
-            let flip = ara_pathtrace::flip::PreparedImage::new(
-                &truth,
-                ara_pathtrace::flip::PIXELS_PER_DEGREE,
-            )?
-            .compare(prepared_actual.as_ref().context("prepared crop")?)?;
             let ssim = 1. - ara_frame::capture::compare(&actual, &truth, 2.)?.score;
             let reference_png = output.join(format!("{shot}-{name}-reference.png"));
             truth.save(&reference_png)?;
             value["reference_png"] = json!(reference_png);
-            value["ldr_secondary"] = json!({"flip":flip.mean,"ssim":ssim});
+            value["ldr_secondary"] =
+                json!({"flip":null,"flipStatus":"removed with ara-pathtrace","ssim":ssim});
         }
         if let Some(reference) = matched {
             let truth = crop(reference);
-            let prepared_truth = ara_pathtrace::flip::PreparedImage::new(
-                &truth,
-                ara_pathtrace::flip::PIXELS_PER_DEGREE,
-            )?;
-            let mut scores = vec![
-                prepared_truth
-                    .compare(prepared_actual.as_ref().context("prepared crop")?)?
-                    .mean,
-            ];
-            for image in repeats {
-                scores.push(
-                    prepared_truth
-                        .compare(&ara_pathtrace::flip::PreparedImage::new(
-                            &crop(image),
-                            ara_pathtrace::flip::PIXELS_PER_DEGREE,
-                        )?)?
-                        .mean,
-                );
-            }
-            let mean = scores.iter().sum::<f64>() / scores.len() as f64;
-            let deviation = scores
-                .iter()
-                .map(|value| (value - mean).abs())
-                .fold(0_f64, f64::max);
-            let tolerance = config["repeatability"]["max_deviation"]
-                .as_f64()
-                .unwrap_or(0.002);
-            let repeatable = scores.len() >= 3 && deviation <= tolerance;
-            let max = region["threshold"]["matched_max"].as_f64().or_else(|| {
-                let profile = config["capture_profile"].as_str().unwrap_or("");
-                let baseline = if region["threshold"]["baseline_by_profile"].is_object() {
-                    &region["threshold"]["baseline_by_profile"][profile]
-                } else {
-                    &region["threshold"]["baseline"]
-                };
-                baseline
-                    .as_f64()
-                    .map(|b| b + region["threshold"]["tolerance"].as_f64().unwrap_or(0.002))
-            });
             let matched_png = output.join(format!("{shot}-{name}-matched-reference.png"));
             truth.save(&matched_png)?;
-            value["matched_transform"] = json!({"flip":mean,"run_scores":scores,"reference_png":matched_png,"repeatability":{"runs":scores.len(),"max_deviation":deviation,"tolerance":tolerance,"status":if scores.len()<3{"not_measured"}else if repeatable{"pass"}else{"fail"}}});
-            value["gate"] = json!({"status":if scores.len()>=3&&!repeatable || max.is_some_and(|limit|mean>limit){"fail"}else if max.is_none(){"uncalibrated"}else if repeatable{"pass"}else{"not_measured"},"capture_profile":config["capture_profile"],"matched_max":max,"repeatability_required":3,"legacy_ldr_is_a_gate":false});
+            value["matched_transform"] = json!({"flip":null,"flipStatus":"removed with ara-pathtrace","reference_png":matched_png});
         }
         result.push(value);
     }

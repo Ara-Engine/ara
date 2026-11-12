@@ -12,21 +12,27 @@ use std::{
     time::{Duration, Instant},
 };
 
-/// Binds the renderer's output and entity channel as the UI adapter's external images
-/// (the Scene view's picture and its pick buffer).
-fn attach(gpu: &mut NativeUi, renderer: &Renderer) -> anyhow::Result<()> {
+/// Binds the Scene view's picture and its pick buffer as the UI adapter's external images:
+/// the renderer's output and entity channel, or Renderlab's image and the packed ids
+/// rasterised beside it (`renderlab`: the picture, then the ids).
+fn attach(
+    gpu: &mut NativeUi,
+    renderer: &Renderer,
+    renderlab: Option<(ara_gpu::Image, ara_gpu::Image)>,
+) -> anyhow::Result<()> {
+    let (color, ids) = renderlab.unwrap_or_else(|| (renderer.output(), renderer.entity_channel()));
     // SAFETY: Both views belong to the shared live renderer, stay valid through UI
     // submission, and finish CopySource.
     unsafe {
         gpu.external_image(
             overlay::viewport_image(),
-            renderer.gpu().native_image(renderer.output())?,
-            renderer.gpu().image_view(renderer.output())?,
+            renderer.gpu().native_image(color)?,
+            renderer.gpu().image_view(color)?,
         )?;
         gpu.external_image(
             overlay::ENTITY_IMAGE,
-            renderer.gpu().native_image(renderer.entity_channel())?,
-            renderer.gpu().image_view(renderer.entity_channel())?,
+            renderer.gpu().native_image(ids)?,
+            renderer.gpu().image_view(ids)?,
         )?;
     }
     Ok(())
@@ -40,13 +46,16 @@ use ara_runtime_render::{PresentationImage, fidelity::vfx::Effects};
 mod bounds;
 mod content;
 mod convergence;
+mod ids;
 mod picking;
 mod preview;
 mod probes;
 mod recovery;
+mod renderlab;
 #[cfg(test)]
 mod scene_switch;
 mod startup;
+pub(super) use ids::IdHost;
 pub(super) use preview::{GamePreview, PreviewCamera};
 pub(crate) use startup::prepare_renderer;
 
@@ -88,10 +97,17 @@ pub(crate) struct SceneView {
     prepared: Option<Prepared>,
     effects: Option<Effects>,
     published: Option<PresentationImage>,
+    /// The Scene's frame drawn by Renderlab, when `ARA_SCENE_RENDERER=renderlab` (`renderlab`).
+    renderlab: Option<renderlab::RenderlabScene>,
+    /// Renderlab failed to start or draw: reported once, and `ara-render` shows the Scene.
+    renderlab_failed: bool,
     plan: Option<FidelityPlan>,
     active: bool,
     revision: Option<(u64, u64, u64, u64)>,
     failed: Option<(u64, u64, u64, u64)>,
+    /// The raster Scene's first render error since a frame last reached the screen, and when
+    /// it began (`Self::stalled`, `Self::presented`).
+    failure: Option<(std::time::Instant, String)>,
     tick: u32,
     remaining: u32,
     convergence: convergence::Convergence,
@@ -339,6 +355,8 @@ impl SceneView {
         if matches!(plan.path, RenderPath::Raster(_)) {
             if let Err(error) = self.render_raster(renderer, editor, view, settle) {
                 eprintln!("Scene raster keeps its last good presentation: {error}");
+                self.failure
+                    .get_or_insert_with(|| (std::time::Instant::now(), error.to_string()));
                 self.remaining = 0;
                 self.convergence.failed();
                 self.frame_pending = renderer.scene_frame_pending();
@@ -505,6 +523,52 @@ impl SceneView {
         }
         Ok(())
     }
+    /// Draws the Scene's frame with the editor-hosted Renderlab engine when
+    /// `ARA_SCENE_RENDERER=renderlab`, from the editor's camera; its image is what the
+    /// compositor shows. A failure is reported once and `ara-render` keeps showing the Scene.
+    fn draw_renderlab(&mut self, renderer: &mut Renderer, editor: &Editor) {
+        if !renderlab::requested() || self.renderlab_failed {
+            return;
+        }
+        let Some(content) = self.content.as_mut() else {
+            return;
+        };
+        let store = editor.host.store();
+        let camera = renderlab::camera_view(&editor.state.camera.spec());
+        if let (Some(frame), Some(camera)) = (self.raster_frame.as_mut(), camera) {
+            frame.camera = Some(camera);
+        }
+        let drawn = (|| -> anyhow::Result<()> {
+            if self.renderlab.is_none() {
+                self.renderlab = Some(renderlab::RenderlabScene::new(
+                    &editor.host.root().join(".ara/gpu"),
+                )?);
+            }
+            let frame = self
+                .raster_frame
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("no Scene frame"))?;
+            let look = ara_runtime_render::environment_at(frame, editor.state.camera.position());
+            let size = renderer.size();
+            self.renderlab
+                .as_mut()
+                .ok_or_else(|| anyhow::anyhow!("no Renderlab engine"))?
+                .render(
+                    renderer.gpu_mut(),
+                    frame,
+                    &look,
+                    size,
+                    self.revision,
+                    || content.content(frame, store.workspace(), store.schema()),
+                )
+        })();
+        if let Err(error) = drawn {
+            eprintln!(
+                "ARA_SCENE_RENDERER: Renderlab could not draw the Scene view ({error:#}); ara-render shows it"
+            );
+            self.renderlab_failed = true;
+        }
+    }
     fn render_raster_attempt(
         &mut self,
         renderer: &mut Renderer,
@@ -660,6 +724,9 @@ impl SceneView {
             });
             self.frame_pending = renderer.scene_frame_pending();
             self.active = renderer.presentation_ready();
+            // Outside the deferred completion scope: Renderlab's CPU-copy handoff waits for
+            // its own submission, which a deferred scope would leave in flight.
+            self.draw_renderlab(renderer, editor);
             return result.map(|_| ()).map_err(Into::into);
         }
         if self
@@ -823,11 +890,19 @@ impl SceneView {
                 self.convergence.completed();
             }
         }
+        if !matches!(work, RasterWork::Submitted(_)) {
+            self.draw_renderlab(renderer, editor);
+        }
         if matches!(work, RasterWork::Submitted(_)) {
             self.convergence.submitted(settle.max(1));
             return Ok(());
         }
-        let output = renderer.output();
+        // A still shows Renderlab's frame where it drew one.
+        let output = self
+            .renderlab
+            .as_ref()
+            .and_then(renderlab::RenderlabScene::image)
+            .unwrap_or_else(|| renderer.output());
         let size = renderer.size();
         PresentationImage::publish(&mut self.published, renderer.gpu_mut(), output, size)?;
         self.failed = None;
@@ -1013,9 +1088,16 @@ impl SceneView {
             .find(|(t, _)| *t == tag)
             .map(|(_, view)| *view)
     }
-    /// Whether the raster Scene draws selection outlines into its frames.
+    /// Whether the raster Scene draws selection outlines into its frames. Renderlab's image
+    /// has none in it, so while it is shown the outlines are the UI layer's, drawn from the
+    /// entity-ID image (`Overlay::Outline`).
     pub fn draws_outlines(&self) -> bool {
         self.raster.is_some()
+            && self
+                .renderlab
+                .as_ref()
+                .and_then(renderlab::RenderlabScene::image)
+                .is_none()
     }
     /// One more frame for an image-only change (new outlines): no new convergence.
     pub fn redraw(&mut self) {
@@ -1045,14 +1127,54 @@ impl SceneView {
                     self.fidelity.is_some() && self.remaining > 0
                 } || self.preview_needs_frame())
     }
+    /// The ids and channels of the Renderlab frame on screen: the click and the overlays
+    /// read them (`IdSource::Packed`) in place of the renderer's.
+    /// A Scene frame reached the screen: earlier render errors no longer matter.
+    pub(super) fn presented(&mut self) {
+        self.failure = None;
+    }
+    /// The Scene's render error when no frame has reached the screen for at least `after`
+    /// since it: a bounded run (`--frames`, `--screenshot`) ends with it rather than wait
+    /// for frames a failed device (a counted validation error stays counted) never presents.
+    pub(super) fn stalled(&self, after: std::time::Duration) -> Option<&str> {
+        self.failure
+            .as_ref()
+            .filter(|(since, _)| since.elapsed() >= after)
+            .map(|(_, error)| error.as_str())
+    }
+    pub(super) fn id_host(&self) -> Option<ids::IdHost<'_>> {
+        self.renderlab
+            .as_ref()
+            .filter(|r| r.image().is_some())
+            .and_then(renderlab::RenderlabScene::id_host)
+    }
+    /// The channels (draw `n` is `n + 1`) the Scene's ids name: Renderlab's draws when it
+    /// shows the Scene, else the renderer's entities.
+    pub(super) fn entities<'a>(&'a self, renderer: &'a Renderer) -> &'a [(u64, String)] {
+        self.id_host()
+            .map_or_else(|| renderer.entities(), |host| host.entities)
+    }
+    /// Whether the Scene has a frame to show: Renderlab's, or the renderer's presentation.
+    pub(super) fn presentable(&self, renderer: &Renderer) -> bool {
+        self.renderlab
+            .as_ref()
+            .is_some_and(|r| r.image().zip(r.id_image()).is_some())
+            || renderer.presentation_ready()
+    }
     pub fn attach(
         &self,
         gpu: &mut NativeUi,
         renderer: &Renderer,
         quality: bool,
     ) -> ara_ui::Result<()> {
-        if renderer.presentation_ready() {
-            attach(gpu, renderer)?;
+        if self.presentable(renderer) {
+            attach(
+                gpu,
+                renderer,
+                self.renderlab
+                    .as_ref()
+                    .and_then(|r| r.image().zip(r.id_image())),
+            )?;
         } else {
             gpu.forget_external(overlay::viewport_image());
             gpu.forget_external(overlay::ENTITY_IMAGE);
@@ -1093,6 +1215,11 @@ impl SceneView {
                 .ok_or_else(|| anyhow::anyhow!("Scene has no completed fidelity frame"))?
                 .capture(renderer.gpu_mut(), &mut capture)?;
         }
+        if matches!(request.mode, ViewMode::Lit)
+            && let Some(renderlab) = &self.renderlab
+        {
+            renderlab.capture(renderer, &mut capture)?;
+        }
         Ok(capture)
     }
     pub fn destroy(self, renderer: &mut Renderer) -> ara_ui::Result<()> {
@@ -1105,6 +1232,9 @@ impl SceneView {
         }
         if let Some(image) = self.published {
             image.destroy(renderer.gpu_mut())?;
+        }
+        if let Some(renderlab) = self.renderlab {
+            renderlab.release(renderer.gpu_mut())?;
         }
         if let Some(effects) = self.effects {
             effects.destroy(renderer.gpu_mut())?;
