@@ -122,7 +122,6 @@ struct Batch {
     material_slot: u64,
     /// Each member in mesh order: its draw's entity and its triangle count, so the batch's
     /// object ids can name each member's primitives (`Scene::tag`).
-    #[cfg_attr(target_vendor = "apple", allow(dead_code))]
     layout: Vec<(u64, u32)>,
 }
 
@@ -140,7 +139,6 @@ pub(crate) struct Scene {
     static_key: Option<u64>,
     /// The ids last set on Renderlab's objects, with the object they were set on: own
     /// objects by entity (`false`), batches by material key (`true`).
-    #[cfg_attr(target_vendor = "apple", allow(dead_code))]
     tags: Tags,
     palette: Vec<Mat4>,
     /// The emissive program once tried: `Some(None)` when Renderlab rejected it.
@@ -701,7 +699,6 @@ impl Scene {
     /// numbers), one range for an own object and one range per member for a static batch.
     /// Draws the frame does not list (foliage) stay untagged. Sets only what changed, since
     /// a draw leaving the list renumbers those after it.
-    #[cfg(not(target_vendor = "apple"))]
     fn tag(&mut self, engine: &mut Engine, frame: &RenderFrame) -> Result<()> {
         let ids: HashMap<u64, u32> = frame
             .draws
@@ -733,12 +730,6 @@ impl Scene {
                 self.tags.insert(key, tagged);
             }
         }
-        Ok(())
-    }
-
-    /// Apple's backend has no object ids yet.
-    #[cfg(target_vendor = "apple")]
-    fn tag(&mut self, _: &mut Engine, _: &RenderFrame) -> Result<()> {
         Ok(())
     }
 

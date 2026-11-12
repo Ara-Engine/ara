@@ -19,9 +19,9 @@ use anyhow::{Context, Result, anyhow};
 use ara_gpu::{Access, Barrier, Device, GpuDevice, Image, Queue, Resource, commands::Command};
 use ara_runtime_render::{EXTERNAL_PASSES, ExternalFrame, ExternalView};
 use renderlab::{
-    ViewId,
+    IdLayer, ViewId,
     backend_ara::cache::ShaderCache,
-    engine::{Light, Settings, Sun, ViewDesc, ViewLook},
+    engine::{Light, Outputs, Settings, Sun, ViewDesc, ViewLook},
 };
 
 /// Lighting last applied to the engine, so unchanged frames set nothing.
@@ -93,7 +93,14 @@ impl Bridge {
             metering: Metering::new(),
             max_reflection_roughness: options.max_reflection_roughness,
             view: None,
-            desc: ViewDesc::new(1, 1),
+            // The Scene host's ids (`Options::scene_ids`): the view writes them beside
+            // each frame.
+            desc: ViewDesc {
+                outputs: Outputs {
+                    ids: options.scene_ids,
+                },
+                ..ViewDesc::new(1, 1)
+            },
             last_look: None,
             cut: true,
             last_view: None,
@@ -108,7 +115,8 @@ impl Bridge {
         self.cut = true;
     }
 
-    /// Apple's backend has no object ids yet.
+    /// No separate answer: the backend's front ids are its opaque ones (it draws no glass
+    /// ids yet), so a click reads the delivered texels (`ExternalFrame::id_texels`).
     pub fn pick_id(&mut self, _pixel: [u32; 2]) -> Result<Option<u32>> {
         Ok(None)
     }
@@ -134,6 +142,9 @@ impl Bridge {
             tiles,
             &mut self.gaps,
         )?;
+        // Terrain tiles follow the frame's draws in the editor's id numbering.
+        self.terrain
+            .tag(&mut self.engine, frame.draws.len() as u32 + 1)?;
         self.decals.sync(&mut self.engine, frame, &mut self.gaps)?;
         self.effects.sync(&mut self.engine, frame, &mut self.gaps)?;
 
@@ -213,7 +224,7 @@ impl Bridge {
         if let Some(meter) = metered
             && self.metering.due()
         {
-            let rgba8 = read_back(gpu, image, view.size)?;
+            let rgba8 = read_back(gpu, "Renderlab.Meter", image, view.size)?;
             let histogram = crate::meter::histogram_of_rgba8(&rgba8, view.size[0] as usize);
             self.metering.observe(view.look, meter, stops, &histogram);
         }
@@ -227,10 +238,22 @@ impl Bridge {
                 )
             })
             .unwrap_or((None, [("", 0.); EXTERNAL_PASSES]));
+        // The view's opaque ids packed into RGBA8 on this device, and the same texels on
+        // the CPU for clicks: one copy, waited for, on the frames of a host that asked.
+        let (id, id_texels) = if self.desc.outputs.ids {
+            let packed = self.engine.view_ids_packed(gpu, view_id, IdLayer::Opaque)?;
+            let (image, size) = (packed.image, packed.size);
+            (
+                Some(image),
+                Some(read_back(gpu, "Renderlab.Ids", image, size)?),
+            )
+        } else {
+            (None, None)
+        };
         Ok(ExternalFrame {
             image,
-            id: None,
-            id_texels: None,
+            id,
+            id_texels,
             gpu_ms,
             passes,
             // The frame was drawn on the presenter's device: nothing crossed.
@@ -330,13 +353,14 @@ fn jumped(last: ([f32; 3], [f32; 3]), now: ([f32; 3], [f32; 3])) -> bool {
     dot < std::f32::consts::FRAC_1_SQRT_2 || moved > 20. * 20.
 }
 
-/// The displayed image's display-encoded RGBA8 rows, read back on the presenter's device
-/// and waited for. `image` is in `CopySource`, and stays there.
-fn read_back(gpu: &mut GpuDevice, image: Image, size: [u32; 2]) -> Result<Vec<u8>> {
+/// An RGBA8 image's rows (the displayed image, the packed ids), read back on the
+/// presenter's device in a pass labelled `label` and waited for. `image` is in
+/// `CopySource`, and stays there.
+fn read_back(gpu: &mut GpuDevice, label: &str, image: Image, size: [u32; 2]) -> Result<Vec<u8>> {
     let bytes = u64::from(size[0]) * u64::from(size[1]) * 4;
     let buffer = gpu.create_readback_buffer(bytes)?;
     let mut commands = gpu.begin(Queue::Graphics);
-    commands.push(Command::BeginPass("Renderlab.Meter".into()));
+    commands.push(Command::BeginPass(label.into()));
     commands.barriers([Barrier {
         resource: Resource::Buffer(buffer),
         before: Access::Undefined,

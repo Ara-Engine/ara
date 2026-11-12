@@ -652,9 +652,9 @@ fn masks_are_cut_and_emissive_maps_glow_where_they_are_lit() {
 
 /// With ids on, each draw reads as its index in the frame plus one, in the id texels the CPU
 /// copy returns, and the engine's own answer for a click agrees with them (no glass here, so
-/// the frontmost and the opaque ids are the same).
+/// the frontmost and the opaque ids are the same). On Apple the backend gives no separate
+/// answer (it has no glass ids yet): a click reads the texels.
 #[test]
-#[cfg_attr(target_vendor = "apple", ignore = "Apple's backend has no object ids yet")]
 fn object_ids_name_each_draw_by_its_index_and_a_click_asks_the_engine() {
     use ara_runtime_render::{ExternalRenderer, ExternalView};
     use std::collections::BTreeMap;
@@ -717,7 +717,8 @@ fn object_ids_name_each_draw_by_its_index_and_a_click_asks_the_engine() {
     for y in (3..SIZE[1]).step_by(41) {
         for x in (3..SIZE[0]).step_by(37) {
             let asked = renderlab.pick_id([x, y]).unwrap();
-            assert_eq!(asked, Some(id(x, y)), "pixel ({x}, {y})");
+            let wanted = (!cfg!(target_vendor = "apple")).then(|| id(x, y));
+            assert_eq!(asked, wanted, "pixel ({x}, {y})");
             checked += 1;
         }
     }

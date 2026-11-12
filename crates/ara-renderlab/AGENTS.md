@@ -11,7 +11,7 @@ this crate alone.
 ## API
 
 - `Renderlab::new(&Options)`: Renderlab's engine on its own Vulkan device, or on Apple on the
-  presenter's Metal device (ara-gpu backend, RT only). A failure to start is `ARA_RENDERLAB_UNAVAILABLE`.
+  presenter's Metal device (ara-gpu backend, RT only). `ARA_RENDERLAB_UNAVAILABLE` is what a failed start reports; `ARA_RENDERLAB_FAIL_START=1` forces it, to test a host's failed-engine state.
 - `PathChoice::{Auto, HardwareRt, NonRt}`: `Auto` prefers hardware RT. The non-RT
   path prints `ARA_RENDERLAB_NONRT_PATENT` (open patent question on its sun-shadow method).
 - `Renderlab::path()`: the path in use.
@@ -89,7 +89,6 @@ for it.
 | Single-sided materials | Every material is double-sided | Renderlab's shadowed paths need double-sided materials today | Renderlab build thread |
 | Skinning with more than four influences | The four strongest, renormalized | Eight-influence skinning in Renderlab | Renderlab build thread |
 | Reflection-probe capture and the Game view's preview outside Play | The Lighting page's Recapture and `render.probe.recapture` answer `ARA4504` (not available yet); existing captures keep loading. The Game view shows nothing through the gameplay camera outside Play (`game_preview_available`); Play itself runs in the player and is unaffected | A reflection capture baked from Renderlab's engine; a second camera on the Scene's hosted engine (or a second engine) | Unassigned |
-| Object ids on Apple | Apple's backend delivers no ids (`ExternalFrame::id_texels` is `None`), so the editor rasterises ids from the frame's draws on the CPU (`studio/viewport/ids.rs`): clicks, hover and outlines read them, and a click cannot see through glass. Elsewhere the engine's ids replace them (`ARA_SCENE_IDS_SYNTHETIC=1` keeps the CPU ids for comparison) | The id pass in Renderlab's Apple backend (`t3/renderlab-metal-ids`) | Mac ara-gpu thread |
 | Look-development lab, stress gates and the player's pass contract | `ara-dev lab set`, the reference and temporal metrics and the live parameters read the old renderer's registry; `lab gate` has no worker (`render_v3` is deleted); the player's perf windows still expect the raster pass names (`ara_bench::passes`), so a measure reports `INVALID_PASS_SET` | Parameter keys in Renderlab; a Renderlab gate worker with the `render_v3` contract; a pass contract over `External.Pass.*` | Unassigned |
 | Virtual-texture terrain and distance levels of terrain | Terrain tiles are meshes (`terrain_mesh`); the old landscape renderer's CDLOD levels, virtual texture and foliage wind are gone (see the terrain row) | Mesh levels of detail in Renderlab; a vertex hook for wind | Linux thread |
 | 2D | Unchanged: `Presenter2d` keeps Ara's 2D renderer | Nothing for 3D work | None needed |
