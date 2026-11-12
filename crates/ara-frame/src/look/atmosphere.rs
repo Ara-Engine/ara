@@ -1,18 +1,11 @@
-//! The physical sky atmosphere both renderers draw (`shaders/atmosphere-model.slangh`):
-//! Unreal's SkyAtmosphere parameters in SI units (metres, inverse metres), the two
-//! atmosphere lights, and the GPU record ([`record`]) the raster look and
-//! ara-render-fidelity upload unchanged.
+//! The physical sky atmosphere: Unreal's SkyAtmosphere parameters in SI units (metres,
+//! inverse metres), the two atmosphere lights, and the GPU record ([`record`]) a renderer
+//! uploads unchanged.
 //!
 //! `ara_components::render::SkyAtmosphere` stores the same parameters in Unreal's units
 //! (kilometres, inverse kilometres, colour times scale); ara-render-fidelity's
 //! `environment` converts them one to one.
 use glam::Vec3;
-
-/// The shared shader source (`shaders/atmosphere-model.slangh`). Renderers with their
-/// own shader root keep a copy and verify it equals this string.
-pub fn shader_source() -> &'static str {
-    include_str!("../../shaders/atmosphere-model.slangh")
-}
 
 /// Unreal's SkyAtmosphere (an Earth-like default), in SI units.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -265,7 +258,7 @@ impl Atmosphere {
     }
 }
 
-/// The GPU record (`AtmosphereModel`, `shaders/atmosphere-model.slangh`) for `model`
+/// The GPU record (`AtmosphereModel`) for `model`
 /// with the planet's surface at world altitude `sea_level`, the renderer's `sun` (the
 /// shadowed directional light; atmosphere light 1 when `sun_is_second`, else 0) and the
 /// `other` atmosphere light. Either may be absent; the sun's row is flagged (Ground w)

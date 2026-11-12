@@ -1,7 +1,6 @@
 //! Captures of the Scene read back from Renderlab: the completed colour image and the packed id
 //! image beside it (`ids`), assembled with `Capture::from_render`, so numbered marks, the
-//! legend and the entity lookup are the ones agents already read. Nothing here builds a
-//! `RasterView`. Only the Lit view exists (the other view modes are not available yet).
+//! legend and the entity lookup are the ones agents already read. Only the Lit view exists (the other view modes are not available yet).
 use super::*;
 use crate::gpu::IdHit;
 use ara_frame::capture::{Capture, CaptureContext, ShaderMetadata};

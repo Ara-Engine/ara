@@ -118,7 +118,7 @@ impl Instance {
     }
 }
 
-/// Engine-owned scene content consumed by both raster and fidelity views.
+/// Engine-owned scene content a renderer consumes.
 pub struct Scene {
     /// Unique model-space geometry, rather than one world-space mesh per draw.
     pub geometry: Vec<Geometry>,

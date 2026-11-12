@@ -182,9 +182,9 @@ impl FrameEnvironment {
     }
 
     /// `base` with this environment's exposure, display and fog controls, and the
-    /// volumes' depth of field and motion blur (which switch the fidelity view to its
+    /// volumes' depth of field and motion blur (which switch the post settings to their
     /// cinematic quality). Lift/gamma/gain, chromatic aberration, the lookup table and
-    /// AO/SSR tuning are raster-only. The homogeneous frustum fog is off: authored fog
+    /// AO/SSR tuning are not part of `PostSettings`. The homogeneous frustum fog is off: authored fog
     /// is the atmosphere's height fog.
     pub fn post(&self, base: PostSettings) -> PostSettings {
         let lens = self.lens;
