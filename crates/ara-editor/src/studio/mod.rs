@@ -929,8 +929,10 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         }
         if let Some(limit) = frame_limit {
             // A frame counts when whichever view the view area shows (the Scene or the Game)
-            // was presented, so the window is captured as it is laid out.
-            if options.hidden() || presented || game_shown {
+            // was presented, so the window is captured as it is laid out. A page that takes
+            // the whole area (`--panel lighting`) has neither, so the window's own frames count.
+            let page_only = visible && !gated && rect.is_none() && game_rect.is_none();
+            if options.hidden() || presented || game_shown || page_only {
                 frames += 1;
                 counted_at = Instant::now();
             } else if gated {
@@ -938,7 +940,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                 counted_at = Instant::now();
             } else if counted_at.elapsed() >= BOUNDED_STALL {
                 anyhow::bail!(
-                    "a bounded run counted no frame for {} s: it counts a frame when the view area's Scene or Game is composited, and neither was (window visible {visible}, Scene rect {rect:?}, Game rect {game_rect:?}, Scene drawn {}, Scene extent shown {shown_extent:?})",
+                    "a bounded run counted no frame for {} s: it counts a frame when the view area's Scene or Game is composited (or the window's own, when the area holds a page), and none was (window visible {visible}, Scene rect {rect:?}, Game rect {game_rect:?}, Scene drawn {}, Scene extent shown {shown_extent:?})",
                     BOUNDED_STALL.as_secs(),
                     scene_view.presentable()
                 );
@@ -950,13 +952,19 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                         Some((&mut renderer, &scene_view)),
                         &options.output,
                     )?;
-                    // The window picture has no overlays; the composed Scene frame does.
+                    // The window picture has no overlays; the composed Scene frame does
+                    // (when the view area shows a Scene at all).
                     let overlays = options.output.join("editor-scene-overlays.png");
-                    match compositor.save_frame(&overlays) {
-                        Ok(()) => {
-                            eprintln!("ara-editor: scene overlays written: {}", overlays.display())
+                    if rect.is_some() {
+                        match compositor.save_frame(&overlays) {
+                            Ok(()) => eprintln!(
+                                "ara-editor: scene overlays written: {}",
+                                overlays.display()
+                            ),
+                            Err(error) => {
+                                eprintln!("ara-editor: no scene overlays capture: {error:#}")
+                            }
                         }
-                        Err(error) => eprintln!("ara-editor: no scene overlays capture: {error:#}"),
                     }
                 }
                 break;
