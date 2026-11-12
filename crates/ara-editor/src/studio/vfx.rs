@@ -1,6 +1,6 @@
-//! The VFX tool, laid out as Niagara's: the preview with its timeline (restart,
-//! play/pause, step, rate) on the left, a placeholder with disabled controls until the renderer
-//! can draw effects; the System Overview in the
+//! The VFX tool, laid out as Niagara's: a placeholder tile where the preview will go, on the
+//! left (no timeline: Renderlab cannot draw effects in the editor yet, so there are no
+//! controls to disable); the System Overview in the
 //! middle, one card per emitter with its stages (spawn, initialize, update, render) in their
 //! colours; the picked module's Selection on the right, where its values are typed and its
 //! tools move, duplicate or remove it. A module's checkbox keeps it but skips it. Hide and
@@ -92,7 +92,7 @@ fn effect(s: &Studio, doc: &str) -> Result<ara_vfx::Effect, String> {
     ara_vfx::Effect::from_graph(&graph).map_err(|d| d.to_string())
 }
 
-/// The page, laid out as Niagara's: the preview and its timeline on the left, the System
+/// The page, laid out as Niagara's: the preview placeholder on the left, the System
 /// Overview (one card per emitter, its stages in their colours) in the middle, and the picked
 /// module's Selection on the right.
 pub(super) fn view(s: &Studio) -> El<Studio> {
