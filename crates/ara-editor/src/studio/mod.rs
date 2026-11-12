@@ -230,6 +230,8 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     // given). Presented Scene frames count when the window shows; hidden, the loop's own.
     let frame_limit = options.bounded().then(|| options.frames.unwrap_or(60));
     let mut frames = 0_u64;
+    // When a bounded run last said why it is not counting frames (`stalled`).
+    let mut stall_reported = Instant::now();
     let mut last_frame = Instant::now();
     let mut fps = 0.0_f32;
     let mut camera = rt.state().editor.state.camera;
@@ -914,6 +916,14 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         if let Some(limit) = frame_limit {
             if options.hidden() || presented {
                 frames += 1;
+            } else if stall_reported.elapsed() >= Duration::from_secs(5) {
+                // A shown run counts a frame only once the Scene is composited: say which
+                // condition holds it back, so a hang is a line in the log, not a guess.
+                stall_reported = Instant::now();
+                eprintln!(
+                    "ara-editor: no frame counted yet: import gate holding {gated}, window visible {shown}, scene rect {rect:?}, Scene drawn {}, extent shown {shown_extent:?}",
+                    scene_view.presentable()
+                );
             }
             if frames >= limit {
                 if options.screenshot {
