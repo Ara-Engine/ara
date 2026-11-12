@@ -1,8 +1,8 @@
 //! Physical and temporal contracts shared by every reconstruction backend.
 use crate::colour::{AutoExposure, Grading, ToneMapper};
 use anyhow::{Result, ensure};
-use ara_gpu::Image;
 use ara_frame::scene::CameraSpec;
+use ara_gpu::Image;
 
 /// Capability tier, independent of the operating system.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

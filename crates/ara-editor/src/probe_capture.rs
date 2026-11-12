@@ -42,12 +42,7 @@ impl Service for ProbeService {
             .read_only(),
         ]
     }
-    fn call(
-        &mut self,
-        _: &mut Cx<'_>,
-        method: &str,
-        _: Value,
-    ) -> Result<Value, Vec<Diagnostic>> {
+    fn call(&mut self, _: &mut Cx<'_>, method: &str, _: Value) -> Result<Value, Vec<Diagnostic>> {
         match method {
             "render.probe.recapture" | "render.probes.query" => {
                 Err(vec![Diagnostic::error(crate::codes::RENDER, NOT_AVAILABLE)])

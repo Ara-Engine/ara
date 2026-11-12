@@ -1,8 +1,8 @@
 //! Instanced shading tables and native BC residency. Legacy captures retain their ABI.
 use super::*;
+use crate::instanced::GeometryGpu;
 use anyhow::Context;
-use ara_frame::instanced::{Scene as NativeScene};
-use crate::instanced::{GeometryGpu};
+use ara_frame::instanced::Scene as NativeScene;
 use ara_texture_stream::{NativeResidency, NativeStats};
 
 mod motion;

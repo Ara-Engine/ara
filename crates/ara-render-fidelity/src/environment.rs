@@ -267,8 +267,8 @@ impl FrameEnvironment {
     /// the physical sky (with its cloud layer) and height fog run on the GPU there too.
     pub fn raster(&self) -> ara_frame::look::Look {
         use ara_frame::look::{
-                    AutoExposure as Metering, Fog, Grading as RasterGrading, Look, Sky, ToneCurve,
-                };
+            AutoExposure as Metering, Fog, Grading as RasterGrading, Look, Sky, ToneCurve,
+        };
         let a = self.auto_exposure;
         Look {
             curve: match self.tone_mapper {

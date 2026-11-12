@@ -2,11 +2,11 @@
 //! (`ara_frame::look::gi`): ray queries run here only, never per frame.
 use crate::{FidelityView, Tier};
 use anyhow::{Result, ensure};
+use ara_frame::look::gi::{ProbeSurfaces, STATIC_VECTORS, SURFACE_TEXELS};
 use ara_gpu::{
     Access, Barrier, Device, GpuDevice, Queue, Resource, RootConstants, vk, vulkan::Command,
 };
 use ara_render2d::graph::State;
-use ara_frame::look::gi::{ProbeSurfaces, STATIC_VECTORS, SURFACE_TEXELS};
 
 /// Probes per submission, bounding each dispatch well under driver timeouts.
 const BATCH: usize = 2048;

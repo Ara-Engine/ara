@@ -287,9 +287,9 @@ impl FidelityView {
                 } => [visibility.sampled_index, 1, render_size[0], render_size[1]],
             },
             lights: [self.light_tables.map_or(0, |(_, index, _)| index), 0, 0, 0],
-            sky: self.atmosphere.map_or(
-                [[0.; 4]; ara_frame::look::atmosphere::RECORD_ROWS],
-                |a| {
+            sky: self
+                .atmosphere
+                .map_or([[0.; 4]; ara_frame::look::atmosphere::RECORD_ROWS], |a| {
                     let sun = a
                         .sun
                         .map(|settings| ara_frame::look::atmosphere::AtmosphereLight {
@@ -305,8 +305,7 @@ impl FidelityView {
                         a.sun_is_second,
                         a.other_light,
                     )
-                },
-            ),
+                }),
         };
         Ok((f, unjittered, camera.position))
     }

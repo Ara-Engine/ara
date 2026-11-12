@@ -1,12 +1,12 @@
 //! Immutable scene upload and incremental, stable-ID acceleration snapshots.
 use anyhow::{Result, ensure};
+use ara_frame::scene::{Material, Scene};
 use ara_gpu::{
     AccelerationStructure, Access, Barrier, Buffer, Device, GpuDevice, Image, Queue, Resource,
     acceleration::{AccelerationDesc, AccelerationInstance},
     vk,
     vulkan::Command,
 };
-use ara_frame::scene::{Material, Scene};
 use glam::Vec3;
 use sha2::{Digest, Sha256};
 

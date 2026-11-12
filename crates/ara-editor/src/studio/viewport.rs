@@ -285,7 +285,6 @@ pub(crate) const VIEW_MODES: [(&str, &str, &str, ViewMode); 19] = [
     ),
 ];
 
-
 fn pose_key(gesture: Option<&crate::world::gesture::Gesture>) -> Option<u64> {
     use std::hash::{Hash, Hasher};
     gesture.map(|gesture| {

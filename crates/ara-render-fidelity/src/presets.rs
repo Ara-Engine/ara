@@ -7,12 +7,12 @@
 //! ([`RasterPlan`], `ara_frame::look::Quality`) and traces no rays.
 use crate::{FidelityView, Mode, PostSettings, Settings, Tier, Upscaler};
 use anyhow::{Result, bail};
-use ara_gpu::GpuDevice;
 use ara_frame::look::{
     AmbientOcclusion, DepthOfFieldQuality, FarShadows, LocalShadows, MotionBlurQuality, Quality,
     RayQueries, ReflectionCaptures, Reflections, ScreenGi, Shadows, VirtualShadows,
     VolumetricFogQuality,
 };
+use ara_gpu::GpuDevice;
 
 /// User-facing quality tier. D27: every tier is raster by default
 /// ([`QualityPreset::raster_quality`]); with [`RenderOptions::ray_tracing`] on an RT

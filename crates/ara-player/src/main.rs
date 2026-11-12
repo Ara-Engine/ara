@@ -1247,7 +1247,9 @@ fn render_debug(debug: ara_play::RenderDebug) -> ara_runtime_render::RenderDebug
         full_resolution: debug.full_resolution,
         reflections: match debug.reflections {
             ara_play::ReflectionView::Lit => ara_runtime_render::ReflectionView::Lit,
-            ara_play::ReflectionView::Reflections => ara_runtime_render::ReflectionView::Reflections,
+            ara_play::ReflectionView::Reflections => {
+                ara_runtime_render::ReflectionView::Reflections
+            }
             ara_play::ReflectionView::Sources => ara_runtime_render::ReflectionView::Sources,
         },
         screen_reflections: debug.screen_reflections,

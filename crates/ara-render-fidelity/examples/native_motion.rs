@@ -1,8 +1,8 @@
 //! Repeated shared-GPU motion measurements: no argument uses the legacy path;
 //! `native` moves an instance, and `native-skin` updates one independent skin.
+use ara_frame::scene::{CameraSpec, Material, Mesh, Scene, Texture, Vertex};
 use ara_gpu::Device;
 use ara_gpu::GpuDevice;
-use ara_frame::scene::{CameraSpec, Material, Mesh, Scene, Texture, Vertex};
 use ara_render_fidelity::{FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, Upscaler};
 use std::{path::Path, time::Instant};
 

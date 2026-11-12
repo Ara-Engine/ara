@@ -125,11 +125,7 @@ mod tests {
         let player = root.path().join("ara-player");
         std::fs::write(&player, b"\x7fELF fixture")?;
         let key = "a".repeat(64);
-        for package in [
-            "ara-render-fidelity",
-            "ara-runtime-render",
-            "ara-render2d",
-        ] {
+        for package in ["ara-render-fidelity", "ara-runtime-render", "ara-render2d"] {
             let cooked = root.path().join("resources").join(package);
             std::fs::create_dir_all(cooked.join(&key))?;
             std::fs::write(cooked.join(&key).join("main.spv"), b"shader")?;

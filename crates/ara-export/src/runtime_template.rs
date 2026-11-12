@@ -78,11 +78,7 @@ pub(crate) fn inventory(player: &Path, engine: &Path) -> Result<Inventory> {
             "ara-editor-gpu",
         ]
     } else {
-        &[
-            "ara-render-fidelity",
-            "ara-runtime-render",
-            "ara-render2d",
-        ]
+        &["ara-render-fidelity", "ara-runtime-render", "ara-render2d"]
     };
     for package in packages {
         let installed = engine.join("resources").join(package);
@@ -302,11 +298,7 @@ mod tests {
         std::fs::write(&player, b"prebuilt player").unwrap();
         let key = "a".repeat(64);
         let stale = "b".repeat(64);
-        for package in [
-            "ara-render-fidelity",
-            "ara-runtime-render",
-            "ara-render2d",
-        ] {
+        for package in ["ara-render-fidelity", "ara-runtime-render", "ara-render2d"] {
             let root = scratch.path().join("crates").join(package).join("cooked");
             for cohort in [&key, &stale] {
                 std::fs::create_dir_all(root.join(cohort)).unwrap();
