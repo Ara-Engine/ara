@@ -32,7 +32,7 @@ const EV100: f32 = 11.0;
 const START: Vec3 = Vec3::new(0.0, 0.6, -2.0);
 /// Direction the sun's light travels: about 13 degrees above the horizon, raking across the
 /// course from its right and ahead, so slab edges and bars throw long shadows left and back.
-const SUN: Vec3 = Vec3::new(-0.85, -0.22, -0.47);
+const SUN: Vec3 = Vec3::new(-0.88, -0.19, -0.43);
 
 /// The moving platform's path: centre, travel, period in ticks.
 const MOVER_ORIGIN: Vec3 = Vec3::new(0.0, 0.8 - SLAB * 0.5, 32.5);
@@ -78,11 +78,11 @@ fn art(s: &mut Scene) {
         "e_env",
         "Dusk sky and fixed exposure",
         json!({
-            "Environment": {"sky": [0.03, 0.06, 0.2, 1], "horizon": [0.8, 0.4, 0.2, 1], "skyFalloff": 4.5,
-                "glow": [0.7, 0.2, 0.05, 1], "glowFalloff": 14, "ground": [0.03, 0.025, 0.025, 1],
-                "intensity": 1200, "skyLight": 1},
+            "Environment": {"sky": [0.1, 0.17, 0.38, 1], "horizon": [0.55, 0.52, 0.56, 1], "skyFalloff": 6.0,
+                "glow": [0.55, 0.17, 0.05, 1], "glowFalloff": 26, "ground": [0.02, 0.022, 0.03, 1],
+                "intensity": 1600, "skyLight": 1},
             // Dusk haze: warm height fog thickens toward the yard far below.
-            "HeightFog": {"density": 0.0001, "falloff": 30, "albedo": [1.0, 0.72, 0.52, 1], "anisotropy": 0.6},
+            "HeightFog": {"density": 0.0001, "falloff": 30, "albedo": [0.6, 0.68, 0.85, 1], "anisotropy": 0.5},
             "PostProcessVolume": {"overrides": [
                 {"exposure": "manual", "ev100": EV100},
                 {"module": "toneMapping", "toneMapping": "neutral"},
@@ -93,7 +93,7 @@ fn art(s: &mut Scene) {
         "e_sun",
         "Sun",
         Vec3::new(0.0, 40.0, 30.0),
-        json!({"kind": "directional", "color": [1.0, 0.7, 0.48, 1], "intensity": 25_000, "sourceAngle": 0.5357}),
+        json!({"kind": "directional", "color": [1.0, 0.64, 0.4, 1], "intensity": 25_000, "sourceAngle": 0.5357}),
         Some(SUN),
     ));
     // Furnace glow at the chimneys' feet, far below; checkpoint and goal lights on the course.

@@ -105,8 +105,8 @@ pub fn course(root: &Path, lock: &Lock) -> Result<String> {
     const RAIL: usize = 5;
     let mut k = Kit::new(vec![
         Material::textured("rust steel", "rusty_metal_02").tinted([0.55, 0.5, 0.46]),
-        Material::textured("poured concrete", "concrete_floor_02").tinted([0.72, 0.7, 0.66]),
-        Material::textured("tread plate", "metal_plate").tinted([0.8, 0.82, 0.85]),
+        Material::textured("poured concrete", "concrete_floor_02").tinted([0.9, 0.88, 0.84]),
+        Material::textured("tread plate", "metal_plate").tinted([0.95, 0.97, 1.0]),
         Material::flat("amber paint", [0.85, 0.42, 0.08], 0.5, 0.0),
         Material::flat("black girder steel", [0.06, 0.065, 0.07], 0.55, 1.0),
         Material::flat("galvanised rail", [0.72, 0.74, 0.76], 0.38, 1.0),
@@ -291,18 +291,18 @@ pub fn yard(root: &Path, lock: &Lock) -> Result<String> {
     const STEEL: usize = 10;
     const PLATES: usize = 11;
     let mut k = Kit::new(vec![
-        Material::textured("yard concrete", "concrete_floor_02").tinted([0.2, 0.19, 0.18]),
-        Material::flat("sooty brick", [0.15, 0.12, 0.105], 0.92, 0.0),
-        Material::flat("tank steel", [0.24, 0.25, 0.27], 0.6, 0.45),
+        Material::textured("yard concrete", "concrete_floor_02").tinted([0.075, 0.08, 0.095]),
+        Material::flat("sooty brick", [0.1, 0.09, 0.09], 0.92, 0.0),
+        Material::flat("tank steel", [0.16, 0.18, 0.22], 0.6, 0.45),
         Material::emitter("slag", [1.0, 0.38, 0.08]),
-        Material::textured("shed cladding", "metal_plate").tinted([0.16, 0.17, 0.19]),
+        Material::textured("shed cladding", "metal_plate").tinted([0.1, 0.11, 0.14]),
         Material::glass("control glass", [0.6, 0.8, 0.9], 0.3),
         Material::emitter("window light", [1.0, 0.82, 0.55]),
         Material::flat("pipe steel", [0.34, 0.35, 0.37], 0.5, 0.8),
         Material::flat("amber paint", [0.85, 0.42, 0.08], 0.5, 0.0),
         Material::flat("road marking", [0.7, 0.66, 0.55], 0.85, 0.0),
         Material::flat("black girder steel", [0.06, 0.065, 0.07], 0.55, 1.0),
-        Material::textured("stacked plate", "metal_plate").tinted([0.3, 0.31, 0.33]),
+        Material::textured("stacked plate", "metal_plate").tinted([0.2, 0.22, 0.26]),
     ]);
     let v = Vec3::new;
     let floor = YARD_FLOOR;
@@ -376,18 +376,20 @@ pub fn yard(root: &Path, lock: &Lock) -> Result<String> {
         }
         pipe(&mut k, PIPE, 0.28, v(x + r - 0.2, floor + 1.0, z), 1, 9.0);
     }
-    // Gantry frames across the route: uprights, a top beam, diagonal braces, a trolley.
+    // Gantry frames beside and over the route: tall uprights, a top beam above the deck (its
+    // shadow rakes across the catwalk), diagonal braces, a hanging lamp.
     for z in [14.0, 46.0, 78.0] {
-        let top = floor + 19.0;
-        for x in [-14.0, 14.0] {
+        let top = floor + 31.0;
+        for x in [-8.0, 8.0] {
             slab_box(&mut k, STEEL, v(x - 0.4, floor, z - 0.4), v(x + 0.4, top + 0.6, z + 0.4), Vec2::ONE);
             let flip = if x < 0.0 { 1.0 } else { -1.0 };
             for dz in [-1.0, 1.0] {
                 k.cuboid(STEEL, v(0.25, 7.6, 0.25), Mat4::from_translation(v(x + flip * 2.3, top - 3.5, z + dz * 0.1)) * Mat4::from_rotation_z(flip * 0.52), Vec2::ONE);
             }
         }
-        slab_box(&mut k, STEEL, v(-14.4, top, z - 0.5), v(14.4, top + 0.9, z + 0.5), Vec2::ONE);
+        slab_box(&mut k, STEEL, v(-8.4, top, z - 0.5), v(8.4, top + 0.9, z + 0.5), Vec2::ONE);
         slab_box(&mut k, AMBER, v(-1.5, top - 1.4, z - 0.9), v(1.5, top, z + 0.9), Vec2::ONE);
+        slab_box(&mut k, WINDOW, v(-0.5, top - 2.2, z - 0.5), v(0.5, top - 1.4, z + 0.5), Vec2::ONE);
     }
     // Pipe racks: two long runs along the route on frames, one run across the yard.
     for (x, h) in [(-18.0, 6.0), (18.0, 4.5)] {
