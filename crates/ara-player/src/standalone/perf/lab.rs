@@ -117,7 +117,9 @@ impl Window {
                 presenter.shader_status().epoch == epoch,
                 "shaders changed during capture; retry after publication"
             );
-            Ok(json!({"images":images,"directory":capture.directory,"shaders":presenter.shader_status()}))
+            Ok(
+                json!({"images":images,"directory":capture.directory,"shaders":presenter.shader_status()}),
+            )
         })();
         match outcome {
             Ok(result) => self.lab.respond(&result)?,

@@ -1,4 +1,4 @@
-//! Optional material layers over the unchanged `ara-render::scene::Material` ABI.
+//! Optional material layers over the unchanged `ara_frame::scene::Material` ABI.
 use anyhow::{Result, ensure};
 
 pub(crate) fn has_layers(materials: &[ara_frame::scene::Material]) -> bool {

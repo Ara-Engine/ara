@@ -96,7 +96,7 @@ UV motion, render-pixel jitter, pre-exposure, reset and both sizes. Internal
 transport is not pre-exposed, so `upscaler_input()` reports pre-exposure 1.
 The packed motion image additionally stores expected prior radial depth and a
 reactive-emission flag. `set_lut` takes linear RGB in G rows and B*16+R columns.
-Scene material lowering is `ara_render::scene::Material`, including its texture
+Scene material lowering is `ara_frame::scene::Material`, including its texture
 index contract; material AST integration should lower into this existing ABI.
 
 ## Remaining integration work
@@ -190,7 +190,7 @@ small-emitter paths would benefit from BSDF/light MIS. The classic mode remains
 available; the optional reservoir mode below replaces its primary local-light
 estimator and indirect gather.
 
-The terrain fixture uses ara-landscape's actual sample tile and ara-terrain's
+The terrain fixture uses ara-terrain's
 hole-aware heightfield mesh, with logarithmic distant terrain, branch geometry
 and individually alpha-tested leaves with bounded two-sided transmission.
 Production integration still needs tiled streaming/dirty-region BLAS updates,
@@ -254,7 +254,7 @@ Editor viewport output, FSR1/TAAU and the DLSS seam retain their contracts.
 
 ## Geometry / shadow integration contract
 
-The public extraction boundary remains `ara_render::scene::Scene` through
+The public extraction boundary remains `ara_frame::scene::Scene` through
 `FidelityView::new` / `update_scene`; `GpuScene::instance_id(entity)` gives its
 stable instance ID. `Material` is still 80 bytes and `Vertex` 48 bytes. Optional
 `MaterialDetail` uses a version tag in reserved material flags. Geometry/VSM work

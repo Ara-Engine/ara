@@ -116,8 +116,7 @@ see its LICENSE.md) with its import sidecar.
 
 ## Testing
 
-Set the GPU environment first (`source ../../.sn/env.sh` or the ara-render `run.ps1`
-pattern: SDL3.dll and the Vulkan SDK `Bin` on PATH, `VK_LAYER_PATH`, an empty
+Set the GPU environment first (`source ../../.sn/env.sh`, or by hand: SDL3.dll and the Vulkan SDK `Bin` on PATH, `VK_LAYER_PATH`, an empty
 `VK_IMPLICIT_LAYER_PATH`). Then
 `CARGO_BUILD_JOBS=2 cargo test -p ara-player -- --nocapture`: `tests/scenario.rs` drives
 the demo over MCP end to end (pool boot, Move 120 ticks, grounded, labelled capture,

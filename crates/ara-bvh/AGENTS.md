@@ -1,6 +1,6 @@
 # ara-bvh
 
-Purpose: CPU builder for compressed-wide BVHs (CWBVH) used by `ara-render`'s `look::trace`
+Purpose: CPU builder for compressed-wide BVHs (CWBVH) used by `ara-importers`
 (render v3 `trace()`, council-v3 D1). Triangle meshes in, flat GPU-ready words out. No GPU,
 no file I/O (side-car bytes go through the caller). Owner: the render-v3 A1 track.
 

@@ -1,4 +1,4 @@
-//! Reflection-capture specs and automatic placement. Baking stays in `ara-render`.
+//! Reflection-capture specs and automatic placement. Baking needs a renderer.
 use anyhow::{Result, ensure};
 use glam::{Mat3, Mat4, Quat, Vec3, Vec4};
 

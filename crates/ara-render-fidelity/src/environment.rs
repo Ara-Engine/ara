@@ -263,7 +263,7 @@ impl FrameEnvironment {
         }
     }
 
-    /// The same look for the raster renderer (`ara_render::Renderer::set_look`):
+    /// The same look for a renderer's look record:
     /// the physical sky (with its cloud layer) and height fog run on the GPU there too.
     pub fn raster(&self) -> ara_frame::look::Look {
         use ara_frame::look::{
@@ -356,7 +356,7 @@ impl FidelityView {
 }
 
 /// The scene's local fog volumes for the raster renderer
-/// (`ara_render::Renderer::set_fog_volumes`), seen from `camera` (world position):
+/// (a renderer's fog volumes), seen from `camera` (world position):
 /// the highest priority first, then the nearest (distance to each box's surface),
 /// ties in entity order; at most `ara_frame::look::MAX_FOG_VOLUMES`. Volumes with
 /// non-finite poses or no extent are skipped; values clamp into their ranges.

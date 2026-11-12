@@ -189,8 +189,8 @@ pub(crate) struct Metering {
     wait: u32,
 }
 
-/// The time each rendered frame adapts by, as Ara's renderer (`FRAME_SECONDS` in
-/// ara-render's look): it has no wall clock and does not follow the simulation tick, so
+/// The time each rendered frame adapts by, as Ara's exposure adaptation did (the deleted renderer's
+/// `FRAME_SECONDS`): it has no wall clock and does not follow the simulation tick, so
 /// a paused game or a redrawn tick still adapts.
 const FRAME_SECONDS: f32 = 1. / 60.;
 

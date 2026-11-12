@@ -1,4 +1,4 @@
-//! Authored look and quality budgets. GPU passes that apply them stay in `ara-render`.
+//! Authored look and quality budgets. GPU passes that apply them live in the renderer.
 //!
 //! Hosts map the scene's authored look onto [`Look`]. The renderer applies it at a
 //! frame boundary. The defaults reproduce the M1 baseline: manual exposure, the ACES

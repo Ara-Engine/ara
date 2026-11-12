@@ -109,7 +109,7 @@ overwrites. A second graphics-family queue isolates Scene work from the native U
 queue where available; `publish_submission_to_ui` publishes one completed graphics submission while other queues may still run.
 Capture/shutdown may use `wait_completion`. Tests hold a queue only through `vulkan::QueueGate` (a host
 timeline wait); device teardown waits until no gate is held, as NVIDIA's Windows `vkDestroyDevice` otherwise deadlocks
-under its process-wide lock (`ara-render` AGENTS.md). `tests/deferred.rs` blocks Scene work behind one: UI progress, polling, ordered updates.
+under its process-wide lock. `tests/deferred.rs` blocks Scene work behind one: UI progress, polling, ordered updates.
 Synchronous presenters use `begin_deferred_completion_on_current_queue`; consecutive
 helpers share one native submit with ordered memory barriers. End the scope before
 host waits. `wait_completion_with` preserves logical pass groups; `submission_stats`
@@ -140,7 +140,7 @@ Caches check vendor/device/UUID/driver and save atomically; cooked artifact and 
 Adopt ready pipeline handles on the owner and retire normally. Keep the last presentation or skip draws until ready.
 ## Verification
 
-`CARGO_BUILD_JOBS=2`. Gates: `../ara-render/run.ps1 -Mode Check`; or `cargo check`, `test`,
+`CARGO_BUILD_JOBS=2`. Gates: `cargo check`, `test`,
 `clippy --all-targets -- -D warnings` and `fmt -- --check`, each with `-p ara-gpu`.
 Vulkan GPU tests run on the PC. For the Windows feature evidence and canonical
 Converter 4.0.3 cook cohorts, read `../../docs/dev/ara-gpu-renderlab.md`.

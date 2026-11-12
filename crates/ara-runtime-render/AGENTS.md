@@ -1,149 +1,63 @@
 # ara-runtime-render
 
-Raster presentation queues view, particles and post inside one completion scope, then waits before publication. The final particle tick shares its draw graph. Submission checkpoints preserve view/feature timings; deferred work is never zero-cost.
-
-Presents `ara_runtime::extract::RenderFrame`s through native raster on every GPU
-and preset (D27), with experimental fidelity as an explicit opt-in. Owns the
-device and per-view upload state; no simulation, window or process code.
+Presents `ara_runtime::extract::RenderFrame`s through the renderer installed on a
+`Presenter` (Renderlab, `ara-renderlab`, the only renderer) and resolves what a frame needs
+to be drawn: models, materials, terrain, foliage, decals, the look and the camera. It owns
+the presentation device and the completed output; no simulation, window or process code.
 
 ## Public API
-- `graphics::plan` composes user scalability overrides (screen GI follows the GI group); `Presenter::set_graphics_settings` adopts them at frame boundaries. Texture/foliage budgets replace native content; unchanged preferences reuse the plan. See `docs/dev/graphics-settings.md`.
-- `set_external_renderer(Box<dyn ExternalRenderer>)`: presents, captures and `live_image` draw the frame with that renderer and publish its image as `output()` (Renderlab: `ara-renderlab`, D35); Ara keeps its bootstrap scene.
-- `Presenter::new(size, window_extensions, pipeline_cache_dir)`: the first frame opens a `PresentationDevice` (headless when `window_extensions` is empty). The bootstrap renderer is built on that device and holds a `GpuLease`, so dropping either owner leaves the device alive for the other.
-- `set_quality(QualityChoice)`: Auto, Low, Medium, High or Epic. The caller supplies
-  the project default or user override. `set_pixel_budget` (editor Game views) renders the preset's 1440p pixel count below 1440p. `set_render_options` selects experimental
-  RT before device creation; otherwise no RT presentation resources are enabled.
-  Lights convert once (`lights::scene_lights`, profiles in `lights::tables`, set with the sun radius each frame).
-  Rendering failures retain the completed image and expose `presentation_error`. `set_debug`: `RenderDebug::reference` forces the path-traced reference (Epic fidelity plan, full res, ARA6009 without RT; captures present until its samples accumulate); `exposure` locks EV100 via `environment_locked` on every path.
-- `RasterView`: caller-owned renderer/device view shared by editor Scene and
-  Presenter. `prepare` adopts published native generations, `render` draws native
-  terrain/foliage and particles through the shared look. `capture` settles residency,
-  probe acquisition and temporal history. It never discovers, cooks or imports.
-  `render_secondary` draws an owned renderer camera over that content and shares
-  model-arrival fades. Release follow-up: compose VFX in secondary Game previews
-  too, with per-camera particle targets; particles currently use primary `render`.
-  Async hosts run `prepare_secondary_frame` inside `Renderer::submit_secondary`'s
-  preparation callback, then `secondary_frame_submitted` only on an accepted frame.
-- `RasterContent::new_reusing` prepares geometry/materials with `Renderer::native_seed`;
-  `preallocate` polls geometry/map allocations. Publish when ready or `destroy` to cancel.
-  `RasterView::publish_content` keeps last-good content if GPU publication fails.
-- `RasterView::prepare_unchanged` is for a retained immutable extraction (editor
-  accumulation/camera frames); it polls GI without revisiting root draws. Edits use
-  `prepare` and its exact dirty rows. Any failed preparation discards that candidate
-  CPU snapshot (`has_prepared_content`) so UI retries use a worker; GPU last-good stays live.
-- `ModelPlaceholders` styles unpublished models from read-only import status:
-  pending bounds are short grey corner marks (no filled faces or distant clutter);
-  failed/missing stay solid magenta. Raster arrivals
-  fade over 12 presented frames using material rows only; captures finish the fade.
-- Probe GI is enabled by default, acquired asynchronously and disk-cached; its early layout lets `preallocate_startup_resources` reserve and prime the volume/staging behind loading.
-  Live frames poll; initial GI bounces use bounded 4096-probe windows, then relight at the preset budget. Readiness still waits for all bounces/fade. `wait_probe_gi` drains pending clears at an explicit capture boundary.
-- `prepare_with(&frame, resolver)` / `present_with`: native local geometry, compressed textures, instance poses and changed skin palettes. Vertex colours map into `Vertex::color`; `Draw.paint` becomes `Instance::paint` (shapes only when it covers every vertex), live edits stream as `Changes::paint`; graph paint layers (`MaterialAsset::paint_layers`, `Source::Layer`) become layer material rows (`fidelity/native/tests/paint.rs`). Decals (`fidelity/native/decals.rs`) become native decals plus one material row (opacity map in slot 5, decal colour folded in); poses/parameters stream as `Changes::decals`, new/removed/re-materialled decals or colour edits rebuild.
-  The resolver reads published terrain/material/prefab assets only on structural changes; model-only callers use `prepare` / `present`.
-- `probes::ProbeCaptures` (J7; `RasterView::probes`/`probes_mut`, `Presenter::set_probe_scene`): authored `ReflectionProbe` capture jobs (`recapture`, `cancel`, `job`, `snapshot`; derived work, no ops), ticked in `prepare`: bounded bake steps, readbacks without waits, `<sourceHash>.capture` written and read off-thread under `.ara/cache/probes`.
-  `sourceHash` is portable (content, lighting, probe settings and pose). A job completes on its hashed receipt; the cache file follows (a write failure is a row diagnostic; `is_busy` and retirement wait for outstanding writes); an image that never arrives is read back again after 120 frames and fails the generation after 240. Editors request; presenter views (Play, exports) capture what the cache lacks. `poll_probe_retirement` retires a replaced view's work. Authored probes always bake at High/Epic; Automatic placement is on unless `ARA_REFLECTION_CAPTURES=0` (`captures.rs`: from the delivered probes once they arrive, re-placed at a capture boundary). Tests: `raster/tests/probes.rs`; `raster/tests/views.rs` checks the gi_diffuse and overdraw views (overdraw against CPU ray counts).
-- `output()` is a completed CopySource image independent of view targets; always
-  pair it with `output_size()`. `size()` is the requested extent, which can differ
-  while a failed replacement retains the last good output. The raster `renderer()`
-  owns the shared device; its own output and size are not the selected presentation.
-- `capture(&frame, size, mode, marks,
-  seed)`: deterministic capture with numbered marks and a legend whose names are
-  `Name (e_address)`; terrain and foliage use the same native G-buffer.
-  `capture_presented(&frame, size, marks, seed)`: reads the GPU-composited window
-  path, including landscape/foliage and persistent VFX (`presented: true`).
-- Fidelity composes terrain, foliage and particles before shared HDR post/TAAU;
-  native captures read the same view as windows and embedded Game. Raster puts
-  terrain/foliage in the G-buffer; particles blend into scene HDR before shared temporal/post without a copy or tonemap.
-- `stats()`: rebuilt flag, updated poses/skins, CPU prepare/render time and GPU ms.
-  `readiness().is_ready()` gates raster content, residency, effect PSOs/warmup and GI convergence/fade, allowing normal motion.
-  `host_wait_stats()` exposes cumulative host waits; snapshot around the whole
-  windowed frame (including presentation), never subtract GPU timestamps from wall time.
-- Raster look: `set_render_options(RenderOptions)` (D27: raster by default; RT opt-in),
-  `set_look_override` (look development/scoring), `set_probe_gi(true)` +
-  `probe_gi_pending()` / `wait_probe_gi()`: probe GI acquired per content key on a
-  worker (one job at a time, newest request queued, full bakes disk-cached under the
-  pipeline cache; delivered records apply 4096 per frame, scattered in-frame).
-  The CPU bakes on half the cores (`gi_cpu.rs`: per-geometry SAH BVHs under an
-  instance top level, map means via `NativeResidency::mean_texel` with the
-  material's sRGB-decode bit for raw graph maps, terrain hits splat-weighted). `gi_cpu::layout`: one lattice over all static triangles, plus a fine one over built-up content when markedly smaller (cache names carry `lattice_rule()`). A pool's full bake delivers in stages: the coarsest lattice as soon as it is traced, then the finer ones (`Message::Surfaces { last }`); readiness waits only for the first;
-  `ARA_PROBE_GI_RT=1` opts into a temporary ray-tracing `VulkanDevice` + fidelity
-  view, which contends with presentation for the driver.
-  GI follows edits: `gi::Mobility` keeps instances that moved within 30 frames (and
-  deforming geometry) out of the surfaces; when that set changes, or a new
-  generation fits the lattice, the worker's persistent CPU tracer re-traces only
-  nearby probes (`gi_cpu::affected`), which `Renderer::update_probe_surfaces` blends in. `tests/gi_edits.rs` checks a moved block's old spot against a fresh view.
-  Emissive surfaces (`emitters.rs`, above 5 cd/m2) light the scene directly. A
-  worker thread samples each emitter's triangles through its emissive map into
-  0.75 m patches and casts rays against its own mesh: escaping flux (shades, sockets)
-  and its lobe become spot or point lights (two-sided only for open sheets). Flat even
-  faces (0.01 m2+, a filled rect or disc, escaping the mesh) become rect/disc area lights
-  first (`Panel`); patches cluster into the rest of `Quality::emitter_lights`. They follow their instances, ride after the scene's
-  own lights and stay out of fog. Probe bakes zero those materials' emission; the
-  threshold is `ara_render::look::EMITTER_RADIANCE`, which screen probe GI and capture faces also skip.
-  `stats().gpu: Option<GpuFrameCosts>` splits native scene updates, compressed
-  texture uploads, VFX simulation/draw, raster/fidelity passes and publication.
-  Residency counters accompany that same frame, including native Low. The legacy
-  diagnostic path alone has incomplete coverage. Terrain/foliage are in view passes.
-  Sum components per frame before quantiles; marginal pass medians do not add.
-- `fidelity::scene(frame, Content)`: engine-owned scene conversion for fidelity.
-  `Content` holds already-resolved terrain layers, foliage rule models, material
-  detail and HDR environment overrides; it never reads sample locks or project paths.
-  `fidelity::vfx::Effects` composites cooked particles into FidelityView HDR before post.
-  This legacy capture adapter retains atlas packing; live presentation uses native.
-- `fidelity::native::{Content::resolve, prepare}` resolves real Header.materials
-  and model/prefab foliage at a control boundary, then prepares local shared geometry,
-  six independent UV slots and native BC residency. It consumes existing runtime
+- `Presenter::new(size, window_extensions, pipeline_cache_dir)` / `with_device`: the first
+  `prepare`/`present` opens a `PresentationDevice` (headless when `window_extensions` is
+  empty). `gpu()` / `gpu_mut()` give the device (None before it opens).
+- `set_external_renderer(Box<dyn ExternalRenderer>)`: presents, captures and `live_image` draw
+  the frame with that renderer and publish its image as `output()`. Without one a present
+  fails ("no renderer is installed"). `ExternalView` carries the frame, the look, the content's
+  environment map, foliage parts, terrain materials, the foliage share and terrain detail
+  distance; `ExternalFrame` returns the image, optional packed ids, GPU ms and pass times.
+  Presents are synchronous: nothing is in flight, so `output()` is complete when a present returns.
+- `present_with(&frame, resolver)` / `present`: the resolver (`fidelity::native::Content`)
+  runs when the draw count changes. A failed present keeps the last published image and
+  exposes `presentation_error`. `stats()` has CPU prepare/render time, GPU ms, the renderer's
+  handoff time and `gpu: Option<GpuFrameCosts>`; `pass_timings()` lists the renderer's own passes.
+- `set_quality(QualityChoice)`, `set_render_options`, `set_graphics_settings`,
+  `graphics::plan`: the user's tier selects what the renderer is told (foliage share, terrain
+  detail, the look's bloom/blur/DOF switches). `quality()` is the preset the device resolves to.
+- `set_debug(RenderDebug)`: `exposure` locks EV100 (`environment_locked`) and `view` picks the
+  debug view captures draw; any other switch is reported to the renderer as `debug_switches`.
+  `reference` is refused (the path-traced reference is gone). `set_look_override` replaces the look.
+- `capture(&frame, size, mode, marks, seed)` / `capture_with`: the renderer's image, settled
+  and read back; a debug view other than Lit fails `ARA_VIEW_MODE_UNAVAILABLE`.
+- `PresentationImage::publish`: a copy of a completed image the compositor can sample while
+  the next frame renders; `readiness()` is renderer, published, rebuilt, failed.
+- `environment_at(frame, eye)`, `camera`, `sky`, `decode_texture`, `mean_texel`: the look at an
+  eye, the frame's camera, the sky gradient and texture decoding the bridge and editor share.
+- `geometry::{shape, transform}`: procedural shapes (box, sphere, capsule, plane) and
+  world-space transform with 8-influence CPU skinning. `terrain_mesh`: a terrain tile as a mesh.
+- `ModelPlaceholders` styles unpublished models from read-only import status: pending
+  bounds are short grey corner marks; failed/missing stay solid magenta.
+- `fidelity::native::{Content::resolve, prepare}` resolves real Header.materials and
+  model/prefab foliage at a control boundary, then prepares local shared geometry, six
+  independent UV slots and native BC residency. It consumes existing runtime
   scatter/selector/material semantics; it does not scatter again, decode pixels or atlas.
-  Prepared owns the CPU scene and its resident set for FidelityView::new_native.
-  `Prepared::enable_motion` reserves independent root surface slots before upload;
-  `update_frame` streams poses, factors and changed joint palettes without copying
-  static vertices or asset handles. `FrameChange::Rebuild` requests fresh content
-  for new identities/generations or terrain residency; keep presenting the last good
-  view until replacement GPU publication succeeds.
-- `fidelity::vfx::Effects::{update, composite_ticks}` maintains per-entity systems,
-  world placement, scale and intensity, and preserves fidelity temporal AA after composition.
-- `geometry::{shape, transform}`: procedural shapes (box, sphere, capsule, plane;
-  centred, planes at y = 0) and world-space transform with 8-influence linear-blend
-  CPU skinning. `sky(env)`: 64×32 gradient environment. `decode_texture`: BC7 KTX2
-  → RGBA8 (the renderer uploads RGBA8 today).
-- `camera(&frame)`: the frame camera as a `CameraSpec` (overview fallback).
-- `vfx::Effects`: GPU particles in captures. Each `VisualEffect` replays its cooked
-  library effect (ara-vfx-gpu `cooked/<name>`, at most 240 ticks) over the frame the
-  renderer just captured (HDR background, reversed-Z depth), camera shifted into the
-  effect's space; `Presenter::capture` composites before resizing back.
-- `landscape::Landscapes`: ara-landscape (CDLOD terrain + scattered foliage) rendered
-  from the capture camera with the scene projection and merged by depth, after VFX
-  (whose delta carries onto terrain). Square terrain extents; atlas tiles are relative
-  to Header.min. Nonzero world origins require ara-landscape's CPU rebase support.
-- `two_d`: 2D worlds (a `Camera2d`) draw through ara-render2d. `atlases(world,
-  assets)` loads every referenced atlas generation (normal atlases linear);
-  `Presenter2d::capture(world, atlases, tick, size, marks, seed)`.
+  `Prepared` owns the CPU scene and resident set; `update_frame` streams poses, factors and
+  joint palettes without copying static vertices; `FrameChange::Rebuild` requests fresh content.
+  Vertex colours map into `Vertex::color`; `Draw.paint` becomes `Instance::paint`; graph paint
+  layers become layer material rows; decals (`fidelity/native/decals.rs`) become native
+  decals plus one material row.
+- `two_d`: 2D worlds (a `Camera2d`) draw through ara-render2d (`Presenter2d`). `atlases(world,
+  assets)` loads every referenced atlas generation; `capture(world, atlases, tick, size, marks, seed)`.
 
 ## Gotchas
-
-- `PresentStats.gpu_span_ms` measures prepare through publication on the device
-  clock; `gpu_ms` remains the legacy timestamp sum, not the D26 whole-frame gate.
-
-- `ara-render` takes glam 0.30 types (`glam30`); runtime math is glam 0.34.
-- Skinning is CPU-side: GPU skinning needs a skinned vertex ABI in the cooked
-  shaders (M3). Fox (1728 vertices) costs well under a millisecond.
-- Native material/draw-set generations replace scene resources while retaining
-  pipelines and targets. Light/transform/skin edits stream; native texture uploads
-  never decode to RGBA8 or build an atlas, on any raster tier.
-- At most 256 local lights (scene lights plus emitter lights; 128 per 16x16 tile);
-  one directional sun (a dim default if the world has none).
-- Capture resizes the renderer to the request and back.
-- `Presenter2d::set_atlases` publishes textures once; `prepare` moves the atlas map
-  through extraction without copying pixels; `present` draws without readbacks.
-- Cook the compositor offline: `cargo run -p ara-shader-cook --
+- Renderlab's bridge reads `Content` (environment map, foliage parts, terrain materials) and
+  `terrain_mesh`; keep their shapes stable or change `ara-renderlab` with them.
+- Skinning is CPU-side here.
+- `PresentStats.gpu_span_ms` measures the device span of the last work; `gpu_ms` is the
+  renderer's own figure plus publication, not a whole-frame gate.
+- `fidelity::native` needs `ara-texture-stream`'s native sampling source to match.
+- Cook the 2D compositor offline: `cargo run -p ara-shader-cook --
   crates/ara-runtime-render/shaders/pipelines.json crates/ara-runtime-render/cooked`.
-- Effects come from ara-vfx-gpu's committed cooked library (a dev-checkout path);
-  authored project effects need an asset-pipeline cook first.
 
 ## Testing
-
-GPU tests need the Vulkan SDK layers: `source .sn/env.sh` (bash) or
-`../ara-render/run.ps1` style process-local `VK_IMPLICIT_LAYER_PATH`/`VK_LAYER_PATH`.
-`RUST_TEST_THREADS=1 cargo test -p ara-runtime-render`: `tests/headless.rs` renders
-the demo scene, walks the Fox, checks streaming updates, a live light edit and that
-validation (including synchronization validation) stays clean. Captures land in
-`.sn/runtime-render/`. `tests/soft_shadows.rs`: penumbra widths vs the path tracer (`--ignored`: every light kind at Medium and High); `examples/shadow_costs.rs`: shadow GPU cost per preset. `cargo clippy -p ara-runtime-render --all-targets -- -D warnings`.
+`cargo test -p ara-runtime-render` (content resolution, readiness, graphics plans, geometry);
+`cargo clippy -p ara-runtime-render --all-targets -- -D warnings`. Renderer-level image tests
+live in `ara-renderlab` (`tests/render.rs`).

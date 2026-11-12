@@ -221,9 +221,8 @@ impl Surface {
             self.renderer.device_lost();
             // SAFETY: the window drops this surface before its presenter's device;
             // all UI and scene submissions occur sequentially on this thread.
-            let mut gpu = unsafe {
-                ara_editor_gpu::NativeUi::new(ara_editor_gpu::ui_device(scene_gpu))?
-            };
+            let mut gpu =
+                unsafe { ara_editor_gpu::NativeUi::new(ara_editor_gpu::ui_device(scene_gpu))? };
             gpu.set_deferred_completion(self.frames_in_flight)?;
             self.gpu = Some(gpu);
         }

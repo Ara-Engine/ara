@@ -1213,7 +1213,7 @@ the lockfile, stage all resolutions including Cargo.lock, then run the gate.
 ## GPU timing queue
 
 ```
-cargo run -p ara-dev -- gpu -- cargo run -p ara-render --example benchmark
+cargo run -p ara-dev -- gpu -- cargo test -p ara-renderlab --test render
 cargo run -p ara-dev -- gpu --timeout 600 -- capture-tool --output target/capture.png
 ```
 

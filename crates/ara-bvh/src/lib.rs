@@ -2,7 +2,7 @@
 //! one BLAS per mesh asset, built at import or on load from a mesh-hash cache, plus
 //! the instance TLAS. Pure data in, flat GPU-ready buffers out; no GPU or asset I/O
 //! (side-car caches go through the caller's [`sidecar`] bytes).
-//! Used by `ara-importers` (import-time builds) and `ara-render` (`look::trace`).
+//! Used by `ara-importers` (import-time builds).
 //!
 //! The pipeline is a port of tinybvh (MIT, Jacco Bikker; see `THIRD_PARTY_NOTICES.md`):
 //! a binned SAH builder with spatial splits (SBVH), the SAH-optimal collapse to an

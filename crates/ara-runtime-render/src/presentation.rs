@@ -2,9 +2,9 @@
 //! external renderer draws, the presenter publishes its completed image.
 use super::*;
 use ara_gpu::{Access, Barrier, Device, GpuDevice, Image, Queue, Resource, commands::Command, vk};
+use ara_render_fidelity::environment::FrameEnvironment;
 use ara_render_fidelity::presets::Plan;
 pub use ara_render_fidelity::presets::{QualityChoice, QualityPreset, RenderOptions};
-use ara_render_fidelity::environment::FrameEnvironment;
 use fidelity::native::Content;
 
 /// A completed display image independent of the renderer's working targets.
@@ -130,8 +130,7 @@ impl Presenter {
         if self.preset.is_none() {
             let caps =
                 ara_render_fidelity::presets::Capabilities::of(self.gpu().context("device")?);
-            self.preset =
-                Some(Plan::resolve(self.choice, &caps, self.size, self.options)?.preset);
+            self.preset = Some(Plan::resolve(self.choice, &caps, self.size, self.options)?.preset);
         }
         Ok(())
     }

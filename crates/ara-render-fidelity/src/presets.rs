@@ -299,7 +299,7 @@ pub struct RenderOptions {
 /// Which renderer draws a view.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RenderPath {
-    /// The raster renderer (`ara-render`) with the look, probe GI and TAA.
+    /// The standard renderer path with the look, probe GI and TAA.
     Raster(RasterPlan),
     /// The ray-traced fidelity renderer (opt-in).
     Fidelity(FidelityPlan),

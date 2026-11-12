@@ -21,5 +21,5 @@ completed cleanly. This is solver/debug geometry, not a skinned character-art ca
 
 `ara-anim-capture` was removed in renderer deletion stage 1c, so these captures are not regenerated. On this Windows
 machine, set process-local `VK_LAYER_PATH=C:/VulkanSDK/1.4.363.0/Bin` and an empty
-`VK_IMPLICIT_LAYER_PATH` directory, following ara-render/run.ps1's validation setup.
+`VK_IMPLICIT_LAYER_PATH` directory, following the GPU validation setup in `ara-gpu`.
 The generated GPU cache and large render-ID buffer are intentionally not committed.

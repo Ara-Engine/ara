@@ -6,7 +6,7 @@ use ara_render2d::graph::State;
 impl FidelityView {
     /// The directional light's angular radius in radians (half its source angle), or
     /// `None` for the Sun's: the cone sun rays sample, as the raster renderer's soft
-    /// shadows (`ara_render::Renderer::set_sun_radius`). A change resets history.
+    /// shadows (the renderer's sun radius). A change resets history.
     pub fn set_sun_radius(&mut self, radius: Option<f32>) -> Result<()> {
         let radius = radius.unwrap_or(crate::view::SUN_RADIUS);
         ensure!(

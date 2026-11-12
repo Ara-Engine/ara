@@ -1,6 +1,6 @@
 # ara-render-fidelity
-Native entry: FidelityView::new_native consumes ara-render::instanced::Scene and
-NativeResidency. Model-space pools/LODs build once; TLAS carries real transforms.
+Native entry: FidelityView::new_native consumes `instanced::Scene` (ara-frame's records;
+the GPU geometry pool is this crate's `instanced::GeometryGpu`) and NativeResidency. Model-space pools/LODs build once; TLAS carries real transforms.
 Native scene count bit31 selects 64B header / 16B mesh / 192B instance records;
 material stride is 320B and geometry rows are 32B. Never add world-space copies.
 The native helper include must exactly match ara-texture-stream's sampling source.
@@ -11,8 +11,10 @@ a replacement view. Rejected poses retain published resources. Native Frame.scen
 is a motion-pending boolean (legacy uses a previous-table index); successful render
 commits presented world/skin history. Repeated renders must not repeat stale motion.
 
-M3 lighting and post extension over ara-render's Graph and ara-gpu's device.
-Scene snapshots and physical units are exactly ara-render::scene's contract.
+M3 lighting and post extension over ara-render2d's Graph and ara-gpu's device. Nothing
+in the engine draws with this view now (Renderlab is the only renderer); the crate's
+live consumers are the look (`environment`, `colour`, `settings`) and the quality
+`presets`. Scene snapshots and physical units are exactly ara_frame::scene's contract.
 No authoritative gameplay or authoring state lives here.
 
 ## API
@@ -47,8 +49,8 @@ No authoritative gameplay or authoring state lives here.
   `Fidelity(FidelityPlan)` for Medium and above. `FidelityPlan::settings` at
   creation, `configure` after new/resize/content swap. D26 RT tiers: Medium 0.4,
   High 0.5, Epic 2/3 transport scale.
-- `bake_probe_surfaces`: one-time ray-traced probe surface caches for the raster
-  renderer's GI (`ara_render::look::gi`); needs one rendered RT frame.
+- `bake_probe_surfaces`: one-time ray-traced probe surface caches for probe GI
+  (`ara_frame::look::gi`); needs one rendered RT frame.
 - `environment::FrameEnvironment::resolve(&frame.look, camera, env.exposure)`: the scene's
   `SkyAtmosphere`/`HeightFog` and the post-process volumes blended at `camera` →
   `view.set_environment`; `raster()` gives the raster renderer's `Look` (grading, lens,
@@ -58,10 +60,10 @@ No authoritative gameplay or authoring state lives here.
   lift/gamma/gain, chromatic aberration, the LUT and AO/SSR tuning are raster-only.
   `HeightFog`'s volumetric fields map onto both renderers' fog (the fidelity froxel fog takes
   emission, extinction scale and per-light `parameters.w`); `fog_volumes()` sorts the scene's
-  `LocalFogVolume`s for `Renderer::set_fog_volumes` (raster only for now). `sky_model` maps `SkyAtmosphere`
-  (Unreal units) onto `ara_render::look::atmosphere::Atmosphere`; `set_atmosphere_lights` takes the sun's and the
-  second light's settings. `shaders/atmosphere-model.slangh` is a byte copy of ara-render's (a test checks it):
-  edit the root `shaders/` one, copy it here and cook both cohorts.
+  `LocalFogVolume`s for a renderer's fog volumes. `sky_model` maps `SkyAtmosphere`
+  (Unreal units) onto `ara_frame::look::atmosphere::Atmosphere`; `set_atmosphere_lights` takes the sun's and the
+  second light's settings. `shaders/atmosphere-model.slangh` is a byte copy of ara-frame's (a test checks it):
+  edit `crates/ara-frame/shaders/` one, copy it here and cook this cohort.
 
 ## Gates
 Use CARGO_BUILD_JOBS=2. `cargo test -p ara-render-fidelity`,
@@ -81,8 +83,8 @@ The opaque GGX lobe is energy-compensated for multiple scattering (`ggxMultipleS
 Principled v2 and the raster's `specularLobes`, the same fits); keep the two in step.
 Glass (transmission + ior/volume) is a GGX dielectric (`sampleGlass`, `glassReflection`),
 absorbing over each stretch inside a volume; transmissive instances take TLAS masks
-16/32 (non-opaque traversal). Shadow rays pass glass by `glassTransmittance` (shared with
-ara-render's `look-glass.slangh`); BSDF paths through glass count no light hits.
+16/32 (non-opaque traversal). Shadow rays pass glass by `glassTransmittance` (a function of the
+material only); BSDF paths through glass count no light hits.
 Probe-surface bakes (`PROBE_SURFACES`) pass glass by its straight transmittance. Texels
 record emissive as RGB9E5 and a mask of the sub-rays on the relit hit's plane, exactly as
 `ara-runtime-render`'s `gi_cpu` (surface version 14).

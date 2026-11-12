@@ -7,8 +7,8 @@ use ara_gpu::{
 use bytemuck::{Pod, Zeroable};
 use glam::Mat4;
 
-/// The raster frame record `tonemapMain` reads. Layout matches `ara-render`'s
-/// `Frame`: this pass only writes extent, exposure, the output slot and the
+/// The raster frame record `tonemapMain` reads. Layout is the frame record
+/// the tone-map shader declares: this pass only writes extent, exposure, the output slot and the
 /// tone-curve selector, and uploads the whole record.
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]

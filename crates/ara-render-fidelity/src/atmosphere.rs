@@ -99,13 +99,13 @@ impl Atmosphere {
 #[cfg(test)]
 mod tests {
     /// Both renderers cook the same atmosphere: the copy in this shader root is
-    /// byte-identical to ara-render's (`shaders/atmosphere-model.slangh`).
+    /// byte-identical to ara-frame's (`shaders/atmosphere-model.slangh`).
     #[test]
     fn the_atmosphere_shader_is_the_raster_copy() {
         assert_eq!(
             include_str!("../shaders/atmosphere-model.slangh"),
             ara_frame::look::atmosphere::shader_source(),
-            "copy shaders/atmosphere-model.slangh into crates/ara-render-fidelity/shaders/"
+            "copy crates/ara-frame/shaders/atmosphere-model.slangh into crates/ara-render-fidelity/shaders/"
         );
     }
 }
