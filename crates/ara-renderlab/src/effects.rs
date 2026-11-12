@@ -103,19 +103,29 @@ impl Effects {
     /// Makes Renderlab's emitters follow `frame.effects` and steps them by the ticks
     /// elapsed since the last frame (none for a redraw of the same tick, so stills and
     /// captures stand still).
+    ///
+    /// The engine ticks only when a simulation tick elapsed, on the first frame, or when
+    /// `posed` says a skinned object's pose changed: a tick that steps nothing still
+    /// restarts the engine's per-tick work (the atmosphere's environment is placed again,
+    /// which relights the GI cache), so redrawing the same tick from a moving camera must
+    /// not tick, except while the lighting settles or a pose changed (`tick_anyway`).
     pub fn sync(
         &mut self,
         engine: &mut Engine,
         frame: &RenderFrame,
+        tick_anyway: bool,
         gaps: &mut Gaps,
     ) -> Result<()> {
+        let first = self.tick.is_none();
         let elapsed = self
             .tick
             .map_or(0, |last| frame.tick.saturating_sub(last).min(MAX_CATCH_UP));
         self.tick = Some(frame.tick);
-        // One engine tick per frame: the particle step and the shared per-frame work (skinning)
-        // that every view rendered after it reuses.
-        engine.tick(elapsed as f32 / EFFECT_HZ)?;
+        // The particle step and the shared per-tick work (skinning) that every view rendered
+        // after it reuses.
+        if first || elapsed > 0 || tick_anyway {
+            engine.tick(elapsed as f32 / EFFECT_HZ)?;
+        }
         let prewarm = WARM_SECONDS;
 
         let mut seen = HashSet::new();

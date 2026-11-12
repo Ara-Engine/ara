@@ -42,15 +42,15 @@ impl Skies {
         }
     }
 
-    /// Sets the frame's sky on `engine` when it changed. `wait` (a capture or a cut)
-    /// waits for a sky image being prepared.
+    /// Sets the frame's sky on `engine` when it changed, and says whether it did. `wait` (a
+    /// capture or a cut) waits for a sky image being prepared.
     pub fn apply(
         &mut self,
         engine: &mut Engine,
         view: &ExternalView<'_>,
         gaps: &mut Gaps,
         wait: bool,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let mut replaced = None;
         let sky = match lighting::sky(view, gaps) {
             SkySource::Atmosphere(medium) => Sky::Atmosphere(medium),
@@ -103,7 +103,8 @@ impl Skies {
                 }
             }
         };
-        if self.applied != Some(sky) {
+        let changed = self.applied != Some(sky);
+        if changed {
             engine.set_sky(sky)?;
             self.applied = Some(sky);
         }
@@ -112,6 +113,6 @@ impl Skies {
         for map in replaced.flatten().into_iter().chain(self.stale.drain(..)) {
             engine.remove_environment(map)?;
         }
-        Ok(())
+        Ok(changed)
     }
 }
