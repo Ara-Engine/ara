@@ -17,9 +17,12 @@
 //! what it needs and [`Job::run`] traces.
 use crate::gi_cpu::{Mesh, Shading};
 use anyhow::{Context, Result};
-use ara_frame::{instanced::{
+use ara_frame::{
+    instanced::{
         Geometry, Lod, Material, NO_TEXTURE, Scene, TextureSlot, TextureTransform, Vertex,
-    }, scene::{EMISSIVE_DECODE_SRGB, LIGHT_DISC, LIGHT_RECT, Light}};
+    },
+    scene::{EMISSIVE_DECODE_SRGB, LIGHT_DISC, LIGHT_RECT, Light},
+};
 use glam30::{Mat3, Mat4, Vec2, Vec3};
 use std::{
     collections::{BTreeMap, BTreeSet},

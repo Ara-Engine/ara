@@ -109,6 +109,10 @@ fn drawable(world: &glam34::Mat4) -> bool {
     inverse.is_finite() && max(a) * max(inverse) <= 1e4
 }
 
+/// Object ids by owner: own objects by entity (`false`), batches by material key (`true`),
+/// each with the object and its `(first primitive, count, id)` ranges.
+type Tags = HashMap<(bool, u64), (ObjectId, Vec<(u32, u32, u32)>)>;
+
 /// One material's static batch: its members' triangles merged in world space.
 struct Batch {
     /// The members' geometry and transforms the mesh was built from.
@@ -116,6 +120,9 @@ struct Batch {
     id: ObjectId,
     mesh: MeshId,
     material_slot: u64,
+    /// Each member in mesh order: its draw's entity and its triangle count, so the batch's
+    /// object ids can name each member's primitives (`Scene::tag`).
+    layout: Vec<(u64, u32)>,
 }
 
 /// Renderlab handles for everything the frame draws.
@@ -130,6 +137,9 @@ pub(crate) struct Scene {
     batches: HashMap<u64, Batch>,
     /// Key of the static draws last placed (`sync`'s `static_key`).
     static_key: Option<u64>,
+    /// The ids last set on Renderlab's objects, with the object they were set on: own
+    /// objects by entity (`false`), batches by material key (`true`).
+    tags: Tags,
     palette: Vec<Mat4>,
     /// The emissive program once tried: `Some(None)` when Renderlab rejected it.
     emissive: Option<Option<ProgramId>>,
@@ -680,7 +690,54 @@ impl Scene {
         for entity in gone {
             self.remove(engine, entity)?;
         }
-        self.sync_batches(engine, merged, gaps)
+        self.sync_batches(engine, merged, gaps)?;
+        self.tag(engine, frame)
+    }
+
+    /// Gives Renderlab's objects the editor's ids: a draw's id is its index in the frame's
+    /// draws plus one (what `RenderFrame::draws` lists, so the editor reads the same
+    /// numbers), one range for an own object and one range per member for a static batch.
+    /// Draws the frame does not list (foliage) stay untagged. Sets only what changed, since
+    /// a draw leaving the list renumbers those after it.
+    #[cfg(not(target_vendor = "apple"))]
+    fn tag(&mut self, engine: &mut Engine, frame: &RenderFrame) -> Result<()> {
+        let ids: HashMap<u64, u32> = frame
+            .draws
+            .iter()
+            .enumerate()
+            .map(|(n, draw)| (draw.entity, n as u32 + 1))
+            .collect();
+        let mut wanted = Tags::new();
+        for (entity, object) in &self.objects {
+            if let Some(id) = ids.get(entity) {
+                wanted.insert((false, *entity), (object.id, vec![(0, u32::MAX, *id)]));
+            }
+        }
+        for (material, batch) in &self.batches {
+            let mut first = 0u32;
+            let mut ranges = Vec::new();
+            for (entity, triangles) in &batch.layout {
+                if let (Some(id), true) = (ids.get(entity), *triangles > 0) {
+                    ranges.push((first, *triangles, *id));
+                }
+                first += triangles;
+            }
+            wanted.insert((true, *material), (batch.id, ranges));
+        }
+        self.tags.retain(|key, _| wanted.contains_key(key));
+        for (key, tagged) in wanted {
+            if self.tags.get(&key) != Some(&tagged) {
+                engine.set_object_ids(tagged.0, &tagged.1)?;
+                self.tags.insert(key, tagged);
+            }
+        }
+        Ok(())
+    }
+
+    /// Apple's backend has no object ids yet.
+    #[cfg(target_vendor = "apple")]
+    fn tag(&mut self, _: &mut Engine, _: &RenderFrame) -> Result<()> {
+        Ok(())
     }
 
     /// Makes the static batches equal `merged` (members by material key): a batch
@@ -706,6 +763,7 @@ impl Scene {
                 .iter()
                 .fold(fnv(FNV, &material.to_le_bytes()), |h, draw| {
                     let h = fnv(h, &geometry_key(draw, &mut self.coverage).to_le_bytes());
+                    let h = fnv(h, &draw.entity.to_le_bytes());
                     cleaned(&draw.world)
                         .to_cols_array()
                         .iter()
@@ -722,11 +780,13 @@ impl Scene {
             let first = members[0];
             let wanted = normal_mapped(first);
             let (mut vertices, mut indices) = (Vec::new(), Vec::new());
+            let mut layout = Vec::with_capacity(members.len());
             for draw in &members {
                 let (mut source, mut triangles) = triangles(draw)?;
                 if wanted {
                     split_handedness(source.to_mut(), triangles.to_mut());
                 }
+                let before = indices.len();
                 batch::append_world(
                     &cleaned(&draw.world),
                     &source,
@@ -734,6 +794,7 @@ impl Scene {
                     &mut vertices,
                     &mut indices,
                 );
+                layout.push((draw.entity, ((indices.len() - before) / 3) as u32));
             }
             let label = format!(
                 "a static batch of {} draws like `{}`",
@@ -752,6 +813,7 @@ impl Scene {
                     id,
                     mesh,
                     material_slot,
+                    layout,
                 },
             );
         }

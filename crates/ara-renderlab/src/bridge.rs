@@ -23,13 +23,15 @@ use renderlab::{
     ViewId,
     engine::{
         Capabilities, Engine, EngineDescriptor, ExperimentalRayQuery, Light, Limits, RenderPath,
-        Sun, ViewDesc, ViewLook, headless_adapter,
+        Sun, ViewDesc, ViewLook, instance_flags,
     },
 };
 use std::time::{Duration, Instant};
 
 /// Longest a present waits for its frame before reading it back regardless.
 const FRAME_WAIT: Duration = Duration::from_secs(5);
+/// How long a click waits for the engine's id readback.
+const PICK_WAIT: Duration = Duration::from_millis(250);
 /// Mesh-material groups terrain tiles may take; each resident tile is its own group (its own
 /// weights texture, so tiles never merge by material). Outpost's 144 tiles need 144; entity
 /// draws and foliage get `MAX_GROUPS - TERRAIN_GROUPS`, merged by material when they exceed it.
@@ -47,6 +49,8 @@ struct Target {
     shared: Option<SharedHandoff>,
     /// Packed ids retained on the presenter, beside `image`.
     id: Option<crate::shared::PresentedId>,
+    /// The texture Renderlab writes the view's ids into (`Options::scene_ids`).
+    ids: Option<crate::id_target::IdTarget>,
 }
 
 /// Lighting last applied to the engine, so unchanged frames set nothing.
@@ -83,6 +87,8 @@ pub(crate) struct Bridge {
     skies: Skies,
     /// The frames cross by CPU copy: asked for, or the shared route is unavailable.
     cpu_copy: bool,
+    /// Ids are written beside every frame (`Options::scene_ids`).
+    scene_ids: bool,
     gpu_ms: Option<f64>,
     /// Renderlab's own passes for the frame `gpu_ms` measured (`ExternalFrame::passes`).
     passes: [(&'static str, f64); EXTERNAL_PASSES],
@@ -91,9 +97,48 @@ pub(crate) struct Bridge {
     last_view: Option<([f32; 3], [f32; 3])>,
 }
 
+/// A Vulkan adapter for the hosted engine on an instance whose validation follows Ara's one
+/// switch: `ARA_NO_GPU_VALIDATION` set non-empty turns it off (Renderlab's own device
+/// otherwise validates in debug builds whatever Ara's device does).
+fn adapter() -> Result<wgpu::Adapter> {
+    let mut flags = instance_flags();
+    if std::env::var_os("ARA_NO_GPU_VALIDATION").is_some_and(|v| !v.is_empty()) {
+        flags = flags.difference(
+            wgpu::InstanceFlags::VALIDATION
+                | wgpu::InstanceFlags::DEBUG
+                | wgpu::InstanceFlags::VALIDATION_INDIRECT_CALL,
+        );
+    }
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends: wgpu::Backends::VULKAN,
+        flags,
+        ..wgpu::InstanceDescriptor::new_without_display_handle()
+    });
+    let request = instance.request_adapter(&wgpu::RequestAdapterOptions {
+        power_preference: wgpu::PowerPreference::HighPerformance,
+        ..Default::default()
+    });
+    // The request resolves without waiting on anything but the driver.
+    struct Unpark(std::thread::Thread);
+    impl std::task::Wake for Unpark {
+        fn wake(self: std::sync::Arc<Self>) {
+            self.0.unpark();
+        }
+    }
+    let waker = std::sync::Arc::new(Unpark(std::thread::current())).into();
+    let mut context = std::task::Context::from_waker(&waker);
+    let mut request = std::pin::pin!(request);
+    loop {
+        match request.as_mut().poll(&mut context) {
+            std::task::Poll::Ready(adapter) => return Ok(adapter?),
+            std::task::Poll::Pending => std::thread::park(),
+        }
+    }
+}
+
 impl Bridge {
     pub fn new(options: &Options) -> Result<Self> {
-        let adapter = headless_adapter().map_err(|error| {
+        let adapter = adapter().map_err(|error| {
             anyhow!("ARA_RENDERLAB_UNAVAILABLE: Renderlab found no Vulkan adapter: {error}")
         })?;
         let capabilities = Capabilities::query(&adapter);
@@ -162,12 +207,17 @@ impl Bridge {
             applied: Applied::default(),
             metering: Metering::new(),
             view: None,
-            desc: ViewDesc::new(1, 1),
+            desc: {
+                let mut desc = ViewDesc::new(1, 1);
+                desc.outputs.ids = options.scene_ids;
+                desc
+            },
             last_look: None,
             readbacks,
             max_reflection_roughness: options.max_reflection_roughness,
             skies: Skies::new(options.constant_sky),
             cpu_copy: options.cpu_copy_handoff,
+            scene_ids: options.scene_ids,
             gpu_ms: None,
             passes: [("", 0.); EXTERNAL_PASSES],
             cut: true,
@@ -181,6 +231,33 @@ impl Bridge {
 
     pub fn cut(&mut self) {
         self.cut = true;
+    }
+
+    /// The frontmost id under `pixel` of the view's last frame (`Engine::request_ids`), waiting
+    /// briefly for the copy: a click's answer, glass included. `None` without ids, before a
+    /// frame, when all the request slots are busy or when the copy does not land in time.
+    pub fn pick_id(&mut self, pixel: [u32; 2]) -> Result<Option<u32>> {
+        let (Some(view), true) = (self.view, self.scene_ids) else {
+            return Ok(None);
+        };
+        let Ok(request) = self
+            .engine
+            .request_ids(view, renderlab::IdRect::pixel(pixel[0], pixel[1]))
+        else {
+            return Ok(None);
+        };
+        let started = Instant::now();
+        while started.elapsed() < PICK_WAIT {
+            let events = self.engine.poll()?;
+            if let Some(read) = events.ids.iter().find(|read| read.request == request) {
+                return Ok(Some(read.at(0, 0).front));
+            }
+            if events.ids_lost.iter().any(|lost| lost.request == request) {
+                return Ok(None);
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        Ok(None)
     }
 
     pub fn render(
@@ -230,6 +307,9 @@ impl Bridge {
                 break;
             }
         }
+        // Terrain tiles follow the frame's draws in the editor's id numbering.
+        self.terrain
+            .tag(&mut self.engine, frame.draws.len() as u32 + 1)?;
         self.decals.sync(&mut self.engine, frame, &mut self.gaps)?;
         self.effects.sync(&mut self.engine, frame, &mut self.gaps)?;
 
@@ -300,12 +380,25 @@ impl Bridge {
             .frame;
         let target = self.target.as_mut().context("target ensured above")?;
         // Shared: the copy into the shared slot queues behind the frame right away.
-        if let Some(shared) = &mut target.shared {
-            if crate::shared::scene_ids_pattern() {
-                shared.stage_pattern(&self.engine)?;
+        if self.scene_ids {
+            if target.ids.as_ref().is_none_or(|t| t.size() != view.size) {
+                target.ids = Some(crate::id_target::IdTarget::new(
+                    self.engine.device(),
+                    view.size,
+                ));
             }
-            // When Renderlab's id texture exists, this is the replacement:
-            // shared.set_id(id_texture);
+            if let Some(ids) = &target.ids {
+                ids.write(&mut self.engine, view_id)?;
+            }
+        }
+        if let Some(shared) = &mut target.shared {
+            match &target.ids {
+                Some(ids) => shared.set_id(ids.texture().clone()),
+                None if crate::shared::scene_ids_pattern() => {
+                    shared.stage_pattern(&self.engine)?;
+                }
+                None => {}
+            }
             shared.publish(&self.engine, view_id)?;
         }
 
@@ -360,6 +453,7 @@ impl Bridge {
         // The handoff onto the presenter's device, timed: the shared ring's delivery,
         // or the CPU copy's readback and upload.
         let started = Instant::now();
+        let mut id_texels = None;
         let image = if let Some(shared) = &mut target.shared {
             settle(gpu, target.image, &mut target.fresh)?;
             shared.deliver(gpu, target.image)?;
@@ -369,6 +463,11 @@ impl Bridge {
             target.image
         } else {
             let read = self.engine.capture_view(view_id)?;
+            id_texels = target
+                .ids
+                .as_ref()
+                .map(|ids| ids.read(&self.engine))
+                .transpose()?;
             upload(gpu, target, &read.rgba8)?
         };
         let handoff_ms = started.elapsed().as_secs_f64() * 1000.;
@@ -376,6 +475,7 @@ impl Bridge {
         Ok(ExternalFrame {
             image,
             id: target.id.as_ref().map(crate::shared::PresentedId::output),
+            id_texels,
             gpu_ms: self.gpu_ms,
             passes: self.passes,
             handoff_ms,
@@ -421,6 +521,7 @@ impl Bridge {
             fresh: true,
             shared,
             id: None,
+            ids: None,
         });
         Ok(())
     }
