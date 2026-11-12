@@ -699,7 +699,6 @@ impl Scene {
     /// numbers), one range for an own object and one range per member for a static batch.
     /// Draws the frame does not list (foliage) stay untagged. Sets only what changed, since
     /// a draw leaving the list renumbers those after it.
-    #[cfg(not(target_vendor = "apple"))]
     fn tag(&mut self, engine: &mut Engine, frame: &RenderFrame) -> Result<()> {
         let ids: HashMap<u64, u32> = frame
             .draws
@@ -731,12 +730,6 @@ impl Scene {
                 self.tags.insert(key, tagged);
             }
         }
-        Ok(())
-    }
-
-    /// Apple's backend has no object ids yet.
-    #[cfg(target_vendor = "apple")]
-    fn tag(&mut self, _: &mut Engine, _: &RenderFrame) -> Result<()> {
         Ok(())
     }
 
