@@ -649,3 +649,77 @@ fn masks_are_cut_and_emissive_maps_glow_where_they_are_lit() {
         );
     }
 }
+
+/// With ids on, each draw reads as its index in the frame plus one, in the id texels the CPU
+/// copy returns, and the engine's own answer for a click agrees with them (no glass here, so
+/// the frontmost and the opaque ids are the same).
+#[test]
+fn object_ids_name_each_draw_by_its_index_and_a_click_asks_the_engine() {
+    use ara_runtime_render::{ExternalRenderer, ExternalView};
+    use std::collections::BTreeMap;
+
+    let out = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("renderlab-ids");
+    std::fs::create_dir_all(&out).unwrap();
+    let mut renderlab = match Renderlab::new(&Options {
+        path: PathChoice::Auto,
+        pipeline_cache: Some(out.join("pipeline-cache")),
+        cpu_copy_handoff: true,
+        scene_ids: true,
+        ..Default::default()
+    }) {
+        Ok(renderlab) => renderlab,
+        Err(error) => {
+            println!("skipping the id check: {error:#}");
+            return;
+        }
+    };
+    let mut gpu = ara_gpu::GpuDevice::new(&[], out.join("presenter")).expect("presenter device");
+    let frame = frame(-2.);
+    let look = ara_runtime_render::environment_at(&frame, glam30::Vec3::new(0., 2.5, 7.));
+    let (foliage, materials) = (BTreeMap::new(), BTreeMap::new());
+    let view = ExternalView {
+        frame: &frame,
+        size: SIZE,
+        look: &look,
+        environment: None,
+        foliage_parts: &foliage,
+        terrain_materials: &materials,
+        debug_switches: false,
+        foliage_percent: 100,
+        terrain_detail: 150.,
+    };
+    // A few frames, so the id pass has history.
+    let mut rendered = renderlab.render(&mut gpu, &view).unwrap();
+    for _ in 0..3 {
+        rendered = renderlab.render(&mut gpu, &view).unwrap();
+    }
+    let texels = rendered
+        .id_texels
+        .expect("the CPU copy returns the id texels");
+    let id = |x: u32, y: u32| {
+        let at = ((y * SIZE[0] + x) * 4) as usize;
+        u32::from_le_bytes([texels[at], texels[at + 1], texels[at + 2], texels[at + 3]])
+    };
+    let seen: std::collections::BTreeSet<u32> = (0..SIZE[0] * SIZE[1])
+        .map(|n| id(n % SIZE[0], n / SIZE[0]))
+        .collect();
+    // The floor, the box and the lamp, nothing else (0 is the sky).
+    for wanted in [1, 2, 3] {
+        assert!(
+            seen.contains(&wanted),
+            "id {wanted} is not in the image: {seen:?}"
+        );
+    }
+    assert!(seen.iter().all(|id| *id <= 3), "unexpected ids: {seen:?}");
+    // The engine's answer for a click agrees with the texel under it.
+    let mut checked = 0;
+    for y in (3..SIZE[1]).step_by(41) {
+        for x in (3..SIZE[0]).step_by(37) {
+            let asked = renderlab.pick_id([x, y]).unwrap();
+            assert_eq!(asked, Some(id(x, y)), "pixel ({x}, {y})");
+            checked += 1;
+        }
+    }
+    assert!(checked > 50);
+    renderlab.release(&mut gpu).unwrap();
+}

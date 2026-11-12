@@ -58,6 +58,10 @@ pub struct ExternalFrame {
     /// 0xFFFF_FFFF a hit without an id). `None` when the renderer has no id image:
     /// the host rasterises its own.
     pub id: Option<Image>,
+    /// The same packed ids as RGBA8 texels, rows top first with no padding, when the renderer
+    /// delivered them by CPU copy (what a click reads, bit for bit). `None` on the shared
+    /// handoff, where `id` is the only copy.
+    pub id_texels: Option<Vec<u8>>,
     /// GPU milliseconds the external renderer measured for a recent frame, when it
     /// has timestamps (it may lag the presented frame).
     pub gpu_ms: Option<f64>,
@@ -86,6 +90,13 @@ pub trait ExternalRenderer: Send {
     fn settle_frames(&self) -> u32;
     /// Releases what it created on `gpu`, before that device is destroyed.
     fn release(&mut self, gpu: &mut GpuDevice) -> Result<()>;
+    /// The id of the frontmost surface (glass included) under `pixel` of the last frame, from
+    /// the renderer's own id pass: what a click picks. `0` is nothing and `0xFFFF_FFFF` a surface
+    /// without an id. `None`: it has no ids, or could not answer in time, and the host reads
+    /// the delivered id image instead.
+    fn pick_id(&mut self, _pixel: [u32; 2]) -> Result<Option<u32>> {
+        Ok(None)
+    }
 }
 
 impl Presenter {

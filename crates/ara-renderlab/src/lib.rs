@@ -32,6 +32,8 @@ mod bridge_metal;
 mod grade;
 #[cfg(all(test, not(target_vendor = "apple")))]
 mod id_slot;
+#[cfg(not(target_vendor = "apple"))]
+mod id_target;
 mod lighting;
 mod meter;
 mod scene;
@@ -85,6 +87,10 @@ pub struct Options {
     /// Light the scene with a constant sky of the sky image's mean radiance instead of
     /// the image itself. For A/B measurement of what a sky map costs in Renderlab.
     pub constant_sky: bool,
+    /// Write the view's object ids beside each frame (`ExternalFrame::id`, `id_texels`):
+    /// the Scene host's outlines, hover and clicks. Draws carry their index in the frame's
+    /// `draws` plus one. Off: no id pass runs.
+    pub scene_ids: bool,
 }
 
 /// Renderlab behind Ara's presenter.
@@ -138,5 +144,9 @@ impl ExternalRenderer for Renderlab {
 
     fn release(&mut self, gpu: &mut GpuDevice) -> Result<()> {
         self.bridge.release(gpu)
+    }
+
+    fn pick_id(&mut self, pixel: [u32; 2]) -> Result<Option<u32>> {
+        self.bridge.pick_id(pixel)
     }
 }

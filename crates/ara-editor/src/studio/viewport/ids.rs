@@ -25,12 +25,26 @@ use std::{collections::HashMap, mem::Discriminant, time::Duration};
 /// Nearest depth in metres a triangle is drawn at: Renderlab's near plane.
 const NEAR: f32 = 0.05;
 
-/// The frame's channels: draw `n` is channel `n + 1`, as `Renderer::entities()` listed them.
+/// The frame's channels: draw `n` is channel `n + 1`, as `Renderer::entities()` listed them,
+/// then each resident terrain tile (sorted by coordinate: the bridge numbers them alike), so a
+/// click or hover on the ground names its tile and the channel map names its Terrain.
 pub(super) fn entities(frame: &RenderFrame) -> Vec<(u64, String)> {
+    let mut tiles = frame
+        .terrain
+        .as_ref()
+        .map_or_else(Vec::new, |terrain| terrain.tiles.clone());
+    tiles.sort();
+    tiles.dedup();
     frame
         .draws
         .iter()
         .map(|draw| (draw.entity, draw.label.clone()))
+        .chain(tiles.iter().map(|tile| {
+            (
+                ara_runtime::terrain::tile_render_id(tile.x, tile.z),
+                format!("terrain tile {},{}", tile.x, tile.z),
+            )
+        }))
         .collect()
 }
 
@@ -57,22 +71,77 @@ struct Target {
 }
 
 impl Ids {
-    /// Brings the ids up to `frame` seen at `size`. Uploads outside any deferred
-    /// completion scope: it waits for the copy.
+    /// Brings the ids up to `frame` seen at `size`: the engine's own texels when it
+    /// delivered them (`ExternalFrame::id_texels`), else rasterised from the draws, only
+    /// when they or the camera changed. Uploads outside any deferred completion scope: it
+    /// waits for the copy.
     pub(super) fn update(
         &mut self,
         gpu: &mut GpuDevice,
         frame: &RenderFrame,
         size: [u32; 2],
+        delivered: Option<Vec<u8>>,
     ) -> Result<()> {
         let key = change_key(frame, size);
-        if self.key == Some(key) && self.target.as_ref().is_some_and(|t| t.size == size) {
+        let delivered = delivered.filter(|t| t.len() == size[0] as usize * size[1] as usize * 4);
+        // A converged still frame delivers the same ids again: nothing to upload.
+        if self.size == size
+            && self.target.is_some()
+            && delivered.as_deref() == Some(self.texels.as_slice())
+        {
+            self.key = Some(key);
             return Ok(());
         }
-        self.entities = entities(frame);
-        self.texels = crate::studio::trace::time("scene ids rasterise", Duration::ZERO, || {
-            self.rasteriser.ids(frame, size)
+        if delivered.is_none()
+            && self.key == Some(key)
+            && self.target.as_ref().is_some_and(|t| t.size == size)
+        {
+            return Ok(());
+        }
+        crate::studio::trace::log(|| {
+            format!(
+                "scene ids {size:?} from {} (target {:?})",
+                if delivered.is_some() {
+                    "the engine"
+                } else {
+                    "the draws"
+                },
+                self.target.as_ref().map(|t| t.size)
+            )
         });
+        // Debug (`ARA_SCENE_IDS_COMPARE=1`): how the engine's ids agree with the rasterised.
+        if let (Some(engine), true) = (
+            &delivered,
+            std::env::var_os("ARA_SCENE_IDS_COMPARE").is_some(),
+        ) {
+            let drawn = self.rasteriser.ids(frame, size);
+            let id = |t: &[u8], n: usize| {
+                u32::from_le_bytes([t[n * 4], t[n * 4 + 1], t[n * 4 + 2], t[n * 4 + 3]])
+            };
+            let mut counts = [0usize; 4];
+            for n in 0..engine.len() / 4 {
+                let (a, b) = (id(engine, n), id(&drawn, n));
+                let k = match (a, b) {
+                    (0, 0) => continue,
+                    (a, b) if a == b => 0,
+                    (0, _) => 1,
+                    (_, 0) => 2,
+                    _ => 3,
+                };
+                counts[k] += 1;
+            }
+            eprintln!(
+                "ARA_SCENE_IDS_COMPARE: {} agree, {} drawn only, {} engine only, {} differ",
+                counts[0], counts[1], counts[2], counts[3]
+            );
+        }
+        self.entities = entities(frame);
+        self.texels = match delivered {
+            Some(texels) => texels,
+            None => crate::studio::trace::time("scene ids rasterise", Duration::ZERO, || {
+                self.rasteriser.ids(frame, size)
+            }),
+        };
         self.size = size;
         if self.target.as_ref().is_some_and(|t| t.size != size) {
             self.release(gpu)?;
@@ -102,6 +171,7 @@ impl Ids {
             entities: &self.entities,
             texels: &self.texels,
             size: self.size,
+            front: None,
         })
     }
 
@@ -184,10 +254,24 @@ pub(in crate::studio) struct IdHost<'a> {
     pub entities: &'a [(u64, String)],
     texels: &'a [u8],
     size: [u32; 2],
+    /// The engine's own answer for the click, when it gave one (`ExternalRenderer::pick_id`).
+    front: Option<u32>,
+}
+
+impl IdHost<'_> {
+    /// The click's answer from the engine's id pass: it sees through glass, which the
+    /// opaque ids the overlays read do not.
+    pub fn with_front(mut self, front: Option<u32>) -> Self {
+        self.front = front;
+        self
+    }
 }
 
 impl IdPick for IdHost<'_> {
     fn id_at(&mut self, [x, y]: [u32; 2]) -> Result<IdHit> {
+        if let Some(id) = self.front {
+            return Ok(IdHit::from_packed(id.to_le_bytes()));
+        }
         anyhow::ensure!(
             x < self.size[0] && y < self.size[1],
             "pixel ({x}, {y}) is outside the {:?} id image",
