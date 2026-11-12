@@ -91,8 +91,10 @@ to `settings/project.json`; marker name/main stay in `ara.project.json`.
 Tests never touch the owner's profile: `.cargo/config.toml` gives every cargo-run
 process `ARA_CONFIG_DIR`/`ARA_CRASH_DIR` under `target/`, `config_dir()` refuses the OS
 profile under tests and cargo, and a headless run (`Options::isolate_profile`) starts
-from a fresh `<output>/.ara-profile` (bounded runs too: `--frames`, `--screenshot`). Never write
-user state anywhere else.
+from a fresh `<output>/.ara-profile` (bounded runs too: `--frames`, `--screenshot`), and
+neither reads-then-rewrites the project's `.ara/editor-layout.json`: it is read, never
+written (`ARA_EDITOR_LAYOUT_READ_ONLY`). A bounded `--panel` page docks in the main window.
+Never write user state anywhere else.
 Scene quality: the Scene view has no quality choice (Renderlab draws one way). The project's
 quality is `rendering.quality` in `settings/project.json`, used by Play and exports; it is
 set from Project Settings.
