@@ -1,4 +1,4 @@
-//! Native Vulkan UiGpu adapter, sharing ara-render's device and offscreen scene texture.
+//! Native Vulkan UiGpu adapter, sharing the presentation device and offscreen scene texture.
 #[cfg(all(test, windows))]
 mod hwnd_tests;
 mod overlay;
