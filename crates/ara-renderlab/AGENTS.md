@@ -28,6 +28,7 @@ this crate alone.
   batches per material, and which (last resort) are left out.
 - `texture.rs`: cooked KTX2 (BC7/BC5) to Renderlab's RGBA8 mip chains.
 - `lighting.rs`: camera, sun, sky source, local lights, exposure and display settings.
+  A light authored with `castShadows` off arrives as `LightView::shadows == Some(false)`; the bridge hands it to Renderlab (`Light::cast_shadows`) once the pin has it (Renderlab PR #51). Until then every local light is ranked for shadows by Renderlab.
 - `sky.rs`: the frame's sky on either engine; a sky image prepared off the frame loop.
 - `rl.rs`: the mapping's `Engine`: wgpu's, or on Apple the backend's (the `backend-ara` feature of the same Renderlab revision; the root manifest patches its ara-gpu to ours).
 - `meter.rs` (on Apple: a readback on metered frames, binned by the pass's CPU twin): the exposure meter's look at a frame: a compute pass on Renderlab's device bins the output's log luminance (512 bins), mapped on a later frame so no frame waits for it. The bridge takes the readings at the start of each frame, when the previous frame's (which it waited for) is done, so a cut's snap lands one frame on, as it did with a blocking read; a pass stuck past 8 frames is reported and gets a new slot.

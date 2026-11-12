@@ -130,6 +130,9 @@ pub struct LightView {
     pub cone: [f32; 2],
     /// Volumetric fog scattering intensity (`Light::volumetric_scattering`; 1 physical).
     pub volumetric: f32,
+    /// `Some(false)` when the light was authored not to cast shadows (`Light::cast_shadows`);
+    /// `None` leaves it to the renderer's automatic choice of which lights get shadows.
+    pub shadows: Option<bool>,
     /// Emitter radius in metres: sphere, tube or disc (zero: an ideal point).
     pub radius: f32,
     /// Tube length in metres along `tangent` (zero: a sphere).
@@ -714,6 +717,7 @@ impl RenderFrame {
                 range: light.range,
                 cone: [light.inner_angle, light.outer_angle],
                 volumetric: light.volumetric_scattering,
+                shadows: (!light.cast_shadows).then_some(false),
                 radius: light.source_radius.max(0.),
                 length: light.source_length.max(0.),
                 size: [light.source_width, light.source_height],
@@ -764,4 +768,26 @@ fn emission_override(
                     .is_some_and(|m| renderer.targets_emissive_material(index, &m.name))
             })
     })
+}
+
+#[cfg(test)]
+mod light_tests {
+    use super::*;
+
+    /// A local light authored with `castShadows` off reaches the renderers as `Some(false)`;
+    /// a default one leaves the choice to the renderer's automatic ranking.
+    #[test]
+    fn a_light_that_does_not_cast_shadows_says_so() {
+        let mut frame = RenderFrame::default();
+        let marker = Light {
+            cast_shadows: false,
+            ..Light::default()
+        };
+        frame.light(&marker, &Pose::IDENTITY, None);
+        frame.light(&Light::default(), &Pose::IDENTITY, None);
+        assert_eq!(
+            frame.lights.iter().map(|l| l.shadows).collect::<Vec<_>>(),
+            [Some(false), None]
+        );
+    }
 }

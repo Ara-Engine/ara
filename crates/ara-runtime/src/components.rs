@@ -211,6 +211,12 @@ pub struct Light {
     /// shafts and glow. Surfaces are lit the same either way.
     #[ara(default = 1, range(min = 0, max = 16))]
     pub volumetric_scattering: f32,
+    /// Whether a local light casts shadows. Off, it lights surfaces through geometry and
+    /// costs no shadow work: turn it off for small, dim or distant lights (markers, lamps
+    /// inside a lit room) that nobody would see a shadow from. A directional light's
+    /// shadows follow `atmosphereSunLight` and the renderer's quality, not this.
+    #[ara(default = true, editor(show_if(field = "kind", one_of = ["point", "spot", "rect", "disc"])))]
+    pub cast_shadows: bool,
     /// Radius of the emitter: a point's or spot's sphere (or tube, with
     /// `sourceLength`) or the disc. Larger sources give broader highlights and softer
     /// shadows; zero is an ideal point (Unreal's Source Radius).
@@ -276,6 +282,7 @@ impl Default for Light {
             inner_angle: 20.0,
             outer_angle: 30.0,
             volumetric_scattering: 1.0,
+            cast_shadows: true,
             source_radius: 0.0,
             source_length: 0.0,
             source_width: 0.64,

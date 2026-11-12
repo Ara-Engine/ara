@@ -4484,6 +4484,24 @@ expression: out
           "default": 1,
           "range": [0, 16]
         },
+        "castShadows": {
+          "type": "bool",
+          "doc": "Whether a local light casts shadows. Off, it lights surfaces through geometry and costs no shadow work: turn it off for small, dim or distant lights (markers, lamps inside a lit room) that nobody would see a shadow from. A directional light's shadows follow `atmosphereSunLight` and the renderer's quality, not this.",
+          "default": true,
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "point",
+                  "spot",
+                  "rect",
+                  "disc"
+                ]
+              }
+            }
+          }
+        },
         "sourceRadius": {
           "type": "f32",
           "doc": "Radius of the emitter: a point's or spot's sphere (or tube, with `sourceLength`) or the disc. Larger sources give broader highlights and softer shadows; zero is an ideal point (Unreal's Source Radius).",
