@@ -101,7 +101,7 @@ fn hybrid_reflections_see_what_the_screen_cannot_and_raster_presets_trace_nothin
         marks: None,
     };
     let traced = |renderer: &Renderer| renderer.timings().iter().any(|t| t.pass == "RT.Reflect");
-    let centre = |capture: &crate::capture::Capture| *capture.image.get_pixel(48, 32);
+    let centre = |capture: &ara_frame::capture::Capture| *capture.image.get_pixel(48, 32);
     let hybrid = Quality {
         high_tier: true,
         ray_queries: Some(RayQueries {

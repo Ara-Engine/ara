@@ -383,7 +383,7 @@ impl Renderer {
             vertical_fov: std::f32::consts::FRAC_PI_2,
         };
         let result = self.with_capture_view(&mut state, quality, |renderer| {
-            renderer.render_frame(&camera, 1., true, crate::capture::ViewMode::Lit, false)?;
+            renderer.render_frame(&camera, 1., true, ara_frame::capture::ViewMode::Lit, false)?;
             renderer.project_capture_face(face, resolution)
         });
         self.views.capture_view = Some(state);
@@ -588,7 +588,7 @@ impl Renderer {
 
 /// FNV-1a over the local lights, quantised to a thousandth (metres, lumens,
 /// cosines): what a bake's light depends on beyond the sun.
-fn light_hash(lights: &[crate::scene::Light]) -> u64 {
+fn light_hash(lights: &[ara_frame::scene::Light]) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325u64;
     for light in lights {
         let values = light

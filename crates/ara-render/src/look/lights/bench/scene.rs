@@ -8,7 +8,7 @@
 //! [`Motion::E3`] adds R5-1/E3-style dynamics to the static recipe (every light
 //! flickers, every fourth orbits, four boxes move), so pops, flicker and moving
 //! shadows are scored; [`Motion::MovingLights`] is T1's `moving_lights` recipe.
-use crate::scene::{CameraSpec, Light};
+use ara_frame::scene::{CameraSpec, Light};
 use glam::{Affine3A, Quat, Vec3};
 use std::f32::consts::{PI, SQRT_2};
 

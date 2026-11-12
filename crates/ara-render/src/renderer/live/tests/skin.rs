@@ -6,7 +6,7 @@ fn raster_skin_updates_reach_the_first_draw_without_a_separate_submission() -> R
         .join("../../target/ara-render/raster-skin-submission");
     let mut scene = fixture::scene();
     let mut renderer = Renderer::new_native(&scene, Box::new(Textures), [96, 64], &[], &root)?;
-    let request = crate::capture::CaptureRequest {
+    let request = ara_frame::capture::CaptureRequest {
         camera: CameraSpec::LookAt {
             position: Vec3::new(0., 0., 3.),
             target: Vec3::ZERO,

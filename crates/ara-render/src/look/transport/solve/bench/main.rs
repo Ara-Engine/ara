@@ -86,7 +86,7 @@ fn main() -> Result<()> {
                 .iter()
                 .find(|s| s["name"].as_str() == Some(name))
                 .context("unknown shot")?;
-            fixture.camera = ara_render::scene::CameraSpec::LookAt {
+            fixture.camera = ara_frame::scene::CameraSpec::LookAt {
                 position: serde_json::from_value(shot["position"].to_owned())?,
                 target: serde_json::from_value(shot["target"].to_owned())?,
                 vertical_fov: (shot["fov"].as_f64().context("shot fov")? as f32).to_radians(),

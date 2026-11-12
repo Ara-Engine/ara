@@ -220,7 +220,7 @@ impl Culling {
         groups: &Groups,
         bounds: &[[Vec3; 2]],
         frame: &frame::Frame,
-        camera: &crate::scene::Camera,
+        camera: &ara_frame::scene::Camera,
         shadow_resolution: u32,
         work: &mut FrameWork,
     ) -> Result<()> {
@@ -388,7 +388,7 @@ impl Culling {
         buffer: Buffer,
         groups: &Groups,
         bounds: &[[Vec3; 2]],
-        camera: &crate::scene::Camera,
+        camera: &ara_frame::scene::Camera,
         work: &mut FrameWork,
     ) -> Result<()> {
         self.transparent.clear();
@@ -617,7 +617,7 @@ mod tests {
 
     #[test]
     fn reversed_z_culling_keeps_intersections_and_rejects_offscreen_bounds() {
-        let camera = crate::scene::CameraSpec::LookAt {
+        let camera = ara_frame::scene::CameraSpec::LookAt {
             position: Vec3::ZERO,
             target: -Vec3::Z,
             vertical_fov: 1.,

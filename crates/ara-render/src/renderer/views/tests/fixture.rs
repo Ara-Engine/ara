@@ -37,7 +37,7 @@ pub(in crate::renderer) fn scene() -> instanced::Scene {
             receives_decals: true,
         }],
         materials: vec![instanced::Material {
-            pbr: crate::scene::Material {
+            pbr: ara_frame::scene::Material {
                 base_color: [0.9, 0.08, 0.02, 1.],
                 textures: [u32::MAX; 4],
                 surface: [0., 1., 0., 0.5],

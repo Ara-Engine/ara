@@ -97,7 +97,7 @@ fn geometry(key: u8, floor: bool) -> Geometry {
 
 fn scene(painted: bool, decals: usize) -> Scene {
     let material = |base: [f32; 4], flags: u32| Material {
-        pbr: ara_render::scene::Material {
+        pbr: ara_frame::scene::Material {
             base_color: base,
             textures: [u32::MAX; 4],
             flags: [0, flags, 0, 0],

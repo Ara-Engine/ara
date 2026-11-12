@@ -2,7 +2,7 @@
 //! environment and last good geometry.
 use super::upload::upload_geometry;
 use super::*;
-use crate::scene::Scene;
+use ara_frame::scene::Scene;
 use sha2::{Digest, Sha256};
 
 impl Renderer {
@@ -63,7 +63,7 @@ impl Renderer {
     /// Replace material parameters in their existing order without uploading geometry.
     /// Texture indices address the original scene textures. Invalid inputs retain the
     /// last good materials; changing textures or material count requires a scene update.
-    pub fn update_materials(&mut self, materials: Vec<crate::scene::Material>) -> Result<()> {
+    pub fn update_materials(&mut self, materials: Vec<ara_frame::scene::Material>) -> Result<()> {
         ensure!(
             materials.len() == self.content.material_count,
             "Material update changes the material count"

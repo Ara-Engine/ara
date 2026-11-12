@@ -60,7 +60,7 @@ pub(crate) fn faces(light: &Light) -> Vec<Mat4> {
     let position = Vec3::from_slice(&light.position_range[..3]);
     let far = light.position_range[3].max(NEAR * 2.);
     let projection = |fov: f32| Mat4::perspective_rh(fov.min(170f32.to_radians()), 1., far, NEAR);
-    let area = (light.parameters[0] % crate::scene::LIGHT_SHAPED) >= crate::scene::LIGHT_RECT;
+    let area = (light.parameters[0] % ara_frame::scene::LIGHT_SHAPED) >= ara_frame::scene::LIGHT_RECT;
     let outer = if area {
         AREA_FACE
     } else {
@@ -478,7 +478,7 @@ mod tests {
             color_lumens: [1., 1., 1., lumens],
             direction_outer: [0., -1., 0., 0.],
             parameters: [0., 1., 0., 1.],
-            ..crate::scene::Light::ZERO
+            ..ara_frame::scene::Light::ZERO
         }
     }
 

@@ -1,5 +1,5 @@
 use super::*;
-use crate::scene::Camera;
+use ara_frame::scene::Camera;
 use bytemuck::{Pod, Zeroable};
 
 #[repr(C)]
@@ -44,7 +44,7 @@ impl Renderer {
         camera: &Camera,
         exposure: f32,
         deterministic: bool,
-        mode: crate::capture::ViewMode,
+        mode: ara_frame::capture::ViewMode,
         output_history: usize,
     ) -> Frame {
         let mut projection = camera.projection;

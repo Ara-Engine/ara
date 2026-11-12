@@ -56,7 +56,7 @@ fn main() -> Result<()> {
                 renderer.resize(size)?;
             }
             let mut camera = common::camera();
-            if let ara_render::scene::CameraSpec::LookAt { position, .. } = &mut camera {
+            if let ara_frame::scene::CameraSpec::LookAt { position, .. } = &mut camera {
                 *position = glam::Mat3::from_rotation_y(angle) * (*position);
             }
             renderer.render(&camera, 0.0015)?;

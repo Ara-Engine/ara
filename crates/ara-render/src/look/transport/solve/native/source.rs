@@ -1,7 +1,7 @@
 //! Fixed source quadrature for CPU patch forcing. Visibility is multiplied per
 //! source sample, before integration. This is separate from B1's pixel shader.
 use super::*;
-use crate::scene::{LIGHT_DISC, LIGHT_RECT, LIGHT_SHAPED, LIGHT_SPOT, Light};
+use ara_frame::scene::{LIGHT_DISC, LIGHT_RECT, LIGHT_SHAPED, LIGHT_SPOT, Light};
 const SAMPLES: u32 = 64;
 
 pub(super) fn light_gain(light: &Light) -> Vec3 {

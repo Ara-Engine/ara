@@ -84,7 +84,7 @@ fn dynamic_updates_and_scene_replacement_are_visible_and_validation_clean() -> R
     );
     ensure!(
         renderer
-            .set_lights(&vec![lights[0]; ara_render::scene::MAX_LOCAL_LIGHTS + 1])
+            .set_lights(&vec![lights[0]; ara_frame::scene::MAX_LOCAL_LIGHTS + 1])
             .is_err()
     );
 

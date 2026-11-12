@@ -166,9 +166,9 @@ pub fn load() -> Result<Fixture> {
             Some("BLEND") => 2,
             _ => 0,
         };
-        out.pbr.flags[1] = ara_render::scene::VERTEX_COLOR_TINT
+        out.pbr.flags[1] = ara_frame::scene::VERTEX_COLOR_TINT
             | if m["doubleSided"] == true {
-                ara_render::scene::DOUBLE_SIDED
+                ara_frame::scene::DOUBLE_SIDED
             } else {
                 0
             };

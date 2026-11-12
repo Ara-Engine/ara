@@ -97,7 +97,7 @@ impl PatchTransport {
     fn receiver_samples(
         &self,
         scene: &Scene,
-        textures: &[crate::scene::Texture],
+        textures: &[ara_frame::scene::Texture],
         workers: usize,
     ) -> Vec<(IVec3, [Vec3; 6])> {
         let cells = receiver_cells(scene, &self.bodies);
@@ -138,7 +138,7 @@ impl PatchTransport {
     pub(super) fn initialize_receivers(
         &mut self,
         scene: &Scene,
-        textures: &[crate::scene::Texture],
+        textures: &[ara_frame::scene::Texture],
     ) -> Result<()> {
         self.update_receivers(scene, textures)?;
         self.graph.invalidate_all(self.frame);
@@ -183,7 +183,7 @@ impl PatchTransport {
     pub(super) fn update_receivers(
         &mut self,
         scene: &Scene,
-        textures: &[crate::scene::Texture],
+        textures: &[ara_frame::scene::Texture],
     ) -> Result<()> {
         self.media.begin_frame(self.frame + 1)?;
         for source in &self.media_sources {

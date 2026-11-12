@@ -6,7 +6,7 @@
 //! pages: they run today's control only.
 use super::contract;
 use ara_render::instanced::{Geometry, Instance, Lod, Material, Scene, Vertex};
-use ara_render::scene::{CameraSpec, Light};
+use ara_frame::scene::{CameraSpec, Light};
 use glam::{Mat4, Quat, Vec3};
 
 /// One case: the catalogue's fields this bench reads, and the catalogue entry itself
@@ -588,7 +588,7 @@ pub(crate) fn apply(f: &mut Fixture, case: &Case, frame: u32) {
 
 /// The fixture as a world-space extraction for the path-traced reference
 /// (`ara-render-fidelity`'s `FidelityView::new` reads the legacy scene).
-pub(crate) fn legacy(f: &Fixture) -> ara_render::scene::Scene {
+pub(crate) fn legacy(f: &Fixture) -> ara_frame::scene::Scene {
     use ara_render::scene;
     let mut meshes = Vec::new();
     for instance in &f.scene.instances {

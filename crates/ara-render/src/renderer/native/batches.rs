@@ -18,7 +18,7 @@ pub(super) fn is_translucent(material: &crate::instanced::Material) -> bool {
 pub(super) fn is_two_pass(material: &crate::instanced::Material, planar: bool) -> bool {
     material.pbr.flags[0] == 2
         && !is_refractive(material)
-        && material.pbr.flags[1] & crate::scene::DOUBLE_SIDED != 0
+        && material.pbr.flags[1] & ara_frame::scene::DOUBLE_SIDED != 0
         && !planar
 }
 
@@ -47,8 +47,8 @@ pub(super) fn bends_rays(material: &crate::instanced::Material) -> bool {
 /// geometry declares colours or the instance carries paint).
 pub(super) fn reads_vertex_colors(material: &crate::instanced::Material, colored: bool) -> bool {
     let flags = material.pbr.flags[1];
-    flags & crate::scene::VERTEX_PAINT_LAYERS != 0
-        || (colored && flags & crate::scene::VERTEX_COLOR_TINT != 0)
+    flags & ara_frame::scene::VERTEX_PAINT_LAYERS != 0
+        || (colored && flags & ara_frame::scene::VERTEX_COLOR_TINT != 0)
 }
 
 /// One instanced draw: `count` visible rows from `first`, all of one LOD entry,

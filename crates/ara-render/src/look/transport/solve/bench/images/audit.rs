@@ -24,8 +24,8 @@ impl CaptureRepeat {
 /// frame's image comparison unsigned; it never replaces the first scored image.
 pub(super) fn repeated_capture(
     renderer: &mut Renderer,
-    request: &ara_render::capture::CaptureRequest,
-) -> Result<(ara_render::capture::Capture, Vec<[f32; 4]>, CaptureRepeat)> {
+    request: &ara_frame::capture::CaptureRequest,
+) -> Result<(ara_frame::capture::Capture, Vec<[f32; 4]>, CaptureRepeat)> {
     let capture = renderer.capture(request)?;
     let (_, hdr) = renderer.lab_radiance()?;
     let repeat = renderer.capture(request)?;

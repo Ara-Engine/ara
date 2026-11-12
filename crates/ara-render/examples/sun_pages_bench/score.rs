@@ -4,7 +4,7 @@
 use super::fixture::{Case, Fixture};
 use anyhow::Result;
 use ara_gpu::GpuDevice;
-use ara_render::scene::CameraSpec;
+use ara_frame::scene::CameraSpec;
 use ara_render_fidelity::{
     FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, ToneMapper, Upscaler,
 };

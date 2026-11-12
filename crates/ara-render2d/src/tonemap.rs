@@ -1,0 +1,117 @@
+//! Reusable baseline exposure/ACES/sRGB pass for alternate HDR render paths.
+use anyhow::{Result, ensure};
+use ara_gpu::{
+    Buffer, Device, GpuDevice, Pipeline, Resource, RootConstants, vk,
+    vulkan::{Command, Recorder},
+};
+use bytemuck::{Pod, Zeroable};
+use glam::Mat4;
+
+/// The raster frame record `tonemapMain` reads. Layout matches `ara-render`'s
+/// `Frame`: this pass only writes extent, exposure, the output slot and the
+/// tone-curve selector, and uploads the whole record.
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+#[allow(dead_code)]
+struct Frame {
+    vp: Mat4,
+    previous_vp: Mat4,
+    inverse_vp: Mat4,
+    shadows: [Mat4; 4],
+    camera: [f32; 4],
+    forward: [f32; 4],
+    sun_direction: [f32; 4],
+    sun_color_exposure: [f32; 4],
+    splits: [f32; 4],
+    extent: [u32; 4],
+    gbuffer: [u32; 4],
+    extra: [u32; 4],
+    lighting: [u32; 4],
+    post: [u32; 4],
+    temporal: [u32; 4],
+    look: [u32; 4],
+    sizes: [u32; 4],
+    upscale: [f32; 4],
+}
+
+pub use ara_frame::look::ToneCurve;
+
+/// `tonemapMain`'s pass-through view ID (`Frame.temporal.z`): outside every
+/// `ViewMode` ID, so neither a debug view nor the tone curve applies (sRGB only).
+const PASS_THROUGH: u32 = u32::MAX;
+
+/// Shared offline-cooked baseline post pass; it owns no scene or gameplay state.
+pub struct ToneMap {
+    pipeline: Pipeline,
+    frame: Buffer,
+    frame_index: u32,
+}
+impl ToneMap {
+    /// Loads the main renderer's cooked tonemap; never compiles at runtime.
+    pub fn new(gpu: &mut GpuDevice) -> Result<Self> {
+        let artifacts = ara_gpu::cooked::resource_dir(
+            env!("CARGO_PKG_NAME"),
+            concat!(env!("CARGO_MANIFEST_DIR"), "/cooked"),
+        );
+        let metadata = serde_json::from_slice(&std::fs::read(artifacts.join("tonemap.json"))?)?;
+        let pipeline = gpu.create_pipeline(&metadata, &artifacts)?;
+        let frame = gpu.create_buffer(
+            std::mem::size_of::<Frame>() as u64,
+            vk::BufferUsageFlags::STORAGE_BUFFER,
+            true,
+        )?;
+        let frame_index = gpu.storage_buffer(frame)?.index;
+        Ok(Self {
+            pipeline,
+            frame,
+            frame_index,
+        })
+    }
+    /// Graph input: import as HostWrite after prepare, then declare ShaderRead.
+    pub fn frame_buffer(&self) -> Buffer {
+        self.frame
+    }
+    /// Uploads the private baseline ABI, keeping alternate renderers independent of it.
+    /// Disable tone mapping for display-space diagnostic colors; sRGB remains applied.
+    pub fn prepare(
+        &self,
+        gpu: &GpuDevice,
+        size: [u32; 2],
+        exposure: f32,
+        output: u32,
+        tone_map: bool,
+    ) -> Result<()> {
+        ensure!(
+            !size.contains(&0) && exposure.is_finite() && exposure > 0.,
+            "Invalid post view/exposure"
+        );
+        let mut frame = Frame::zeroed();
+        frame.extent = [size[0], size[1], 0, 0];
+        frame.sun_color_exposure[3] = exposure;
+        frame.post[3] = output;
+        frame.temporal[2] = if tone_map { 0 } else { PASS_THROUGH };
+        gpu.upload(self.frame, bytemuck::bytes_of(&frame))?;
+        Ok(())
+    }
+    /// Records the pass. Declare HDR sampled input and output Storage in the graph.
+    pub fn record(&self, recorder: &mut Recorder, hdr: u32, size: [u32; 2]) {
+        self.record_pass(recorder, hdr, size);
+    }
+    fn record_pass(&self, recorder: &mut Recorder, hdr: u32, size: [u32; 2]) {
+        recorder.push(Command::Pipeline(self.pipeline));
+        recorder.push(Command::Constants(RootConstants {
+            words: [self.frame_index, hdr, 0, 0, 0, 0, 0, 0],
+        }));
+        recorder.push(Command::Dispatch([
+            size[0].div_ceil(8),
+            size[1].div_ceil(8),
+            1,
+        ]));
+    }
+    /// Retires resources after their last submitted use when replacing a render path.
+    pub fn retire(self, gpu: &mut GpuDevice) -> Result<()> {
+        gpu.retire_pipeline(self.pipeline)?;
+        gpu.retire(Resource::Buffer(self.frame))?;
+        Ok(())
+    }
+}

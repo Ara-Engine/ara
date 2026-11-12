@@ -1,7 +1,7 @@
 //! Authored Showcase camera, lights and environment, with the lab's fixed post.
 use super::fixture::Fixture;
 use anyhow::{Context, Result, ensure};
-use ara_render::scene::{CameraSpec, Light};
+use ara_frame::scene::{CameraSpec, Light};
 use glam::{EulerRot, Quat, Vec3};
 use serde_json::Value;
 use std::{fs, path::Path};

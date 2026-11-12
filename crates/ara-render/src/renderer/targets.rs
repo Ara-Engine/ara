@@ -50,7 +50,7 @@ pub(super) fn request(render: [u32; 2], display: [u32; 2]) -> ResourcePreparatio
         (
             u64::from(render[0].div_ceil(16))
                 * u64::from(render[1].div_ceil(16))
-                * (crate::scene::TILE_LIGHTS as u64 + 1)
+                * (ara_frame::scene::TILE_LIGHTS as u64 + 1)
                 * 4,
             vk::BufferUsageFlags::STORAGE_BUFFER,
             false,

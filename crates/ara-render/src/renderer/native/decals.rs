@@ -98,7 +98,7 @@ impl Decals {
     pub fn prepare(
         &mut self,
         gpu: &mut GpuDevice,
-        camera: &crate::scene::Camera,
+        camera: &ara_frame::scene::Camera,
         size: [u32; 2],
         storage: [u32; 4],
     ) -> Result<usize> {
@@ -258,7 +258,7 @@ impl Native {
     pub(in crate::renderer) fn prepare_decals(
         &mut self,
         gpu: &mut GpuDevice,
-        camera: &crate::scene::Camera,
+        camera: &ara_frame::scene::Camera,
         size: [u32; 2],
         storage: [u32; 4],
     ) -> Result<usize> {
@@ -296,7 +296,7 @@ mod tests {
 
     #[test]
     fn a_box_in_front_covers_its_projection_and_one_crossing_the_camera_everything() {
-        let camera = crate::scene::CameraSpec::LookAt {
+        let camera = ara_frame::scene::CameraSpec::LookAt {
             position: Vec3::new(0.0, 0.0, 5.0),
             target: Vec3::ZERO,
             vertical_fov: 0.8,

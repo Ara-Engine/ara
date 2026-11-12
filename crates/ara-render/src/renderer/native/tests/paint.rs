@@ -1,14 +1,14 @@
 //! Vertex colours: the glTF tint, per-instance paint, vertex-paint layers and the
 //! vertex-colour views, read back from Albedo/VertexColor captures.
 use super::*;
-use crate::scene::{PaintWeight, VERTEX_COLOR_TINT, VERTEX_PAINT_LAYERS};
+use ara_frame::scene::{PaintWeight, VERTEX_COLOR_TINT, VERTEX_PAINT_LAYERS};
 
 const SIZE: [u32; 2] = [256, 128];
 const GEOMETRY_COLOR: [f32; 4] = [1.0, 0.5, 0.25, 1.0];
 
 fn material(base: [f32; 3], flags: u32) -> instanced::Material {
     instanced::Material {
-        pbr: crate::scene::Material {
+        pbr: ara_frame::scene::Material {
             base_color: [base[0], base[1], base[2], 1.],
             textures: [u32::MAX; 4],
             flags: [0, flags, 0, 0],
@@ -107,7 +107,7 @@ fn request(mode: ViewMode) -> CaptureRequest {
 }
 
 /// The displayed sRGB bytes at quad `n`'s centre.
-fn at(capture: &crate::capture::Capture, n: usize) -> [u8; 3] {
+fn at(capture: &ara_frame::capture::Capture, n: usize) -> [u8; 3] {
     let x = -4.5 + 3. * n as f32;
     let projection = Mat4::perspective_rh(0.8, SIZE[0] as f32 / SIZE[1] as f32, 0.1, 100.)
         * Mat4::look_at_rh(Vec3::new(0., 0., 8.), Vec3::ZERO, Vec3::Y);

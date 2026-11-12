@@ -322,7 +322,7 @@ impl Renderer {
         if bytemuck::cast_slice::<_, u8>(&self.content.lights)
             != bytemuck::cast_slice::<_, u8>(&scene.lights)
         {
-            let empty = [crate::scene::Light::zeroed()];
+            let empty = [ara_frame::scene::Light::zeroed()];
             let lights = if scene.lights.is_empty() {
                 &empty
             } else {

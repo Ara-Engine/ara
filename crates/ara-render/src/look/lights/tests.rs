@@ -4,7 +4,7 @@
 use super::Settings;
 use super::bench::scene::{self, Case, Frame, Layout, MASK_BLOCKERS, MASK_FLOOR, Motion, Placed};
 use super::bench::{Bench, Blockers, Readback};
-use crate::scene::{CameraSpec, Light};
+use ara_frame::scene::{CameraSpec, Light};
 use anyhow::Result;
 use glam::{Affine3A, Quat, Vec3};
 

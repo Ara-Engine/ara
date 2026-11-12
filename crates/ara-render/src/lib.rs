@@ -1,9 +1,12 @@
 #![warn(missing_docs)]
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 //! Ara's render graph, PBR baseline and deterministic visual feedback API.
-//! Scene, instanced content, look and capture records live in `ara-frame` and are re-exported.
+//! Scene, instanced content, look and capture records live in `ara-frame`.
+//! Callers outside this crate import those from `ara_frame`. These two
+//! re-exports remain for this crate's own `use crate::{scene, capture}` paths.
+//! The render graph lives in `ara-render2d` and is re-exported here.
 pub use ara_frame::capture;
-pub mod graph;
+pub use ara_render2d::graph;
 pub mod instanced;
 #[cfg(feature = "fidelity-lab")]
 pub mod lab;

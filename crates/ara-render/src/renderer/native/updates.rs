@@ -310,7 +310,7 @@ impl Native {
         &mut self,
         gpu: &mut GpuDevice,
         frame: &frame::Frame,
-        camera: &crate::scene::Camera,
+        camera: &ara_frame::scene::Camera,
         quality: &crate::look::Quality,
     ) -> Result<()> {
         ara_gpu::cpu_scope!("RasterNative.prepare");
@@ -384,7 +384,7 @@ impl Native {
 
     pub(in crate::renderer) fn presented(
         &mut self,
-        camera: &crate::scene::Camera,
+        camera: &ara_frame::scene::Camera,
         advance_geometry: bool,
     ) {
         for &i in &self.changes.rows.list {

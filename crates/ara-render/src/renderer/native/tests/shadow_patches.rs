@@ -262,12 +262,12 @@ fn a_moved_caster_patches_a_local_face_to_what_a_whole_redraw_draws() -> Result<
     let mut scene = scene();
     scene.sun_lux = Vec3::ZERO;
     // A point light 2 m above the caster: it shadows the ground through the -Y face.
-    scene.lights.push(crate::scene::Light {
+    scene.lights.push(ara_frame::scene::Light {
         position_range: [0., 3., 0., 10.],
         color_lumens: [1., 1., 1., 2000.],
         direction_outer: [0., -1., 0., 0.],
         parameters: [0., 1., 0., 1.],
-        ..crate::scene::Light::ZERO
+        ..ara_frame::scene::Light::ZERO
     });
     let quality = crate::look::Quality {
         local_shadows: Some(crate::look::LocalShadows {
