@@ -1268,8 +1268,8 @@ fn render_debug(debug: ara_play::RenderDebug) -> ara_render::RenderDebug {
         }),
         exposure: debug.exposure.filter(|ev| ev.is_finite()),
         view: {
-            use ara_play::DebugView as D;
             use ara_frame::capture::ViewMode as V;
+            use ara_play::DebugView as D;
             match debug.view {
                 D::Lit => V::Lit,
                 D::Albedo => V::Albedo,

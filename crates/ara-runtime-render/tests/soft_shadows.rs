@@ -13,7 +13,7 @@
 //! angle; `penumbra_table` (ignored: `cargo test -p ara-runtime-render --test
 //! soft_shadows -- --ignored --nocapture`) prints every case at Medium and High.
 use ara_doc::Workspace;
-use ara_frame::{capture::{Capture, ViewMode}};
+use ara_frame::capture::{Capture, ViewMode};
 use ara_render::{ReferenceTrace, RenderDebug};
 use ara_runtime::{Runtime, RuntimeConfig, assets::MemoryAssets, extract::RenderFrame};
 use ara_runtime_render::{Presenter, QualityChoice, QualityPreset};

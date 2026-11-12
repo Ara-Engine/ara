@@ -583,6 +583,11 @@ impl SceneView {
                 "ARA_SCENE_RENDERER: Renderlab could not draw the Scene view ({error:#}); ara-render shows it"
             );
             self.renderlab_failed = true;
+            // A failed engine (a lost device, say) shows nothing: its last image goes, so
+            // the Scene is the error, not a stale or black frame.
+            if let Some(scene) = self.renderlab.take() {
+                let _ = scene.release(renderer.gpu_mut());
+            }
         }
     }
     fn render_raster_attempt(
@@ -1163,6 +1168,13 @@ impl SceneView {
             .as_ref()
             .filter(|(since, _)| since.elapsed() >= after)
             .map(|(_, error)| error.as_str())
+    }
+    /// The engine's own id under `pixel` for a click, when Renderlab shows the Scene.
+    pub(super) fn pick_front(&mut self, pixel: [u32; 2]) -> Option<u32> {
+        self.renderlab
+            .as_mut()
+            .filter(|r| r.image().is_some())
+            .and_then(|r| r.pick_id(pixel))
     }
     pub(super) fn id_host(&self) -> Option<ids::IdHost<'_>> {
         self.renderlab
