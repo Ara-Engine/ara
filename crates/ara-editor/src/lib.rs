@@ -46,7 +46,6 @@ pub(crate) mod pilot;
 pub(crate) mod play_controls;
 pub(crate) mod play_profiling;
 pub mod prefab;
-mod probe_capture;
 mod script_assets;
 pub mod settings;
 pub mod state;

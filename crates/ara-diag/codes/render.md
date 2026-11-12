@@ -8,14 +8,13 @@
 owner: ara-runtime-render
 shown as: ARA_VIEW_MODE_UNAVAILABLE
 
-The requested debug view is not supported or not ready on this renderer, so the view keeps its previous mode instead of drawing Lit under the debug view's name.
+The requested debug view is not supported on this renderer, so nothing is drawn under the debug view's name (Renderlab draws the Lit view only).
 
 Causes:
-- The renderer path or quality preset does not produce the view (for example GI diffuse without probe GI).
-- The view's data is not ready yet (probe GI still converging).
+- A capture asked for a view other than Lit (`ara capture --view`, a labelled capture's mode).
 
 Fixes:
-- Follow the reason in `render.probes.query` capabilities; switch the preset or wait for readiness.
+- Drop the view option to capture the lit image.
 
 ## ARA6120 RENDERLAB_UNAVAILABLE: Renderlab renderer could not start
 owner: ara-renderlab

@@ -4,20 +4,16 @@
 //! is not there yet.
 //!
 //! - A panel, page or preview area that has nothing to draw: [`tile`].
-//! - A menu entry or button with nothing behind it: keep the entry, `enabled(item, false)`, and
-//!   give it the tooltip [`SOON`], so the menu keeps its shape.
+//! - A control with nothing behind it does not belong here: remove it (and add a row to the
+//!   gap table in `crates/ara-renderlab/AGENTS.md`), never disable and keep it.
 use ara_kit::icons;
 use ara_kit::look::Look;
 use stillkit::el::{Align, El, Justify, col, el, icon, row, text};
 
 use super::Studio;
 
-/// The one line a disabled entry's tooltip says.
-#[allow(dead_code, reason = "first user: the Scene view's placeholders")]
-pub(super) const SOON: &str = "Not available yet";
-
 /// A muted tile filling its parent: an outlined square and `line` (one sentence, what is not
-/// available; [`SOON`] when nothing more is useful). `key` names it for tests and captures.
+/// available). `key` names it for tests and captures.
 #[allow(dead_code, reason = "first user: the Scene view's placeholders")]
 pub(super) fn tile(l: &Look, key: &str, line: &str) -> El<Studio> {
     let c = &l.c;
@@ -47,12 +43,6 @@ pub(super) fn note(l: &Look, line: &str) -> El<Studio> {
         .cascade_ink()
         .child(icon(icons::SQUARE_DASHED).size(14.0))
         .child(text(line.to_owned()).text_size(11.5).wrap(3).grow(1.0))
-}
-
-/// Whether the Scene's renderer can capture reflection probes (the Lighting page's Recapture and
-/// the `render.probe.recapture` job). Existing captures keep loading; only new ones need it.
-pub(super) fn probe_capture_available() -> bool {
-    false
 }
 
 /// Whether the Game view can show the scene through its gameplay camera outside Play (a second

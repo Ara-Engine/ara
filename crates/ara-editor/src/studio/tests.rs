@@ -867,9 +867,6 @@ fn history_pages_assets_search_restores_and_render_debug_opens() {
             .map(String::as_str),
         Some("crate")
     );
-    // Copy Probe State needs the renderer's report first, and says so.
-    run(&mut rt, "lighting.probe.copy");
-    assert!(rt.state().local.copy.is_none());
 }
 
 #[test]
@@ -5566,30 +5563,6 @@ fn the_editor_capture_says_the_scene_is_not_in_it() {
         status.to_string().contains("native GPU layers"),
         "the result points at `viewport`: {status}"
     );
-}
-
-/// Window > Lighting in front of the Scene at High: Recapture starts a bake, which only
-/// advances through Scene renders. Polling alone leaves it running; the unpresented render
-/// the loop runs for it completes it.
-#[test]
-fn recapturing_probes_says_it_is_not_available_and_starts_no_job() {
-    use crate::catalog::Target;
-    let mut rt = open();
-    rt.update(|s| super::commands::run(s, "create.light.probe", &Target::None));
-    rt.update(|s| s.act("editor.layout.show", json!({"panel": "lighting"})));
-    settle(&mut rt);
-    assert!(
-        rt.find("lighting/probe/unavailable").is_some(),
-        "the page says so beside the button"
-    );
-    assert!(
-        rt.find("lighting/probe/recapture").is_some(),
-        "the button keeps its place"
-    );
-    // Disabled: pressing it, or running the command, starts nothing.
-    press(&mut rt, "lighting/probe/recapture");
-    rt.update(|s| super::commands::run(s, "lighting.probe.recapture", &Target::None));
-    settle(&mut rt);
 }
 
 #[test]
