@@ -520,7 +520,11 @@ The existing engine installer stays compatible under
 its Start menu shortcut. Directly launching a legacy Hub inside an engine folder
 requires installing the standalone Hub for GUI self-update. Smoke mode with
 `--no-system-integration` suppresses shell/registry/PATH writes; smoke isolates
-LOCALAPPDATA so its managed launcher installation stays inside target.
+LOCALAPPDATA so its managed launcher installation stays inside target. The smoke installs
+into `<target>/smoke/<4 hex digits>` (a short folder of fixed length, whatever the checkout
+path or process id) and, before installing, fails with the path and its length if any
+installed file would reach Windows' 260-character limit, because such an install cannot be
+uninstalled.
 
 Standalone Hub updates download in the background. **Restart to update** starts
 an updater copied outside the Hub directory. It waits only for that GUI PID,
