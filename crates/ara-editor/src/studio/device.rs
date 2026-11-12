@@ -2,6 +2,7 @@
 //! all the old renderer was to the editor once Renderlab drew the Scene: the compositor, the
 //! Game layer, the graph pages and the captures borrow its `GpuDevice`.
 use ara_gpu::GpuDevice;
+use ara_runtime_render::PresentationDevice;
 use std::{
     ffi::CString,
     path::PathBuf,
@@ -11,7 +12,7 @@ use std::{
 
 /// The editor's GPU device and the Scene view's output size in physical pixels.
 pub(crate) struct SceneDevice {
-    gpu: GpuDevice,
+    device: PresentationDevice,
     size: [u32; 2],
 }
 
@@ -19,18 +20,18 @@ impl SceneDevice {
     /// Creates the device at `size` on this thread (the windowed studio uses [`prepare`]).
     pub(crate) fn new(extensions: &[CString], cache: PathBuf, size: [u32; 2]) -> anyhow::Result<Self> {
         Ok(Self {
-            gpu: GpuDevice::new(extensions, cache)?,
+            device: PresentationDevice::open(extensions, cache)?,
             size,
         })
     }
 
     /// The device (shared by every GPU user of the studio) and the current output size.
     pub(crate) fn gpu(&self) -> &GpuDevice {
-        &self.gpu
+        self.device.gpu()
     }
 
     pub(crate) fn gpu_mut(&mut self) -> &mut GpuDevice {
-        &mut self.gpu
+        self.device.gpu_mut()
     }
 
     /// The Scene view's output size.

@@ -70,9 +70,8 @@ fn scene_probe_content_and_skin_uploads_share_the_deferred_frame() -> Result<()>
     renderer.submit_scene_frame(|renderer| {
         // A real earlier submission is held on compute, as upload/prepare can
         // precede the frame's G-buffer work without completing on the host.
-        let point = renderer
-            .gpu
-            .submit(renderer.gpu.begin(Queue::Compute).finish(), &[])?;
+        let commands = renderer.gpu.begin(Queue::Compute).finish();
+        let point = renderer.gpu.submit(commands, &[])?;
         renderer.gpu.resolve(point)?;
         renderer.update_probe_surfaces(&update)?;
         renderer.replace_native_scene(&scene, Box::new(Textures))?;

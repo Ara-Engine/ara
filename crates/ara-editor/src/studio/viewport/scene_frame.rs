@@ -188,6 +188,11 @@ impl SceneView {
         if let Err(error) = drawn {
             eprintln!("Renderlab could not draw the Scene view: {error:#}");
             self.renderlab_error = Some(format!("{error:#}"));
+            // A failed engine (a lost device, say) shows nothing: its last image goes, so the
+            // Scene is the error, not a stale or black frame.
+            if let Some(scene) = self.renderlab.take() {
+                let _ = scene.release(device.gpu_mut());
+            }
         }
     }
 }

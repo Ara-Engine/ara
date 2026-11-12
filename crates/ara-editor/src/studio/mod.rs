@@ -198,10 +198,10 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     let mut sync = SceneSync::new();
     let mut revision = rt.state().editor.host.store().revision();
     let mut extraction = rt.state().editor.extraction_revision;
-    // SAFETY: the renderer outlives the compositor (retired and dropped below, before
-    // it); this thread submits for both.
+    // SAFETY: the device outlives the compositor (retired and dropped below, before it);
+    // this thread submits for both.
     let mut compositor =
-        unsafe { compositor::Compositor::new(&renderer, rt.state().editor.state.light)? };
+        unsafe { compositor::Compositor::new(renderer.gpu(), rt.state().editor.state.light)? };
     // SAFETY: as the compositor's.
     let mut game = unsafe { game::Game::new(&renderer)? };
     // SAFETY: as the compositor's.
@@ -252,7 +252,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     loop {
         // Vulkan's Scene may run on its own queue: finish external reads before recycling images.
         #[cfg(any(windows, target_os = "linux"))]
-        if !compositor.scene_ready(&renderer)? {
+        if !compositor.scene_ready(renderer.gpu())? {
             rt.touch(|s| {
                 server.pump(&mut s.editor);
                 s.editor.tick();

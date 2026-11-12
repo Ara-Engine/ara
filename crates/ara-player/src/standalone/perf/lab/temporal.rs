@@ -87,10 +87,6 @@ pub(super) fn run(
                 pairs: 0,
             };
             let mut extent = [0; 2];
-            let mut previous_display: Option<ara_pathtrace::flip::PreparedImage> = None;
-            let mut perceptual = Vec::new();
-            let mut flip_sum = 0.;
-            let mut flip_peak = 0_f64;
             for sample in 0..frames {
                 if mode == "pan" {
                     let angle = (speed * sample as f64 / 60.).to_radians() as f32;
@@ -114,22 +110,6 @@ pub(super) fn run(
                 );
                 extent = size;
                 accumulator.add(blocks(&pixels, size)?);
-                let display = presenter.lab_display(frame)?;
-                let prepared = ara_pathtrace::flip::PreparedImage::new(
-                    &display,
-                    ara_pathtrace::flip::PIXELS_PER_DEGREE,
-                )?;
-                if let Some(previous) = previous_display.as_ref() {
-                    let difference = previous.compare(&prepared)?;
-                    let per_block =
-                        block_means(&difference.errors, [display.width(), display.height()]);
-                    flip_sum += difference.mean;
-                    flip_peak = flip_peak.max(per_block.iter().copied().fold(0_f64, f64::max));
-                    perceptual.push(
-                        json!({"pair":sample,"mean":difference.mean,"block_means":per_block}),
-                    );
-                }
-                previous_display = Some(prepared);
             }
             let rms = accumulator
                 .delta
@@ -147,15 +127,7 @@ pub(super) fn run(
                 &path,
                 &json!({"size":extent,"block_size":16,"columns":extent[0].div_ceil(16),"rows":extent[1].div_ceil(16),"relative_luminance_rms":rms,"energy":accumulator.energy,"sample_pairs":accumulator.pairs}),
             )?;
-            let mean_limit = config["static_mean_max"].as_f64().unwrap_or(0.01);
-            let block_limit = config["static_block_max"].as_f64().unwrap_or(0.03);
-            let flip_mean = flip_sum / accumulator.pairs as f64;
-            let flip_path = directory.join(format!("{shot}-temporal-{mode}-flip.json"));
-            write(
-                &flip_path,
-                &json!({"metric":"consecutive display-frame LDR FLIP","pixels_per_degree":67,"block_size":16,"pairs":perceptual}),
-            )?;
-            report[mode] = json!({"size":extent,"low_frequency_luminance_delta_rms":global,"mean_block_rms":mean,"max_block_rms":peak,"blocks":path,"frame_flip":{"mean":flip_mean,"max_block_mean":flip_peak,"pairs":accumulator.pairs,"blocks":flip_path},"gate":if mode=="static" {json!({"metric":"consecutive display-frame FLIP","status":if flip_mean<=mean_limit&&flip_peak<=block_limit{"pass"}else{"fail"},"mean_limit":mean_limit,"block_limit":block_limit})}else{json!({"status":"informational_motion"})}});
+            report[mode] = json!({"size":extent,"low_frequency_luminance_delta_rms":global,"mean_block_rms":mean,"max_block_rms":peak,"blocks":path,"frame_flip":{"status":"not_measured","reason":"FLIP left with ara-pathtrace"},"gate":{"status":"not_measured","reason":"FLIP left with ara-pathtrace"}});
         }
         Ok(report)
     })();
@@ -163,6 +135,7 @@ pub(super) fn run(
     result
 }
 
+#[cfg(test)]
 fn block_means(values: &[f32], size: [u32; 2]) -> Vec<f64> {
     let mut means = Vec::new();
     for y0 in (0..size[1]).step_by(16) {

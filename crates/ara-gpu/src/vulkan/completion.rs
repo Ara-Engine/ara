@@ -268,8 +268,11 @@ impl VulkanDevice {
         self.consume_completion(frame, consume)
     }
 
-    /// Establish device memory visibility on the native UI/present queue after
-    /// completion. The wait is GPU-side and covers only already-completed work.
+    /// Publish every completed queue to the UI queue at a frame boundary.
+    /// Refuses while any queue is still in flight. A single graphics submission
+    /// that must become visible while other queues may still run uses
+    /// [`Self::publish_submission_to_ui`] after that submission has been waited.
+    /// The wait is GPU-side and covers only already-completed work.
     pub fn publish_completed_to_ui(&self) -> Result<()> {
         let completed = self.completed()?;
         if (0..2).any(|queue| completed[queue] < self.submitted[queue]) {
@@ -294,6 +297,40 @@ impl VulkanDevice {
             .collect();
         // SAFETY: Both queues have the same exclusive owner thread. Timelines
         // and the UI queue belong to this device and outlive this submission.
+        unsafe {
+            self.context
+                .device
+                .queue_submit2(
+                    self.context.graphics,
+                    &[vk::SubmitInfo2::default().wait_semaphore_infos(&waits)],
+                    vk::Fence::null(),
+                )
+                .map_err(anyhow::Error::from)?;
+        }
+        Ok(())
+    }
+
+    /// Make one already-completed graphics submission visible on the UI queue.
+    /// After `begin_deferred_completion`, `Queue::Graphics` runs on `scene_graphics`
+    /// while the editor UI samples on `graphics` and requires `TRANSFER_SRC_OPTIMAL`.
+    /// Call this after `resolve` (or `wait`) of that submission. It waits only for
+    /// `point`, so other queues may still be in flight.
+    /// [`Self::publish_completed_to_ui`] is the frame-boundary call and refuses
+    /// until every queue has completed. No-op when Scene and UI share a queue, or
+    /// when `point` is not a graphics submission.
+    pub fn publish_submission_to_ui(&self, point: TimelinePoint) -> Result<()> {
+        if point.value == 0 || point.queue != Queue::Graphics {
+            return Ok(());
+        }
+        if !self.scene_queue || self.context.scene_graphics == self.context.graphics {
+            return Ok(());
+        }
+        let waits = [vk::SemaphoreSubmitInfo::default()
+            .semaphore(self.timelines[Queue::Graphics.index()])
+            .value(point.value)
+            .stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)];
+        // SAFETY: Both queues belong to this device and this thread. `point` is a
+        // value already signalled on this device's graphics timeline.
         unsafe {
             self.context
                 .device

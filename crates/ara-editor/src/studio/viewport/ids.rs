@@ -170,6 +170,9 @@ impl Target {
         commands.push(Command::EndPass);
         let point = gpu.submit(commands.finish(), &[])?;
         gpu.resolve(point)?;
+        // The UI samples this image on its own queue, like the colour copy
+        // (`PresentationImage::copy`).
+        gpu.publish_submission_to_ui(point)?;
         self.fresh = false;
         Ok(())
     }
