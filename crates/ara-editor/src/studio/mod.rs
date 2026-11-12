@@ -559,7 +559,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             // An asynchronous Scene frame lands passes after it was submitted: show it then.
             let landed = renderer.shown_frame_tag() != shown_tag;
             composite |= render || restyled || landed;
-            let layer = (composite && renderer.presentation_ready())
+            let layer = (composite && scene_view.presentable(&renderer))
                 .then(|| layer_target(&surface, SCENE_LAYER, &mut rt, &mut layer_failure))
                 .flatten();
             if let Some(layer) = layer {

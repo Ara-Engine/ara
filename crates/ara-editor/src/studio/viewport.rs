@@ -1154,13 +1154,20 @@ impl SceneView {
         self.id_host()
             .map_or_else(|| renderer.entities(), |host| host.entities)
     }
+    /// Whether the Scene has a frame to show: Renderlab's, or the renderer's presentation.
+    pub(super) fn presentable(&self, renderer: &Renderer) -> bool {
+        self.renderlab
+            .as_ref()
+            .is_some_and(|r| r.image().zip(r.id_image()).is_some())
+            || renderer.presentation_ready()
+    }
     pub fn attach(
         &self,
         gpu: &mut NativeUi,
         renderer: &Renderer,
         quality: bool,
     ) -> ara_ui::Result<()> {
-        if renderer.presentation_ready() {
+        if self.presentable(renderer) {
             attach(
                 gpu,
                 renderer,
