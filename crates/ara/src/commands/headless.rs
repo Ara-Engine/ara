@@ -101,6 +101,21 @@ pub struct CaptureArgs {
     /// Camera turn over the clip in degrees about the vertical axis.
     #[arg(long, allow_hyphen_values = true)]
     video_yaw: Option<f32>,
+    /// Cut the camera once inside the clip: from this clip frame (0-based) on, the camera
+    /// jumps by `--video-cut-move` and turns by `--video-cut-yaw` on top of its path.
+    #[arg(long, requires = "video")]
+    video_cut_at: Option<u32>,
+    /// World-space jump of the cut in metres, `x,y,z`.
+    #[arg(
+        long,
+        value_delimiter = ',',
+        allow_hyphen_values = true,
+        requires = "video_cut_at"
+    )]
+    video_cut_move: Option<Vec<f32>>,
+    /// Turn of the cut in degrees about the vertical axis.
+    #[arg(long, allow_hyphen_values = true, requires = "video_cut_at")]
+    video_cut_yaw: Option<f32>,
 }
 impl CaptureArgs {
     pub fn call(self) -> Call {
@@ -110,6 +125,7 @@ impl CaptureArgs {
             "path":self.path,"width":self.width,"height":self.height,"preset":self.preset,
             "ticks":self.ticks,"seed":self.seed,"marks":self.marks,"stability":self.stability,
             "video":self.video,"videoMove":self.video_move,"videoYaw":self.video_yaw,
+            "videoCutAt":self.video_cut_at,"videoCutMove":self.video_cut_move,"videoCutYaw":self.video_cut_yaw,
             "renderDebug":render_debug(&self.without, self.full_resolution, self.reflections.as_deref(),
                 self.ev100, self.view.as_deref())})),
             summary: protocol::pretty,
@@ -184,5 +200,60 @@ mod tests {
         assert_eq!(lock["exposure"], 7.);
         assert_eq!(lock["view"], "giDiffuse");
         assert_eq!(debug["view"], "lit");
+    }
+
+    /// `ara capture` parsed from `args`, as the protocol call it makes.
+    fn capture_call(args: &[&str]) -> Result<serde_json::Value, clap::Error> {
+        #[derive(clap::Parser)]
+        struct Cli {
+            #[command(flatten)]
+            capture: super::CaptureArgs,
+        }
+        let cli = <Cli as clap::Parser>::try_parse_from(
+            std::iter::once("capture").chain(args.iter().copied()),
+        )?;
+        Ok(cli.capture.call().params)
+    }
+
+    #[test]
+    fn capture_cut_flags_reach_the_request() {
+        let params = capture_call(&[
+            "--video",
+            "120",
+            "--video-move",
+            "4,0,-4",
+            "--video-yaw",
+            "12",
+            "--video-cut-at",
+            "60",
+            "--video-cut-move",
+            "-20,0,15",
+            "--video-cut-yaw",
+            "140",
+        ])
+        .expect("parses");
+        assert_eq!(params["videoCutAt"], 60);
+        assert_eq!(params["videoCutMove"], serde_json::json!([-20., 0., 15.]));
+        assert_eq!(params["videoCutYaw"], 140.);
+        // No cut flags, no cut params.
+        let plain = capture_call(&["--video", "6"]).expect("parses");
+        assert!(plain.get("videoCutAt").is_none() && plain.get("videoCutMove").is_none());
+    }
+
+    #[test]
+    fn a_cut_needs_a_clip_and_its_frame() {
+        assert!(capture_call(&["--video-cut-at", "3"]).is_err());
+        assert!(capture_call(&["--video", "10", "--video-cut-yaw", "90"]).is_err());
+        assert!(
+            capture_call(&[
+                "--video",
+                "10",
+                "--video-cut-at",
+                "3",
+                "--video-cut-yaw",
+                "90"
+            ])
+            .is_ok()
+        );
     }
 }
