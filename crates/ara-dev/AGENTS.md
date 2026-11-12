@@ -52,12 +52,12 @@ Local developer binary. Uses git/cargo subprocesses; ara-hotpatch is tooling-onl
 - `hotpatch`: `--install-dx` prepares optional pinned dx plus its native Rust save fix;
   ordinary builds never require it. Body-only source contract, guarded compiler/linker,
   frame-boundary player/editor publication. Windows facade stays inside this command.
-  `render-probe` is a windowless pass proof; acquire the GPU queue before its start file.
+  `sim-probe` is the windowless simulation proof.
 - `preview`: isolate a workspace-version commit, package/smoke/sign both kinds
   locally. Only --publish pushes/uploads; --prepared resumes a reviewed record.
   --target-dir explicitly opts into warm external release outputs. See docs/releases.md.
 - `d26`: the release scoreboard (`src/d26/`). It reuses `perf` windows on Outpost, Hangar and
-  Showcase packs, `ara-samples capture --reference` (ꟻLIP) and the editor's responsiveness
+  Showcase packs and the editor's responsiveness
   probe, and writes `target/d26/<ts>/report.{json,html}`. Unmeasured rows stay "not measured".
   GPU windows require raster/GI readiness then warmup; readiness timeouts fail loudly.
   CPU/hitches use whole-run samples; arrival peaks/time-to-ready have no budget gate.

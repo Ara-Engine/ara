@@ -220,7 +220,8 @@ fn display(rgba: &[f32], size: [u32; 2], ev100: f32) -> image::RgbaImage {
     })
 }
 
-/// The worst 64x64-pixel region's mean FLIP of `test` against `control`.
+/// The worst 64x64-pixel region's mean absolute error of `test` against `control`,
+/// on the tone-mapped image. FLIP left with `ara-pathtrace`.
 fn region_flip(control: &[f32], test: &[f32], size: [u32; 2], ev100: f32) -> Result<f64> {
     if control
         .iter()
@@ -229,11 +230,8 @@ fn region_flip(control: &[f32], test: &[f32], size: [u32; 2], ev100: f32) -> Res
     {
         return Ok(0.);
     }
-    let flip = ara_pathtrace::flip::flip(
-        &display(control, size, ev100),
-        &display(test, size, ev100),
-        ara_pathtrace::flip::PIXELS_PER_DEGREE,
-    )?;
+    let left = display(control, size, ev100);
+    let right = display(test, size, ev100);
     let (w, h) = (size[0] as usize, size[1] as usize);
     let mut worst = 0f64;
     for by in (0..h).step_by(64) {
@@ -241,11 +239,17 @@ fn region_flip(control: &[f32], test: &[f32], size: [u32; 2], ev100: f32) -> Res
             let (mut sum, mut n) = (0f64, 0usize);
             for y in by..(by + 64).min(h) {
                 for x in bx..(bx + 64).min(w) {
-                    sum += f64::from(flip.errors[y * w + x]);
+                    let i = (y * w + x) * 4;
+                    for channel in 0..3 {
+                        sum += (f64::from(left.as_raw()[i + channel])
+                            - f64::from(right.as_raw()[i + channel]))
+                        .abs()
+                            / 255.;
+                    }
                     n += 1;
                 }
             }
-            worst = worst.max(sum / n as f64);
+            worst = worst.max(sum / (n as f64 * 3.));
         }
     }
     Ok(worst)

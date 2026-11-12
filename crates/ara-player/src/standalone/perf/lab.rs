@@ -106,15 +106,10 @@ impl Capture {
                 } else {
                     reference
                 };
-                let flip = ara_pathtrace::flip::flip(
-                    &reference,
-                    &image.image,
-                    ara_pathtrace::flip::PIXELS_PER_DEGREE,
-                )?;
                 let compare = ara_frame::capture::compare(&image.image, &reference, 2.)?;
                 let diff = self.directory.join(format!("{shot}-diff.png"));
                 compare.diff.save(&diff)?;
-                metrics["ldr_secondary"] = json!({"flip":flip.mean,"ssim":1.-compare.score,"diff":diff,"reference_resized":resized});
+                metrics["ldr_secondary"] = json!({"flip":null,"flipStatus":"removed with ara-pathtrace","ssim":1.-compare.score,"diff":diff,"reference_resized":resized});
             } else {
                 metrics["reference_missing"] = json!(reference);
             }
