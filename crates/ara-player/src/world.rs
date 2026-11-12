@@ -865,14 +865,30 @@ impl World {
                     )?);
                 }
                 if let Some(frames) = params.video {
+                    let frames = frames.clamp(1, 3600);
+                    let cut = match params.video_cut_at {
+                        Some(at) if at >= frames => {
+                            return Err(anyhow!(
+                                "video_cut_at {at} is past the clip's last frame ({})",
+                                frames - 1
+                            ));
+                        }
+                        Some(at) => Some(video::Cut {
+                            at,
+                            travel: params.video_cut_move.unwrap_or_default(),
+                            yaw: params.video_cut_yaw.unwrap_or_default(),
+                        }),
+                        None => None,
+                    };
                     video::record(
                         presenter,
                         frame,
                         &request,
                         video::Clip {
-                            frames: frames.clamp(1, 3600),
+                            frames,
                             travel: params.video_move.unwrap_or_default(),
                             yaw: params.video_yaw.unwrap_or_default(),
+                            cut,
                         },
                         &std::path::Path::new(path).with_extension("video"),
                         |frame| self.fidelity_content(frame),
