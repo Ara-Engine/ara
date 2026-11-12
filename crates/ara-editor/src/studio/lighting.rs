@@ -115,40 +115,19 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                 .on_dismiss(|s: &mut Studio| s.local.lighting_menu = None),
         );
     }
-    // Reflection probes recapture on demand (the scene is unchanged); a running capture
-    // offers Cancel instead.
-    let capture = if capturing(s) {
-        button(l, Tone::Ghost, Size::Sm, Some(icons::X), "Cancel capture")
-            .key("lighting/probe/cancel")
-            .on_press(|s: &mut Studio| {
-                super::commands::run(s, "lighting.probe.cancel", &crate::catalog::Target::None)
-            })
-    } else {
-        let unavailable = probes_unavailable(s);
-        enabled(
-            button(
-                l,
-                Tone::Ghost,
-                Size::Sm,
-                Some(icons::REFRESH_CW),
-                "Recapture",
-            )
-            .key("lighting/probe/recapture")
-            .tooltip(match unavailable {
-                _ if !super::unavailable::probe_capture_available() => {
-                    super::unavailable::SOON.to_owned()
-                }
-                Some(why) => format!("Not available: {why}"),
-                None => "Capture the selected reflection probes again".to_owned(),
-            })
-            .on_press(|s: &mut Studio| {
-                super::commands::run(s, "lighting.probe.recapture", &crate::catalog::Target::None)
-            }),
-            !probes(s, None).is_empty()
-                && unavailable.is_none()
-                && super::unavailable::probe_capture_available(),
+    // Reflection probes recapture on demand once the Scene's renderer can capture them.
+    let capture = enabled(
+        button(
+            l,
+            Tone::Ghost,
+            Size::Sm,
+            Some(icons::REFRESH_CW),
+            "Recapture",
         )
-    };
+        .key("lighting/probe/recapture")
+        .tooltip(super::unavailable::SOON),
+        super::unavailable::probe_capture_available(),
+    );
     let toolbar = row()
         .h(super::style::TOOLBAR + 6.0)
         .pad_x(6.0)
@@ -157,20 +136,7 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         .child(search)
         .child(add)
         .child(presets)
-        .child(capture)
-        .child(
-            icon_button(
-                l,
-                Tone::Ghost,
-                Size::Sm,
-                icons::ACTIVITY,
-                "Refresh probe status",
-            )
-            .key("lighting/probe/refresh")
-            .on_press(|s: &mut Studio| {
-                super::commands::run(s, "lighting.probe.refresh", &crate::catalog::Target::None)
-            }),
-        );
+        .child(capture);
     let body = if rows.is_empty() {
         col().grow(1.0).justify(Justify::Center).child(empty(
             l,
@@ -227,33 +193,16 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                                     .wrap(1),
                             ),
                     )
-                    .children(mixer(s, &r.id))
-                    .children(probe_state(s, &r.id).map(|state| {
-                        text(state)
-                            .text_size(11.0)
-                            .color(c.muted_foreground.0)
-                            .tooltip("The renderer's capture of this probe")
-                    })),
+                    .children(mixer(s, &r.id)),
             );
         }
         list
     };
-    // Said next to the button rather than only in its tooltip: a quality without probe
-    // captures (Auto on an integrated GPU) is the usual reason Recapture is off.
-    let unavailable = if super::unavailable::probe_capture_available() {
-        probes_unavailable(s).map(|why| {
-            text(format!("Reflection probes can't capture: {why}. Choose High or Epic in the Scene's quality menu."))
-                .key("lighting/probe/unavailable")
-                .text_size(11.0)
-                .color(c.muted_foreground.0)
-                .pad_x(10.0)
-        })
-    } else {
-        Some(
-            super::unavailable::note(l, "Reflection probe capture is not available yet.")
-                .key("lighting/probe/unavailable"),
-        )
-    };
+    // Said next to the button rather than only in its tooltip.
+    let unavailable = Some(
+        super::unavailable::note(l, "Reflection probe capture is not available yet.")
+            .key("lighting/probe/unavailable"),
+    );
     col()
         .grow(1.0)
         .child(toolbar)
@@ -466,187 +415,6 @@ fn create(s: &mut Studio, kind: Create) {
         }
         Err(error) => s.editor.report_failure(&error),
     }
-}
-
-/// What a probe capture job is followed as (`Local::asset_jobs`).
-const RECAPTURE: &str = "Recapture reflection probes";
-
-/// The selected Reflection Probes (or `entity`, when given).
-fn probes(s: &Studio, entity: Option<&str>) -> Vec<String> {
-    match entity {
-        Some(entity) => vec![entity.to_owned()],
-        None => s
-            .editor
-            .state
-            .selection
-            .iter()
-            .filter(|id| {
-                s.resolved
-                    .get(*id)
-                    .is_some_and(|e| e.record.contains_key("ReflectionProbe"))
-            })
-            .cloned()
-            .collect(),
-    }
-}
-
-/// Queues a fresh capture of the selected Reflection Probes (derived data: the scene is
-/// unchanged); the host loop follows the job, a failure says why.
-pub(super) fn recapture(s: &mut Studio, entity: Option<&str>) -> ara_ui::Result<()> {
-    if !super::unavailable::probe_capture_available() {
-        return Err(format!("Reflection probe capture: {}", super::unavailable::SOON).into());
-    }
-    let entities = probes(s, entity);
-    if entities.is_empty() {
-        return Err("Select one or more Reflection Probes to recapture".into());
-    }
-    // Ask the renderer first: a quality without reflection captures (Auto on an integrated
-    // GPU) would start a job that can only fail. With no renderer report yet, try.
-    let _ = refresh_probes(s);
-    if let Some(why) = probes_unavailable(s) {
-        return Err(format!(
-            "Reflection probes can't capture: {why}. Choose High or Epic in the Scene's quality menu."
-        )
-        .into());
-    }
-    for id in &entities {
-        let value = s
-            .resolved
-            .get(id)
-            .and_then(|e| e.record.get("ReflectionProbe"))
-            .ok_or("That entity has no Reflection Probe")?;
-        let probe: ara_components::render::ReflectionProbe =
-            serde::Deserialize::deserialize(value)?;
-        if let Some(reason) = probe.invalid() {
-            return Err(reason.into());
-        }
-    }
-    let reply = s.editor.action(
-        "render.probe.recapture",
-        serde_json::json!({"doc": s.editor.state.doc, "entities": entities, "why": RECAPTURE}),
-    )?;
-    let job = reply["job"]
-        .as_str()
-        .ok_or("The recapture returned no job")?
-        .to_owned();
-    s.local.asset_jobs.push((job, RECAPTURE.to_owned()));
-    super::note(
-        s,
-        match entities.len() {
-            1 => "Recapturing 1 reflection probe".to_owned(),
-            n => format!("Recapturing {n} reflection probes"),
-        },
-    );
-    Ok(())
-}
-
-/// Asks the renderer where each of the scene's reflection probes stands (captured, stale,
-/// capturing, failed) for the Lighting list.
-pub(super) fn refresh_probes(s: &mut Studio) -> ara_ui::Result<()> {
-    let doc = s.editor.state.doc.clone();
-    let answer = s.editor.action(
-        "render.probes.query",
-        serde_json::json!({"doc": doc, "since": null}),
-    )?;
-    let snapshot: ara_runtime_render::probes::ProbeSnapshot = serde_json::from_value(answer)
-        .map_err(|e| format!("The renderer's probe report could not be read: {e}"))?;
-    if snapshot.probes.iter().any(|row| row.doc != doc) {
-        return Err("The probe report was for another scene".into());
-    }
-    s.local.probe_status = Some(snapshot);
-    Ok(())
-}
-
-/// Why the renderer cannot capture reflection probes at its current quality, from its last
-/// report; `None` when it can, or has not said. The host's "no snapshot yet" placeholder
-/// (version 0: the Scene has not rendered, or just changed) is not a report, so a transient
-/// wait never reads as a quality problem.
-pub(super) fn probes_unavailable(s: &Studio) -> Option<&str> {
-    let report = s.local.probe_status.as_ref().filter(|r| r.version > 0)?;
-    if report.capabilities.reflection_probes {
-        return None;
-    }
-    report
-        .capabilities
-        .reasons
-        .get("reflectionProbes")
-        .map(String::as_str)
-}
-
-/// What the renderer last said of `entity`'s probe capture, in a few words.
-fn probe_state(s: &Studio, entity: &str) -> Option<String> {
-    use ara_runtime_render::probes::ProbeState;
-    let row = s
-        .local
-        .probe_status
-        .as_ref()?
-        .probes
-        .iter()
-        .find(|r| r.entity == entity)?;
-    let state = match row.state {
-        ProbeState::Idle if row.generation == 0 => "Not captured".to_owned(),
-        ProbeState::Idle | ProbeState::Done => "Captured".to_owned(),
-        ProbeState::Queued => "Queued".to_owned(),
-        ProbeState::Capturing | ProbeState::Progress => match row.progress {
-            Some(p) => format!("Capturing {:.0}%", p * 100.0),
-            None => "Capturing".to_owned(),
-        },
-        ProbeState::Cancelled => "Cancelled".to_owned(),
-        ProbeState::Failed => "Failed".to_owned(),
-    };
-    Some(if row.stale {
-        format!("{state} · stale")
-    } else {
-        state
-    })
-}
-
-/// The renderer's report on one probe as JSON, for the clipboard (bug reports, agents).
-pub(super) fn copy_probe(s: &mut Studio, entity: &str) -> ara_ui::Result<()> {
-    let snapshot = s
-        .local
-        .probe_status
-        .as_ref()
-        .ok_or("Refresh the probe status first")?;
-    let row = snapshot
-        .probes
-        .iter()
-        .find(|r| r.entity == entity)
-        .ok_or("The renderer has not reported that reflection probe yet")?;
-    let report = serde_json::json!({
-        "doc": s.editor.state.doc,
-        "entity": entity,
-        "version": snapshot.version,
-        "capabilities": snapshot.capabilities,
-        "probe": row,
-    });
-    s.local.copy = Some(ara_json::to_canonical_string(&report));
-    Ok(())
-}
-
-/// Asks this window's running probe captures to stop.
-pub(super) fn cancel(s: &mut Studio) -> ara_ui::Result<()> {
-    let jobs: Vec<String> = s
-        .local
-        .asset_jobs
-        .iter()
-        .filter(|(_, why)| why == RECAPTURE)
-        .map(|(job, _)| job.clone())
-        .collect();
-    if jobs.is_empty() {
-        return Err("No probe capture is running".into());
-    }
-    for job in jobs {
-        s.editor
-            .action("render.probe.cancel", serde_json::json!({"job": job}))?;
-    }
-    super::note(s, "Probe capture cancelled");
-    Ok(())
-}
-
-/// Whether a probe capture this window started is still running.
-pub(super) fn capturing(s: &Studio) -> bool {
-    s.local.asset_jobs.iter().any(|(_, why)| why == RECAPTURE)
 }
 
 /// Appends `preset`'s override groups to the selected volumes (one undo step).

@@ -74,33 +74,26 @@ pub(super) struct Job {
     pub thread: JoinHandle<anyhow::Result<PreparedScene>>,
 }
 
-/// One CPU-complete candidate, retained while its native allocations are prepared.
+/// One CPU-complete candidate.
 pub(super) struct Publication {
     pub key: Key,
     pub scene: PreparedScene,
-    pub ready: bool,
 }
 
-/// Poll only; live calls never join an unfinished extraction or wait for native
-/// allocations. Superseded candidates cancel their resources before being dropped.
+/// Poll only; live calls never join an unfinished extraction. A candidate that no longer shows
+/// progress is dropped.
 pub(super) fn poll(
     job: &mut Option<Job>,
     publication: &mut Option<Publication>,
     current: Key,
     shown: Option<Key>,
-    renderer: &mut ara_render::Renderer,
     wait: bool,
 ) -> anyhow::Result<()> {
     if publication
         .as_ref()
         .is_some_and(|p| !p.key.shows_progress(current, shown))
-        && let Some(raster) = publication
-            .take()
-            .expect("superseded publication")
-            .scene
-            .raster
     {
-        raster.destroy(renderer)?;
+        *publication = None;
     }
     if job
         .as_ref()
@@ -115,24 +108,7 @@ pub(super) fn poll(
             *publication = Some(Publication {
                 key: job.key,
                 scene: result?,
-                ready: false,
             });
-        }
-    }
-    if let Some(candidate) = publication {
-        // The Scene view's own frame (no raster content) has no GPU allocations to prepare.
-        let Some(raster) = candidate.scene.raster.as_mut() else {
-            candidate.ready = true;
-            return Ok(());
-        };
-        match raster.preallocate(renderer) {
-            Ok(ready) => candidate.ready = ready,
-            Err(error) => {
-                if let Some(raster) = publication.take().expect("failed publication").scene.raster {
-                    raster.destroy(renderer)?;
-                }
-                return Err(error);
-            }
         }
     }
     Ok(())
@@ -155,34 +131,16 @@ fn snapshot<'a>(
 }
 
 impl Job {
-    /// The Scene view's own frame, with no renderer: the worker extracts it and the CPU scene
-    /// picking reads, and hands both straight back (`PreparedScene::frame`).
-    pub fn start_frame(
-        key: Key,
-        content: &crate::world::gltf::FidelityContent,
-        editor: &crate::Editor,
-        view: &crate::world::DocumentView,
-    ) -> anyhow::Result<Self> {
-        Ok(Self {
-            key,
-            thread: content.prepare_async(snapshot(editor, view), None)?,
-        })
-    }
-
+    /// Starts extracting the Scene's frame for `key` on the content worker.
     pub fn start(
         key: Key,
         content: &crate::world::gltf::FidelityContent,
         editor: &crate::Editor,
         view: &crate::world::DocumentView,
-        renderer: &ara_render::Renderer,
-        quality: ara_frame::look::Quality,
     ) -> anyhow::Result<Self> {
         Ok(Self {
             key,
-            thread: content.prepare_async(
-                snapshot(editor, view),
-                Some(renderer.native_seed_for_quality(&quality)?),
-            )?,
+            thread: content.prepare_async(snapshot(editor, view))?,
         })
     }
 }

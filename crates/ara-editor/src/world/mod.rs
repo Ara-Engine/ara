@@ -5,7 +5,6 @@ pub mod gesture;
 mod ghosts;
 pub(crate) mod gltf;
 mod imports;
-mod patch;
 mod resolver;
 use crate::state::EditorState;
 use ara_diag::Diagnostic;
@@ -16,8 +15,6 @@ use ara_runtime::components::MeshRenderer;
 use glam::{EulerRot, Mat4, Quat, Vec3};
 pub use gltf::ModelCache;
 pub use imports::{Imports, ImportsCache};
-pub(crate) use patch::Patch;
-pub use patch::scene_only;
 pub use resolver::SceneResolver;
 use serde_json::Value;
 use std::{
@@ -48,6 +45,22 @@ pub struct DocumentView {
     imports: Arc<Imports>,
 }
 impl DocumentView {
+    /// This view with some entities' records replaced (an uncommitted Inspector
+    /// draft); unknown entities are ignored.
+    pub(crate) fn with_records(&self, records: BTreeMap<String, ara_doc::Record>) -> DocumentView {
+        let mut entities = (*self.entities).clone();
+        for (id, record) in records {
+            if let Some(entity) = entities.get_mut(&id) {
+                entity.record = record;
+            }
+        }
+        DocumentView {
+            entities: std::sync::Arc::new(entities),
+            ghosts: self.ghosts.clone(),
+            imports: self.imports.clone(),
+        }
+    }
+
     /// Resolve a scene once per committed document revision.
     pub fn new(store: &Store, doc: &str) -> Result<Self, Vec<Diagnostic>> {
         Ok(Self::with_entities(store, Arc::new(resolve(store, doc)?)))

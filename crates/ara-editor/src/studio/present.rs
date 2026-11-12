@@ -77,7 +77,7 @@ pub(super) fn target(handle: stillkit::NativeHandle) -> Result<Target> {
 /// outlives the presentation.
 pub(super) unsafe fn create(
     ui: &NativeUi,
-    renderer: &ara_render::Renderer,
+    renderer: &crate::studio::device::SceneDevice,
     target: Target,
     extent: [u32; 2],
 ) -> Result<ara_platform::Present> {

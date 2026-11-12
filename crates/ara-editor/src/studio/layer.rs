@@ -23,7 +23,7 @@ impl Layer {
     /// # Safety
     /// The renderer outlives this; one thread submits for both.
     pub unsafe fn new(
-        renderer: &ara_render::Renderer,
+        renderer: &crate::studio::device::SceneDevice,
         images: impl IntoIterator<Item = u32>,
     ) -> Result<Self> {
         // SAFETY: forwarded caller contract.
@@ -43,7 +43,7 @@ impl Layer {
     }
 
     /// Whether the last frame left the GPU (else skip this pass and draw on a later one).
-    pub fn ready(&mut self, renderer: &ara_render::Renderer) -> Result<bool> {
+    pub fn ready(&mut self, renderer: &crate::studio::device::SceneDevice) -> Result<bool> {
         #[cfg(any(windows, target_os = "linux"))]
         let started = std::time::Instant::now();
         let budget = std::time::Duration::from_millis(1);
@@ -73,7 +73,7 @@ impl Layer {
     /// `layer` is the live native layer this presents into (`present::Target`).
     pub unsafe fn draw(
         &mut self,
-        renderer: &ara_render::Renderer,
+        renderer: &crate::studio::device::SceneDevice,
         layer: super::present::Target,
         extent: [u32; 2],
         scale: f32,
@@ -115,7 +115,7 @@ impl Layer {
     }
 
     /// Waits for and releases the presentation; call before the renderer drops.
-    pub fn retire(&mut self, renderer: &ara_render::Renderer) {
+    pub fn retire(&mut self, renderer: &crate::studio::device::SceneDevice) {
         let _ = self.ui.wait_idle(ui_device(renderer.gpu()));
         if let Some((mut present, _, _)) = self.present.take() {
             // SAFETY: the adapter is idle and the presentation is not used again.

@@ -1,26 +1,61 @@
-//! Derived probe work crosses typed channels; only the application owns renderer calls.
-mod bridge;
+//! Reflection probe capture has no renderer to run on yet. The protocol methods stay
+//! (`render.probe.recapture`, `render.probe.cancel`, `render.probes.query`) so agents and tools
+//! that call them get a clear answer, not an unknown-method error: a recapture is rejected,
+//! a cancel finds no job, and a query says no snapshot exists. When the Scene's renderer can
+//! capture probes, these call it (`studio::unavailable::probe_capture_available`).
 mod params;
-mod service;
 
-pub(crate) use bridge::{Bridge, Event, Request, SceneBinding};
-pub(crate) use service::ProbeService;
+use ara_diag::Diagnostic;
+use ara_host::{Cx, Method, Service};
+use ara_schema::SchemaDb;
+use params::{RenderProbeCancelParams, RenderProbeRecaptureParams, RenderProbesQueryParams};
+use serde_json::Value;
 
-use std::sync::mpsc::sync_channel;
+const NOT_AVAILABLE: &str =
+    "Reflection probe capture is not available yet: the Scene's renderer cannot capture probes";
 
-const CHANNEL_CAPACITY: usize = 128;
-const MAX_JOBS: usize = 64;
-const MAX_ENTITIES: usize = 256;
+/// The probe methods' answer while no renderer captures probes.
+#[derive(Default)]
+pub(crate) struct ProbeService;
 
-/// Connects the protocol service to the application's render-boundary owner.
-pub(crate) fn channel() -> (ProbeService, Bridge) {
-    let (requests, request_rx) = sync_channel(CHANNEL_CAPACITY);
-    let (events, event_rx) = sync_channel(CHANNEL_CAPACITY);
-    (
-        ProbeService::new(requests, event_rx),
-        Bridge::new(request_rx, events),
-    )
+impl Service for ProbeService {
+    fn name(&self) -> &'static str {
+        "editor-probe-capture"
+    }
+    fn methods(&self, db: &mut SchemaDb) -> Vec<Method> {
+        vec![
+            Method::new::<RenderProbeRecaptureParams>(
+                db,
+                "render.probe.recapture",
+                "Queue derived reflection-probe captures (not available yet).",
+            ),
+            Method::new::<RenderProbeCancelParams>(
+                db,
+                "render.probe.cancel",
+                "Cancel this session's reflection-probe capture job (there are none yet).",
+            ),
+            Method::new::<RenderProbesQueryParams>(
+                db,
+                "render.probes.query",
+                "Read the Scene's probe capabilities and capture receipts (not available yet).",
+            )
+            .read_only(),
+        ]
+    }
+    fn call(
+        &mut self,
+        _: &mut Cx<'_>,
+        method: &str,
+        _: Value,
+    ) -> Result<Value, Vec<Diagnostic>> {
+        match method {
+            "render.probe.recapture" | "render.probes.query" => {
+                Err(vec![Diagnostic::error(crate::codes::RENDER, NOT_AVAILABLE)])
+            }
+            "render.probe.cancel" => Err(vec![crate::invalid(
+                "No reflection probe capture is running: capture is not available yet",
+            )]),
+            _ => Err(vec![crate::invalid("Unknown probe capture method")]),
+        }
+    }
 }
-
-#[cfg(test)]
-mod tests;

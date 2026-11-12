@@ -219,7 +219,7 @@ pub(super) fn sync(s: &mut Studio, domain: &'static str) {
 pub(super) unsafe fn draw(
     s: &mut Studio,
     target: &mut super::layer::Layer,
-    renderer: &ara_render::Renderer,
+    renderer: &crate::studio::device::SceneDevice,
     layer: super::present::Target,
     extent: [u32; 2],
     scale: f32,

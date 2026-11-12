@@ -1,15 +1,13 @@
-//! The Scene view's Renderlab frame (preview). With `ARA_SCENE_RENDERER=renderlab` the Scene
-//! view also draws the frame it already extracts through an engine hosted in the editor
-//! process (`ara-renderlab`'s bridge, the same one the player's presenter uses), and the
-//! compositor shows that image in place of `ara-render`'s colour. `ara-render` still renders the
-//! frame beside it: it keeps the entity-ID image, picking, outlines and the frame tags working
-//! until Renderlab's id output replaces them. Off by default.
+//! The Scene view's Renderlab frame. The Scene view draws the frame the editor extracts through
+//! an engine hosted in the editor process (`ara-renderlab`'s bridge, the same one the player's
+//! presenter uses), and the compositor shows that image. It is the only renderer: ids, picking
+//! and outlines come from the frame's own CPU ids (`ids`) until Renderlab delivers its own.
 use super::ids::{IdHost, Ids};
 use anyhow::{Context, Result};
 use ara_gpu::{GpuDevice, Image};
 use ara_render_fidelity::environment::FrameEnvironment;
 use ara_renderlab::{Options, PathChoice, Renderlab};
-use ara_runtime::extract::{CameraView, RenderFrame};
+use ara_runtime::extract::RenderFrame;
 use ara_runtime_render::{
     ExternalRenderer, ExternalView, PresentationImage, fidelity::native::Content,
 };
@@ -20,12 +18,6 @@ pub(super) type Revision = Option<(u64, u64, u64, u64)>;
 
 /// Distance in metres to which terrain layers use their detail maps: the High preset's.
 const TERRAIN_DETAIL: f32 = 150.;
-
-/// Whether the Scene view draws with Renderlab: always, unless `ARA_SCENE_RENDERER=raster` keeps
-/// the old raster view while it still exists.
-pub(super) fn requested() -> bool {
-    std::env::var("ARA_SCENE_RENDERER").map_or(true, |value| value != "raster")
-}
 
 /// The editor-hosted Renderlab engine and the last image it drew.
 pub(super) struct RenderlabScene {
@@ -130,56 +122,5 @@ impl RenderlabScene {
         }
         self.ids.release(gpu)?;
         self.engine.release(gpu)
-    }
-}
-
-/// The view `camera` (the editor's look-at camera) as the extracted frame carries it.
-pub(super) fn camera_view(camera: &ara_render::scene::CameraSpec) -> Option<CameraView> {
-    match camera {
-        ara_render::scene::CameraSpec::LookAt {
-            position,
-            target,
-            vertical_fov,
-        } => Some(CameraView {
-            position: position.to_array(),
-            forward: (*target - *position).try_normalize()?.to_array(),
-            fov: vertical_fov.to_degrees(),
-        }),
-        // Orthographic and framing requests have no Renderlab camera yet.
-        _ => None,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use glam::Vec3;
-
-    /// The editor's look-at camera becomes the extracted frame's camera: eye, unit direction
-    /// and the field of view in degrees; the orthographic requests have none.
-    #[test]
-    fn a_look_at_camera_becomes_a_frame_camera() {
-        let spec = ara_render::scene::CameraSpec::LookAt {
-            position: Vec3::new(1., 2., 3.),
-            target: Vec3::new(1., 2., -7.),
-            vertical_fov: 60f32.to_radians(),
-        };
-        let view = camera_view(&spec).expect("a perspective camera");
-        assert_eq!(view.position, [1., 2., 3.]);
-        assert_eq!(view.forward, [0., 0., -1.]);
-        assert!((view.fov - 60.).abs() < 1e-4);
-        let ortho = ara_render::scene::CameraSpec::OrthographicLookAt {
-            position: Vec3::ZERO,
-            target: Vec3::NEG_Z,
-            vertical_size: 10.,
-        };
-        assert!(camera_view(&ortho).is_none());
-        // An eye on its target has no direction.
-        let degenerate = ara_render::scene::CameraSpec::LookAt {
-            position: Vec3::ONE,
-            target: Vec3::ONE,
-            vertical_fov: 1.,
-        };
-        assert!(camera_view(&degenerate).is_none());
     }
 }

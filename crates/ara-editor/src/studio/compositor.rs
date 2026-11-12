@@ -21,8 +21,6 @@ pub(super) struct Compositor {
     ui: NativeUi,
     paint: UiRenderer,
     outlines: Outlines,
-    /// How the overlays read object ids (`ARA_SCENE_IDS`).
-    ids: overlay::IdMode,
     /// Debug (`ARA_SCENE_DUMP=<file.png>`): each composed Scene frame, with its overlays,
     /// is read back and written there. The window captures never include the overlays.
     dump: Option<std::path::PathBuf>,
@@ -37,7 +35,7 @@ impl Compositor {
     /// Release Scene images before reuse, waiting at most 1 ms for the whole gate.
     /// A persistent stall skips Scene passes and logs once while events keep pumping.
     #[cfg(any(windows, target_os = "linux"))]
-    pub fn scene_ready(&mut self, renderer: &ara_render::Renderer) -> Result<bool> {
+    pub fn scene_ready(&mut self, renderer: &super::device::SceneDevice) -> Result<bool> {
         let started = std::time::Instant::now();
         let budget = std::time::Duration::from_millis(1);
         let mut ready = self.ui.wait_previous_for(budget)?;
@@ -66,7 +64,7 @@ impl Compositor {
     /// An adapter on the renderer's GPU, themed for `light`.
     /// # Safety
     /// The renderer outlives the compositor; one thread submits for both.
-    pub unsafe fn new(renderer: &ara_render::Renderer, light: bool) -> Result<Self> {
+    pub unsafe fn new(renderer: &super::device::SceneDevice, light: bool) -> Result<Self> {
         // SAFETY: forwarded caller contract.
         let mut ui = unsafe { NativeUi::new(ui_device(renderer.gpu()))? };
         // Submissions return at once; the next frame checks the last one finished (the
@@ -87,7 +85,6 @@ impl Compositor {
             ui,
             paint,
             outlines,
-            ids: overlay::IdMode::from_env(),
             dump: std::env::var_os("ARA_SCENE_DUMP").map(Into::into),
             sheet: sheet(light)?,
             light,
@@ -113,13 +110,11 @@ impl Compositor {
         &self.outlines.channels
     }
 
-    /// The renderer entity the click at physical pixel `at` lands on, through the
-    /// channel map (a model's parts and a terrain's tiles pick their entity). `host`
-    /// answers from the Scene's own ids (Renderlab's frame); without one the click reads
-    /// the id source the overlays read: ara-render's, or the repacked debug image.
+    /// The entity the click at physical pixel `at` lands on, through the channel map (a model's
+    /// parts and a terrain's tiles pick their entity). `host` answers from the Scene's own ids
+    /// (Renderlab's frame); without one nothing is drawn yet and the click lands on nothing.
     pub fn pick(
         &mut self,
-        renderer: &mut ara_render::Renderer,
         host: Option<IdHost<'_>>,
         view: &DocumentView,
         revision: u64,
@@ -128,44 +123,27 @@ impl Compositor {
         self.outlines.channels.update(
             crate::world::EditWorldView::entities(view),
             revision,
-            host.as_ref()
-                .map_or_else(|| renderer.entities(), |host| host.entities),
+            host.as_ref().map_or(&[], |host| host.entities),
         );
         let id = match host {
             Some(mut host) => hit_entity(host.id_at(at)?, host.entities),
-            None if self.ids == overlay::IdMode::Repacked => {
-                hit_entity(self.repacked_hit(at)?, renderer.entities())
-            }
-            None => renderer.entity_at(at).map_err(|e| anyhow::anyhow!("{e}"))?,
+            None => None,
         };
         Ok(id
             .and_then(|id| self.outlines.channels.target_of(id))
             .map(str::to_owned))
     }
 
-    /// The hit under `at` in the repacked debug image the overlays just read.
-    #[cfg(target_os = "macos")]
-    fn repacked_hit(&mut self, at: [u32; 2]) -> Result<IdHit> {
-        crate::gpu::PackedPick(|at| self.ui.repacked_texel(at)).id_at(at)
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    fn repacked_hit(&mut self, _at: [u32; 2]) -> Result<IdHit> {
-        anyhow::bail!("ARA_SCENE_IDS=repacked is only available on Metal")
-    }
-
     /// Draws the Scene's image on screen and the overlays for `state` at `extent` physical
     /// pixels (`scale` per logical px), and presents it into `layer`. `state` carries the
-    /// camera and `gizmo` the drag pose of the frame on screen, so overlays never drift from
-    /// a lagging image. A raster Scene draws selection outlines itself: changed outlines go
-    /// to the renderer and `scene` redraws. False when nothing reached the screen (the last
+    /// camera and `gizmo` the drag pose of the frame on screen. False when nothing reached the screen (the last
     /// frame is still on the GPU, or the present was skipped): call again on a later pass.
     /// # Safety
     /// `layer` is the Scene view's live native layer (`present::Target`).
     #[allow(clippy::too_many_arguments)]
     pub unsafe fn frame(
         &mut self,
-        renderer: &mut ara_render::Renderer,
+        renderer: &mut super::device::SceneDevice,
         scene: &mut crate::studio::viewport::SceneView,
         view: &DocumentView,
         state: &EditorState,
@@ -189,9 +167,8 @@ impl Compositor {
         // The image on screen: the last completed frame of an asynchronous Scene, or the
         // published presentation of a synchronous one.
         scene
-            .attach(&mut self.ui, renderer, state.quality)
+            .attach(&mut self.ui, renderer)
             .map_err(|e| anyhow::anyhow!("{e}"))?;
-        self.outlines.in_scene = self.ids.outlines_in_scene(scene.draws_outlines());
         let logical = [extent[0] as f32 / scale, extent[1] as f32 / scale];
         let rect = Box2 {
             x: 0.0,
@@ -203,8 +180,7 @@ impl Compositor {
             view,
             state,
             rect,
-            scene.entities(renderer),
-            renderer.size()[0],
+            scene.entities(),
             changed,
             gizmo,
             &mut self.outlines,
@@ -212,21 +188,16 @@ impl Compositor {
             &self.sheet,
         )
         .map_err(|e| anyhow::anyhow!("{e}"))?;
-        if let Some(outlines) = self.outlines.take_scene_outlines() {
-            renderer.set_outlines(outlines);
-            scene.redraw();
-        }
         self.outlines
             .upload(&mut self.paint, &mut self.ui)
             .map_err(|e| anyhow::anyhow!("{e}"))?;
         self.ui.set_dpi(scale)?;
-        // A Renderlab Scene reads the packed ids rasterised beside its image.
-        let source = if scene.id_host().is_some() {
-            crate::gpu::IdSource::Packed(overlay::ENTITY_IMAGE)
-        } else {
-            self.ids.source()
-        };
-        self.ui.overlays(rect, source, overlays);
+        // The overlays read the packed ids rasterised beside Renderlab's image.
+        self.ui.overlays(
+            rect,
+            crate::gpu::IdSource::Packed(overlay::ENTITY_IMAGE),
+            overlays,
+        );
         let list = DisplayList {
             commands: vec![Draw::Image {
                 node: 1,
@@ -236,14 +207,9 @@ impl Compositor {
             }],
             glyphs: Vec::new(),
         };
-        // Metal orders a synchronous frame after the renderer on its adapter's queue.
-        // An asynchronous Scene shows a completed pair instead; waiting for its pending
-        // frame would stall the UI while it converges. The Vulkan host gates the pair's
-        // reuse separately, before the renderer starts the next pass.
+        // Metal orders the UI frame after Renderlab's last submission on the adapter's queue.
         #[cfg(target_os = "macos")]
-        if !renderer.scene_frame_async() {
-            self.ui.order_after(renderer.gpu());
-        }
+        self.ui.order_after(renderer.gpu());
         let size = [
             logical[0].round().max(1.0) as u32,
             logical[1].round().max(1.0) as u32,
@@ -279,7 +245,7 @@ impl Compositor {
     }
 
     /// Releases the layer presentation; call before the window closes.
-    pub fn retire(&mut self, renderer: &ara_render::Renderer) {
+    pub fn retire(&mut self, renderer: &super::device::SceneDevice) {
         let _ = self.ui.wait_idle(ui_device(renderer.gpu()));
         if let Some((mut present, _)) = self.present.take() {
             // SAFETY: the adapter is idle and the presentation is not used again.
@@ -322,7 +288,7 @@ mod tests {
     fn scene_recycling_waits_for_the_compositor_read() -> Result<()> {
         let cache = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../target/studio-compositor-handoff");
-        let mut renderer = ara_render::Renderer::new_raster(
+        let mut renderer = super::device::SceneDevice::new_raster(
             Scene {
                 meshes: Vec::new(),
                 materials: vec![Material {

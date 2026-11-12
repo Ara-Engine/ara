@@ -4,7 +4,7 @@
 //! finish on a worker (`crate::capture::Work`). `--screenshot` takes the `window` picture
 //! through the same code ([`screenshot`]).
 use ara_frame::capture::{CaptureRequest, ViewMode};
-use ara_render::Renderer;
+use super::device::SceneDevice;
 use serde_json::{Value, json};
 use stillkit::el::Runtime;
 
@@ -16,7 +16,7 @@ use crate::world::EditWorldView as _;
 /// Serves the next queued capture job, if there is one. `scene` is the renderer and the
 /// Scene view it presents, for viewport captures; none while the Scene is not shown, which
 /// fails a `viewport` capture with a message saying so.
-pub(super) fn serve(rt: &mut Runtime<Studio>, scene: Option<(&mut Renderer, &SceneView)>) {
+pub(super) fn serve(rt: &mut Runtime<Studio>, scene: Option<(&mut SceneDevice, &SceneView)>) {
     let Ok(task) = rt.state().editor.captures.try_recv() else {
         return;
     };
@@ -29,7 +29,7 @@ pub(super) fn serve(rt: &mut Runtime<Studio>, scene: Option<(&mut Renderer, &Sce
 fn prepare(
     task: &CaptureTask,
     rt: &mut Runtime<Studio>,
-    scene: Option<(&mut Renderer, &SceneView)>,
+    scene: Option<(&mut SceneDevice, &SceneView)>,
 ) -> anyhow::Result<Work> {
     let editor = &rt.state().editor;
     let target = task.params.target.as_deref().unwrap_or("viewport");
@@ -83,7 +83,7 @@ fn not_shown() -> anyhow::Error {
 }
 
 /// The Scene capture the editor takes: its camera at the renderer's size, with `marks`.
-fn request(editor: &crate::Editor, renderer: &Renderer, marks: Option<usize>) -> CaptureRequest {
+fn request(editor: &crate::Editor, renderer: &SceneDevice, marks: Option<usize>) -> CaptureRequest {
     CaptureRequest {
         camera: editor.state.camera.spec(),
         size: renderer.size(),
@@ -102,7 +102,7 @@ fn request(editor: &crate::Editor, renderer: &Renderer, marks: Option<usize>) ->
 /// under the UI. The report is the window's layout.
 fn window(
     rt: &mut Runtime<Studio>,
-    scene: Option<(&mut Renderer, &SceneView)>,
+    scene: Option<(&mut SceneDevice, &SceneView)>,
 ) -> anyhow::Result<(image::RgbaImage, Value)> {
     use image::imageops::{FilterType, overlay, replace, resize};
     let (renderer, scene) = scene.ok_or_else(not_shown)?;
@@ -141,7 +141,7 @@ fn window(
 /// project-folder sandbox that gates an agent's output path.
 pub(super) fn screenshot(
     rt: &mut Runtime<Studio>,
-    scene: Option<(&mut Renderer, &SceneView)>,
+    scene: Option<(&mut SceneDevice, &SceneView)>,
     dir: &std::path::Path,
 ) -> anyhow::Result<std::path::PathBuf> {
     let (image, report) = window(rt, scene)?;

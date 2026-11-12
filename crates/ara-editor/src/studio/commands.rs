@@ -689,7 +689,7 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             }
         }
         id if id.starts_with("view.debug.") => {
-            type Flip = fn(&mut ara_render::RenderDebug);
+            type Flip = fn(&mut ara_play::RenderDebug);
             let flip: Option<Flip> = match id.trim_start_matches("view.debug.") {
                 "ambient_occlusion" => Some(|d| d.ambient_occlusion = !d.ambient_occlusion),
                 "shadows" => Some(|d| d.shadows = !d.shadows),
@@ -702,7 +702,7 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                 "temporal_jitter" => Some(|d| d.temporal_jitter = !d.temporal_jitter),
                 "full_resolution" => Some(|d| d.full_resolution = !d.full_resolution),
                 "reflections" => Some(|d| {
-                    use ara_render::ReflectionView as R;
+                    use ara_play::ReflectionView as R;
                     d.reflections = if d.reflections == R::Reflections {
                         R::Lit
                     } else {
@@ -710,14 +710,14 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                     }
                 }),
                 "reflection_sources" => Some(|d| {
-                    use ara_render::ReflectionView as R;
+                    use ara_play::ReflectionView as R;
                     d.reflections = if d.reflections == R::Sources {
                         R::Lit
                     } else {
                         R::Sources
                     }
                 }),
-                "reset" => Some(|d| *d = ara_render::RenderDebug::default()),
+                "reset" => Some(|d| *d = ara_play::RenderDebug::default()),
                 _ => None,
             };
             match flip {
@@ -1781,19 +1781,15 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             }
         }
         // Lighting: reflection probe captures, and the volumes' look presets.
-        "lighting.probe.recapture" => {
-            let entity = match target {
-                Target::Entity(entity) => Some(entity.as_str()),
-                _ => None,
-            };
-            super::lighting::recapture(s, entity)
-        }
-        "lighting.probe.cancel" => super::lighting::cancel(s),
-        "lighting.probe.refresh" => super::lighting::refresh_probes(s),
-        "lighting.probe.copy" => match target.entity(&s.editor.state).map(str::to_owned) {
-            Some(entity) => super::lighting::copy_probe(s, &entity),
-            None => Err("Select a reflection probe".into()),
-        },
+        // Reflection probe capture has no renderer to run on yet.
+        "lighting.probe.recapture"
+        | "lighting.probe.cancel"
+        | "lighting.probe.refresh"
+        | "lighting.probe.copy" => Err(format!(
+            "Reflection probe capture: {}",
+            super::unavailable::SOON
+        )
+        .into()),
         // History pages through older changes, 300 at a time.
         "history.older" => {
             let total = s.editor.host.store().history().len();
@@ -2253,12 +2249,10 @@ pub(super) fn applies(s: &Studio, id: &str, target: &Target) -> bool {
             .is_some_and(|id| crate::prefab::instance(e.host.store(), &e.state.doc, id).is_some())
     };
     match id {
-        "lighting.probe.recapture" | "lighting.probe.refresh" | "lighting.probe.copy" => {
-            record("ReflectionProbe")
-        }
+        "lighting.probe.recapture" | "lighting.probe.refresh" | "lighting.probe.copy" => false,
+        "lighting.probe.cancel" => false,
         "view.camera.pilot" => record("Camera"),
         "assets.set_main" => matches!(target, Target::Asset(path) if path.ends_with(".scene")),
-        "lighting.probe.cancel" => super::lighting::capturing(s),
         "lighting.inspect" => [
             "Light",
             "ReflectionProbe",

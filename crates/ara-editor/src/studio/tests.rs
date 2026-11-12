@@ -5134,27 +5134,8 @@ fn a_wayland_layer_presents_and_resizes() -> anyhow::Result<()> {
         matches!(target, super::present::Target::Wayland { .. }),
         "{target:?}"
     );
-    let scene = rt.touch(|s| -> anyhow::Result<_> {
-        let view = s.editor.view()?;
-        view.scene(
-            s.editor.host.root(),
-            &s.editor.state,
-            None,
-            &mut s.editor.models,
-        )
-    })?;
     let cache = rt.state().editor.host.root().join(".ara/gpu");
-    let renderer = crate::studio::viewport::prepare_renderer(
-        scene,
-        [64, 64],
-        super::present_extensions(),
-        cache,
-        false,
-        Default::default(),
-        |_| Ok(true),
-    )
-    .map_err(|e| anyhow::anyhow!("{e}"))?
-    .context("the renderer started")?;
+    let renderer = super::device::SceneDevice::new(&super::present_extensions(), cache, [64, 64])?;
     // SAFETY: the renderer outlives the layer (retired below); this thread submits.
     let mut layer = unsafe { super::layer::Layer::new(&renderer, [])? };
     let list = ara_ui::paint::DisplayList {
@@ -5638,53 +5619,18 @@ fn recapturing_probes_says_it_is_not_available_and_starts_no_job() {
     press(&mut rt, "lighting/probe/recapture");
     rt.update(|s| super::commands::run(s, "lighting.probe.recapture", &Target::None));
     settle(&mut rt);
-    assert!(!super::lighting::capturing(rt.state()), "no capture job");
-}
-
-#[test]
-fn a_placeholder_probe_report_is_not_a_quality_problem() {
-    let mut rt = open();
-    let report = |version: u64| -> ara_runtime_render::probes::ProbeSnapshot {
-        serde_json::from_value(json!({"version":version,"sceneRevision":0,"probes":[],"capabilities":{
-            "reflectionProbes":false,"giDiffuse":false,"overdraw":false,
-            "reasons":{"reflectionProbes":"The Scene renderer has not published a probe snapshot"}}}))
-        .unwrap()
-    };
-    rt.update(|s| s.local.probe_status = Some(report(0)));
-    assert_eq!(super::lighting::probes_unavailable(rt.state()), None);
-    rt.update(|s| s.local.probe_status = Some(report(3)));
-    assert_eq!(
-        super::lighting::probes_unavailable(rt.state()),
-        Some("The Scene renderer has not published a probe snapshot")
-    );
 }
 
 #[test]
 fn agents_capture_the_scene_with_entity_marks_on_this_gpu() {
-    use crate::world::EditWorldView as _;
     let mut rt = open();
     let root = rt.state().editor.host.root().to_owned();
-    let scene = rt.touch(|s| {
-        let view = s.editor.view().unwrap();
-        view.scene(
-            s.editor.host.root(),
-            &s.editor.state,
-            None,
-            &mut s.editor.models,
-        )
-        .unwrap()
-    });
-    let mut renderer = crate::studio::viewport::prepare_renderer(
-        scene,
-        [320, 240],
-        super::present_extensions(),
+    let mut renderer = super::device::SceneDevice::new(
+        &super::present_extensions(),
         root.join(".ara/gpu"),
-        false,
-        Default::default(),
-        |_| Ok(true),
+        [320, 240],
     )
-    .unwrap()
-    .expect("the renderer starts on this GPU");
+    .expect("the GPU device starts");
     let mut view = crate::studio::viewport::SceneView::default();
     // The Scene draws through Renderlab, as the live view does, before an agent reads it.
     rt.touch(|s| {
@@ -5727,33 +5673,15 @@ fn agents_capture_the_scene_with_entity_marks_on_this_gpu() {
 /// and the chrome over it is the UI's.
 #[test]
 fn agents_capture_the_window_with_the_scene_in_it_on_this_gpu() {
-    use crate::world::EditWorldView as _;
     let mut rt = open();
     settle(&mut rt);
     let root = rt.state().editor.host.root().to_owned();
-    let scene = rt.touch(|s| {
-        s.editor
-            .view()
-            .unwrap()
-            .scene(
-                s.editor.host.root(),
-                &s.editor.state,
-                None,
-                &mut s.editor.models,
-            )
-            .unwrap()
-    });
-    let mut renderer = crate::studio::viewport::prepare_renderer(
-        scene,
-        [320, 240],
-        super::present_extensions(),
+    let mut renderer = super::device::SceneDevice::new(
+        &super::present_extensions(),
         root.join(".ara/gpu"),
-        false,
-        Default::default(),
-        |_| Ok(true),
+        [320, 240],
     )
-    .unwrap()
-    .expect("the renderer starts on this GPU");
+    .expect("the GPU device starts");
     let mut view = crate::studio::viewport::SceneView::default();
     rt.touch(|s| {
         let document = s.editor.view().unwrap();

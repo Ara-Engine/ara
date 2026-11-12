@@ -57,13 +57,10 @@ are served by the studio's loop (`studio/capture.rs`, written by `capture::Work`
 worker); probe jobs (`render.probe.*`) by `studio/probes.rs`.
 
 Polish assets: Lucide SVGs (ISC), Inter, JetBrains Mono (OFL; THIRD_PARTY_NOTICES).
-Raster IDs drive picking and hover through `world/channels.rs` (channel → entity; terrain is
-one object). A raster Scene draws selection outlines into its frames (`Outlines::in_scene`);
-overlays draw with the shown frame's camera and drag pose (`SceneView::shown_frame`).
-The overlays read ids through `gpu::IdSource` (`overlay::IdMode`, debug switch
-`ARA_SCENE_IDS`: unset = today; `direct` = ara-render ids with shader outlines, the control;
-`repacked` = the same ids repacked to Renderlab's packed RGBA8 form, Metal only): the two
-modes' Scene frames must match pixel for pixel. `ARA_SCENE_DUMP=<file.png>` writes each composed
+The Scene's ids (packed RGBA8, rasterised from the frame beside Renderlab's image) drive picking and
+hover through `world/channels.rs` (channel → entity; terrain is one object); the overlays read
+them through `gpu::IdSource::Packed` and draw the selection outlines from them.
+`ARA_SCENE_DUMP=<file.png>` writes each composed
 Scene frame (image + overlays, the compositor's target) to a PNG: window captures and `--headless`
 never include the overlays, so use it to see them.
 `ARA_SCENE_RENDERER=renderlab` (off by default) draws the Scene with an engine hosted in the

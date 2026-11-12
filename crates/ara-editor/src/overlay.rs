@@ -20,44 +20,6 @@ pub const ENTITY_IMAGE: u32 = 0x7fff_0001;
 /// Resource handle of the outline group table (`NativeUi::outline_groups`).
 pub const OUTLINE_GROUPS: u32 = 0x7fff_0002;
 
-/// How the Scene overlays get object ids: the debug switch `ARA_SCENE_IDS`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum IdMode {
-    /// The default: ara-render's id image, and a raster Scene draws its own outlines.
-    Scene,
-    /// `direct`: ara-render's id image, with the outlines drawn by the overlay shader
-    /// (what a Renderlab Scene does): the control for `Repacked`.
-    Direct,
-    /// `repacked`: ara-render's id image repacked on the GPU into the packed form
-    /// Renderlab delivers, so grid, hover and outlines run the packed path (Metal only).
-    Repacked,
-}
-
-impl IdMode {
-    /// The mode `ARA_SCENE_IDS` names (`direct`, `repacked`); anything else is `Scene`.
-    pub fn from_env() -> Self {
-        match std::env::var("ARA_SCENE_IDS").as_deref() {
-            Ok("direct") => Self::Direct,
-            Ok("repacked") => Self::Repacked,
-            _ => Self::Scene,
-        }
-    }
-
-    /// The id source the overlays read.
-    pub fn source(self) -> crate::gpu::IdSource {
-        match self {
-            Self::Scene | Self::Direct => crate::gpu::IdSource::Direct(ENTITY_IMAGE),
-            Self::Repacked => crate::gpu::IdSource::Repacked(ENTITY_IMAGE),
-        }
-    }
-
-    /// Whether the raster Scene draws the selection outlines into its frames
-    /// ([`Outlines::in_scene`]) rather than the overlay shader.
-    pub fn outlines_in_scene(self, raster: bool) -> bool {
-        raster && self == Self::Scene
-    }
-}
-
 /// Selection, review and hover outlines by entity, not by renderer channel: an entity
 /// drawn as several instances (a terrain's chunks, a model's parts) outlines as one
 /// shape, and a terrain chunk hovers and outlines as its whole terrain. Holds the
@@ -77,15 +39,6 @@ pub struct Outlines {
     /// Where the pointer rests over the Scene, normalised: the hovered object outlines.
     /// Only the capture switch `ARA_SCENE_HOVER=u,v` sets it today.
     pub hover: Option<[f32; 2]>,
-    /// Each outlined channel (index + 1) and its colour group, for the renderer.
-    channel_groups: Vec<(u32, u8)>,
-    /// Whether the Scene frame draws the outlines itself (a raster Scene: whole
-    /// silhouettes, hidden parts faint, `ara_render::Outlines`). Otherwise the UI
-    /// overlay outlines the visible pixels of the entity-ID image.
-    pub in_scene: bool,
-    /// The outline key last handed to the renderer, and outlines waiting for it.
-    sent: Option<u64>,
-    pending: Option<ara_render::Outlines>,
 }
 impl Outlines {
     /// Refresh the channel map and group table; the outline overlays, one per colour group.
@@ -123,7 +76,6 @@ impl Outlines {
             .map(|a| selection && state.selection.contains(a))
             .collect();
         let mut groups = vec![("accent".to_owned(), false)];
-        self.channel_groups.clear();
         // Texel 0 is the background; channel `n` is texel `n + 1`, as the renderer writes.
         let width = 4096usize;
         let height = (entities.len() + 1).div_ceil(width).max(1);
@@ -150,7 +102,6 @@ impl Outlines {
             };
             if colour > 0 {
                 groups[colour - 1].1 = true;
-                self.channel_groups.push((n as u32 + 1, colour as u8));
             }
             // Hover groups are 16-bit: a scene past 65 535 entities hovers single channels.
             let hover = channels.targets[n]
@@ -170,11 +121,6 @@ impl Outlines {
             height: height as u32,
             rgba,
         });
-    }
-    /// Outlines for the Scene frame since the last call (`in_scene`): hand them to
-    /// `Renderer::set_outlines` and render a frame to show them.
-    pub fn take_scene_outlines(&mut self) -> Option<ara_render::Outlines> {
-        self.pending.take()
     }
     /// Upload a rebuilt group table and point the outline shader at it.
     pub fn upload(
@@ -608,7 +554,6 @@ pub fn build(
     state: &EditorState,
     rect: Box2,
     entities: &[(u64, String)],
-    output_width: u32,
     changed: &std::collections::BTreeMap<u64, &str>,
     gizmo: GizmoState,
     outlines: &mut Outlines,
@@ -665,37 +610,18 @@ pub fn build(
         changed,
         show("viewport.outline"),
     );
-    if outlines.in_scene {
-        // The Scene frame draws them: one logical pixel each side, in display pixels.
-        if outlines.sent != Some(outlines.key) {
-            outlines.sent = Some(outlines.key);
-            let colours = outlines
-                .groups
-                .iter()
-                .map(|(token, _)| color(token, 1.))
-                .collect::<ara_ui::Result<Vec<_>>>()?;
-            outlines.pending = Some(ara_render::Outlines {
-                channels: outlines.channel_groups.clone(),
-                colours,
-                width: output_width as f32 / rect.w.max(1.),
-                hidden: 0.35,
+    if let Some(uv) = outlines.hover {
+        overlays.push(Overlay::Hover {
+            uv,
+            color: color("accent", 0.35)?,
+        });
+    }
+    for (n, (token, used)) in outlines.groups.iter().enumerate() {
+        if *used {
+            overlays.push(Overlay::Outline {
+                index: n as u32 + 1,
+                color: color(token, 1.)?,
             });
-        }
-    } else {
-        outlines.sent = None;
-        if let Some(uv) = outlines.hover {
-            overlays.push(Overlay::Hover {
-                uv,
-                color: color("accent", 0.35)?,
-            });
-        }
-        for (n, (token, used)) in outlines.groups.iter().enumerate() {
-            if *used {
-                overlays.push(Overlay::Outline {
-                    index: n as u32 + 1,
-                    color: color(token, 1.)?,
-                });
-            }
         }
     }
     // Component gizmos read their own switches (`viewport.gizmos`, `viewport.icons`...).
