@@ -64,17 +64,17 @@ struct Target {
 }
 
 impl Ids {
-    /// Brings the channels up to `frame` seen at `size`, and the texels to `delivered` (the
+    /// Brings the channels up to those of a frame (`entities`) seen at `size`, and the texels to `delivered` (the
     /// engine's `id_texels`, when it has them): uploads them when they changed. Uploads outside
     /// any deferred completion scope: it waits for the copy.
     pub(super) fn update(
         &mut self,
         gpu: &mut GpuDevice,
-        frame: &RenderFrame,
+        entities: Vec<(u64, String)>,
         size: [u32; 2],
         delivered: Option<Vec<u8>>,
     ) -> Result<()> {
-        self.entities = entities(frame);
+        self.entities = entities;
         self.ready = true;
         let delivered = delivered.filter(|t| t.len() == size[0] as usize * size[1] as usize * 4);
         let Some(texels) = delivered else {
@@ -115,6 +115,7 @@ impl Ids {
             texels: &self.texels,
             size: self.size,
             front: None,
+            view: [0, 0],
         })
     }
 
@@ -199,9 +200,18 @@ pub(in crate::studio) struct IdHost<'a> {
     size: [u32; 2],
     /// The engine's own answer for the click, when it gave one (`ExternalRenderer::pick_id`).
     front: Option<u32>,
+    /// The size of the view a click's pixel is in, when it differs from the ids' (a resize since
+    /// the frame on screen was drawn): the pixel then names the same spot of the ids' image.
+    view: [u32; 2],
 }
 
 impl IdHost<'_> {
+    /// Reads clicks in a view of `size` pixels.
+    pub fn in_view(mut self, size: [u32; 2]) -> Self {
+        self.view = size;
+        self
+    }
+
     /// The click's answer from the engine's id pass: it sees through glass, which the
     /// opaque ids the overlays read do not.
     pub fn with_front(mut self, front: Option<u32>) -> Self {
@@ -224,6 +234,16 @@ impl IdPick for IdHost<'_> {
             !self.texels.is_empty(),
             "the engine delivered no id texels and did not answer the click"
         );
+        // A click in a view of another size than the ids' (a resize since the frame on screen was
+        // drawn) lands on the same spot of the ids' image.
+        let [x, y] = if self.view[0] > 0 && self.view[1] > 0 && self.view != self.size {
+            [
+                (u64::from(x) * u64::from(self.size[0]) / u64::from(self.view[0])) as u32,
+                (u64::from(y) * u64::from(self.size[1]) / u64::from(self.view[1])) as u32,
+            ]
+        } else {
+            [x, y]
+        };
         anyhow::ensure!(
             x < self.size[0] && y < self.size[1],
             "pixel ({x}, {y}) is outside the {:?} id image",
@@ -292,6 +312,7 @@ mod tests {
             texels,
             size,
             front: None,
+            view: [0, 0],
         }
     }
 
@@ -311,6 +332,23 @@ mod tests {
         assert_eq!(host.id_at([0, 1]).unwrap(), IdHit::Nothing);
         assert_eq!(host.id_at([1, 1]).unwrap(), IdHit::Unselectable);
         assert!(host.id_at([2, 0]).is_err(), "outside the image");
+    }
+
+    /// A click in a view that was resized since the frame was drawn reads the texel of the same
+    /// spot, not the pixel number: the new view is twice the width and height here.
+    #[test]
+    fn a_click_in_a_resized_view_reads_the_same_spot() {
+        let texels = [
+            1, 0, 0, 0, 2, 0, 0, 0, // row 0: ids 1, 2
+            3, 0, 0, 0, 4, 0, 0, 0, // row 1: ids 3, 4
+        ];
+        let mut host = host(&texels, [2, 2]).in_view([4, 4]);
+        assert_eq!(host.id_at([0, 0]).unwrap(), IdHit::Id(1));
+        assert_eq!(host.id_at([3, 0]).unwrap(), IdHit::Id(2));
+        assert_eq!(host.id_at([1, 3]).unwrap(), IdHit::Id(3));
+        assert_eq!(host.id_at([3, 3]).unwrap(), IdHit::Id(4));
+        // Pixels the ids' own size knows are read as they were.
+        assert_eq!(host.id_at([2, 2]).unwrap(), IdHit::Id(4));
     }
 
     /// The engine's answer for a click wins over the texels; without either, the click errors

@@ -155,4 +155,21 @@ impl ExternalRenderer for Renderlab {
     fn pick_id(&mut self, pixel: [u32; 2]) -> Result<Option<u32>> {
         self.bridge.pick_id(pixel)
     }
+
+    // Apple's engine draws on the presenter's own device and keeps the blocking `render`.
+    #[cfg(not(target_vendor = "apple"))]
+    fn begin(&mut self, gpu: &mut GpuDevice, view: &ExternalView<'_>) -> Result<bool> {
+        self.bridge.begin(gpu, view)?;
+        Ok(true)
+    }
+
+    #[cfg(not(target_vendor = "apple"))]
+    fn in_flight(&self) -> bool {
+        self.bridge.in_flight()
+    }
+
+    #[cfg(not(target_vendor = "apple"))]
+    fn finish(&mut self, gpu: &mut GpuDevice) -> Result<Option<ExternalFrame>> {
+        self.bridge.finish(gpu)
+    }
 }

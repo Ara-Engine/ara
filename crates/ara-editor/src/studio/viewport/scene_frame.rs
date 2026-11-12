@@ -23,6 +23,7 @@ impl SceneView {
         view: &crate::world::DocumentView,
     ) -> ara_ui::Result<()> {
         ara_gpu::cpu_scope!("SceneView.render_scene_frame");
+        self.live_size = device.size();
         if self.preview_view.is_some() && self.preview_scene != editor.state.doc {
             // Drafts belong to the outgoing scene.
             self.set_preview_view(&editor.state.doc, None);
@@ -135,25 +136,26 @@ impl SceneView {
             self.scene_drawn = Some(drawn);
             self.scene_settle = SETTLE;
         }
-        // Renderlab refines its image over the passes after a change (its pipelines warm, its
-        // acceleration structures build, its history converges): draw a few, then rest.
-        if self.scene_settle > 0 {
+        // Renderlab refines its image over the frames after a change (its pipelines warm, its
+        // acceleration structures build, its history converges): draw a few, then rest. A frame
+        // is submitted without waiting for it (one in flight, the newest camera each time) and
+        // taken by the pass that finds it done, so the studio keeps running at its own rate.
+        self.poll_renderlab(device);
+        if self.scene_settle > 0 && !self.renderlab.as_ref().is_some_and(|r| r.in_flight()) {
             self.scene_settle -= 1;
-            self.draw_renderlab(device, editor);
-            // The still the capture routes read: Renderlab's image.
-            if let Some(output) = self.renderlab.as_ref().and_then(|scene| scene.image()) {
-                let size = device.size();
-                PresentationImage::publish(&mut self.published, device.gpu_mut(), output, size)?;
-            }
+            self.start_renderlab(device, editor);
+            // A frame that finished inside `start` (an engine that cannot split one) is the still
+            // the capture routes read.
+            self.publish_still(device)?;
         }
         self.active = self.presentable();
         Ok(())
     }
 
-    /// Draws the Scene's frame with the editor-hosted Renderlab engine from the editor's
-    /// camera; its image is what the compositor shows. A failure (the engine did not start, or
-    /// could not draw) is kept in `renderlab_error` for the Scene panel to show.
-    fn draw_renderlab(&mut self, device: &mut SceneDevice, editor: &Editor) {
+    /// Submits the Scene's frame to the editor-hosted Renderlab engine from the editor's camera;
+    /// [`Self::poll_renderlab`] takes its image. A failure (the engine did not start, or could not
+    /// draw) is kept in `renderlab_error` for the Scene panel to show.
+    fn start_renderlab(&mut self, device: &mut SceneDevice, editor: &Editor) {
         if self.renderlab_error.is_some() {
             return;
         }
@@ -180,18 +182,59 @@ impl SceneView {
             self.renderlab
                 .as_mut()
                 .ok_or_else(|| anyhow::anyhow!("no Renderlab engine"))?
-                .render(device.gpu_mut(), frame, &look, size, self.revision, || {
-                    content.content(frame, store.workspace(), store.schema())
-                })
+                .start(
+                    device.gpu_mut(),
+                    frame,
+                    &look,
+                    size,
+                    self.revision,
+                    editor.state.camera,
+                    || content.content(frame, store.workspace(), store.schema()),
+                )
         })();
         if let Err(error) = drawn {
-            eprintln!("Renderlab could not draw the Scene view: {error:#}");
-            self.renderlab_error = Some(format!("{error:#}"));
-            // A failed engine (a lost device, say) shows nothing: its last image goes, so the
-            // Scene is the error, not a stale or black frame.
-            if let Some(scene) = self.renderlab.take() {
-                let _ = scene.release(device.gpu_mut());
+            self.fail_renderlab(device, &error);
+        }
+    }
+
+    /// Takes the frame Renderlab finished, if it has one: never waits. A frame of another size
+    /// than the Scene view's now (a resize since it was submitted) is not shown.
+    fn poll_renderlab(&mut self, device: &mut SceneDevice) {
+        let Some(scene) = self.renderlab.as_mut() else {
+            return;
+        };
+        let size = device.size();
+        match scene.poll(device.gpu_mut(), size) {
+            Ok(true) => {
+                super::super::trace::log(|| "scene frame taken".into());
+                if let Err(error) = self.publish_still(device) {
+                    self.fail_renderlab(device, &error);
+                }
             }
+            Ok(false) => {}
+            Err(error) => self.fail_renderlab(device, &error),
+        }
+    }
+
+    /// The still the capture routes read: Renderlab's image, copied when it changes.
+    fn publish_still(&mut self, device: &mut SceneDevice) -> ara_ui::Result<()> {
+        if let Some(output) = self.renderlab.as_ref().and_then(|scene| scene.image())
+            && self.published_from != Some(output)
+        {
+            self.published_from = Some(output);
+            let size = device.size();
+            PresentationImage::publish(&mut self.published, device.gpu_mut(), output, size)?;
+        }
+        Ok(())
+    }
+
+    /// Reports a Renderlab failure once and releases the engine: a failed engine (a lost device,
+    /// say) shows nothing, so the Scene is the error, not a stale or black frame.
+    fn fail_renderlab(&mut self, device: &mut SceneDevice, error: &dyn std::fmt::Display) {
+        eprintln!("Renderlab could not draw the Scene view: {error:#}");
+        self.renderlab_error = Some(format!("{error:#}"));
+        if let Some(scene) = self.renderlab.take() {
+            let _ = scene.release(device.gpu_mut());
         }
     }
 }
