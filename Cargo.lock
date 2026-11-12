@@ -1848,6 +1848,7 @@ dependencies = [
  "glam 0.34.1",
  "image",
  "renderlab",
+ "serde_json",
  "wgpu",
 ]
 

@@ -28,10 +28,11 @@ pub(crate) struct Writer {
 
 impl Writer {
     fn view(&mut self, bytes: &[u8], target: Option<u32>) -> usize {
-        while self.bin.len() % 4 != 0 {
+        while !self.bin.len().is_multiple_of(4) {
             self.bin.push(0);
         }
-        let mut view = json!({"buffer": 0, "byteOffset": self.bin.len(), "byteLength": bytes.len()});
+        let mut view =
+            json!({"buffer": 0, "byteOffset": self.bin.len(), "byteLength": bytes.len()});
         if let Some(target) = target {
             view["target"] = json!(target);
         }
@@ -87,7 +88,13 @@ impl Writer {
     }
 
     /// Adds a mesh of one primitive, returning its index.
-    pub fn mesh(&mut self, name: &str, attributes: Value, indices: usize, material: usize) -> usize {
+    pub fn mesh(
+        &mut self,
+        name: &str,
+        attributes: Value,
+        indices: usize,
+        material: usize,
+    ) -> usize {
         self.meshes.push(json!({"name": name, "primitives": [{
             "attributes": attributes, "indices": indices, "material": material,
         }]}));
@@ -104,7 +111,8 @@ impl Writer {
     /// Adds an image file (relative to the glTF) and a texture over it.
     pub fn texture(&mut self, uri: &str, clamp: bool) -> usize {
         self.images.push(json!({"uri": uri}));
-        self.textures.push(json!({"source": self.images.len() - 1, "sampler": usize::from(clamp)}));
+        self.textures
+            .push(json!({"source": self.images.len() - 1, "sampler": usize::from(clamp)}));
         self.textures.len() - 1
     }
 
@@ -124,7 +132,7 @@ impl Writer {
 
     /// Writes `<stem>.gltf` and `<stem>.bin`.
     pub fn write(mut self, dir: &Path, stem: &str) -> Result<()> {
-        while self.bin.len() % 4 != 0 {
+        while !self.bin.len().is_multiple_of(4) {
             self.bin.push(0);
         }
         std::fs::write(dir.join(format!("{stem}.bin")), &self.bin)?;

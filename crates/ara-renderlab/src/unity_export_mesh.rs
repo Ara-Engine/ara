@@ -11,10 +11,13 @@ use ara_runtime::{
 };
 use serde_json::json;
 
-
 pub(crate) fn normalize(v: [f32; 3]) -> [f32; 3] {
     let l = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
-    if l.is_finite() && l > 1e-12 { v.map(|c| c / l) } else { [0., 1., 0.] }
+    if l.is_finite() && l > 1e-12 {
+        v.map(|c| c / l)
+    } else {
+        [0., 1., 0.]
+    }
 }
 
 /// `m` (column-major) applied to a point (`w` 1) or a direction (`w` 0).
@@ -66,10 +69,17 @@ impl Export {
         let skinned = draw.skin.is_some();
         let key = match &draw.geometry {
             Geometry::Shape { shape, size } => {
-                format!("shape:{}:{:?}:{material}", *shape as u8, size.map(f32::to_bits))
+                format!(
+                    "shape:{}:{:?}:{material}",
+                    *shape as u8,
+                    size.map(f32::to_bits)
+                )
             }
             Geometry::Model { model, primitive } if skinned => {
-                format!("skin:{:x}:{material}", draw.entity.wrapping_add(*primitive as u64))
+                format!(
+                    "skin:{:x}:{material}",
+                    draw.entity.wrapping_add(*primitive as u64)
+                )
             }
             Geometry::Model { model, primitive } => {
                 format!("model:{}:{primitive}:{material}", hex(&model.digest.0))
@@ -92,7 +102,12 @@ impl Export {
                     Some(range) => pose(&p.vertices, &frame.palettes[range.clone()]),
                     None => p.vertices.clone(),
                 };
-                (model.asset.clone(), vertices, p.indices.clone(), p.vertex_colors)
+                (
+                    model.asset.clone(),
+                    vertices,
+                    p.indices.clone(),
+                    p.vertex_colors,
+                )
             }
         };
         let mut positions = Vec::with_capacity(vertices.len() * 3);

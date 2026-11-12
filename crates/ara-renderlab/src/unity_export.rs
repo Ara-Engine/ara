@@ -104,8 +104,18 @@ fn export(view: &ExternalView<'_>, foliage: &[Draw], dir: &Path) -> Result<()> {
             "warmupFrames": 30, "framesPerSecond": 60,
             "note": "ara-player/src/world/video.rs: t = max(i-30,0)/(frames-1); position = start + travel*t; forward rotated about +Y by yaw*t: [x cos + z sin, y, z cos - x sin]"}));
     let (sun, other_light) = sun(frame);
-    let fog = frame.look.fog.as_ref().map(serde_json::to_value).transpose()?;
-    let atmosphere = frame.look.sky.as_ref().map(serde_json::to_value).transpose()?;
+    let fog = frame
+        .look
+        .fog
+        .as_ref()
+        .map(serde_json::to_value)
+        .transpose()?;
+    let atmosphere = frame
+        .look
+        .sky
+        .as_ref()
+        .map(serde_json::to_value)
+        .transpose()?;
     let environment = serde_json::to_value(frame.environment)?;
     let sidecar = json!({
         "format": "ara-unity-export/1",
@@ -195,7 +205,10 @@ impl Export {
         }
         let decoded = ara_runtime_render::decode_texture(&texture.ktx2)
             .with_context(|| format!("decoding {}", texture.name))?;
-        let image = Rc::new(Image { size: decoded.size, rgba: decoded.rgba });
+        let image = Rc::new(Image {
+            size: decoded.size,
+            rgba: decoded.rgba,
+        });
         // Decoded 4096 maps are 64 MB each: keep only the recent few.
         if self.decoded.len() > 24 {
             self.decoded.clear();
@@ -206,13 +219,26 @@ impl Export {
 
     /// Writes `rgba` as `textures/<name>.png` (RGB when fully opaque) and returns its glTF
     /// texture index, shared by `name`.
-    fn file(&mut self, w: &mut Writer, dir: &Path, name: &str, size: [u32; 2], rgba: &[u8], clamp: bool) -> Result<usize> {
+    fn file(
+        &mut self,
+        w: &mut Writer,
+        dir: &Path,
+        name: &str,
+        size: [u32; 2],
+        rgba: &[u8],
+        clamp: bool,
+    ) -> Result<usize> {
         if let Some(index) = self.files.get(name) {
             return Ok(*index);
         }
         let path = dir.join("textures").join(format!("{name}.png"));
-        if rgba.chunks_exact(4).all(|p| p[3] == 255) {
-            let rgb: Vec<u8> = rgba.chunks_exact(4).flat_map(|p| [p[0], p[1], p[2]]).collect();
+        if rgba.as_chunks::<4>().0.iter().all(|p| p[3] == 255) {
+            let rgb: Vec<u8> = rgba
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .flat_map(|p| [p[0], p[1], p[2]])
+                .collect();
             image::save_buffer(&path, &rgb, size[0], size[1], image::ColorType::Rgb8)?;
         } else {
             image::save_buffer(&path, rgba, size[0], size[1], image::ColorType::Rgba8)?;
@@ -223,7 +249,14 @@ impl Export {
     }
 
     /// One draw as a glTF node (entity draws and foliage parts alike).
-    fn draw(&mut self, w: &mut Writer, frame: &RenderFrame, draw: &Draw, foliage: bool, dir: &Path) -> Result<()> {
+    fn draw(
+        &mut self,
+        w: &mut Writer,
+        frame: &RenderFrame,
+        draw: &Draw,
+        foliage: bool,
+        dir: &Path,
+    ) -> Result<()> {
         if !draw.world.is_finite() || draw.world.determinant() == 0. {
             return Ok(());
         }
@@ -238,7 +271,15 @@ impl Export {
         if draw.skin.is_some() {
             self.skinned.push(draw.address.clone());
         }
-        let name = format!("{}#{}", if foliage { "foliage" } else { draw.label.as_str() }, self.nodes);
+        let name = format!(
+            "{}#{}",
+            if foliage {
+                "foliage"
+            } else {
+                draw.label.as_str()
+            },
+            self.nodes
+        );
         if !draw.casts_shadows {
             self.no_shadow.push(name.clone());
         }
@@ -254,7 +295,14 @@ impl Export {
     /// The glTF material of a draw (shared by content) and whether its mesh may carry tangents.
     fn material(&mut self, w: &mut Writer, draw: &Draw, dir: &Path) -> Result<(usize, bool)> {
         let src = source(draw);
-        let mut key = format!("{:?}{:?}{:?}{:?}{:?}", draw.color.map(f32::to_bits), draw.roughness.to_bits(), draw.metallic.to_bits(), draw.emissive.map(f32::to_bits), draw.emissive_factor.map(|f| f.map(f32::to_bits)));
+        let mut key = format!(
+            "{:?}{:?}{:?}{:?}{:?}",
+            draw.color.map(f32::to_bits),
+            draw.roughness.to_bits(),
+            draw.metallic.to_bits(),
+            draw.emissive.map(f32::to_bits),
+            draw.emissive_factor.map(|f| f.map(f32::to_bits))
+        );
         match (&draw.material, &draw.geometry) {
             (Some(native), _) => key += &format!("native{}", hex(&native.digest.0)),
             (None, Geometry::Model { model, primitive }) => {
@@ -271,7 +319,10 @@ impl Export {
         let (mut metallic, mut roughness) = (draw.metallic, draw.roughness);
         let mut glow = match &draw.geometry {
             Geometry::Shape { .. } => draw.emissive,
-            Geometry::Model { .. } => { let f = draw.emissive_factor.unwrap_or([0.; 3]); std::array::from_fn(|i| f[i] * draw.emissive[i]) },
+            Geometry::Model { .. } => {
+                let f = draw.emissive_factor.unwrap_or([0.; 3]);
+                std::array::from_fn(|i| f[i] * draw.emissive[i])
+            }
         };
         let mut pbr = json!({});
         let mut record = json!({"index": id, "name": format!("mat{id}")});
@@ -291,11 +342,19 @@ impl Export {
             material["doubleSided"] = json!(m.double_sided);
             record["sourceName"] = json!(m.name);
             let opacity = base_alpha(m, draw);
-            let uv = [m.base_color_uv, m.normal_uv, m.metallic_roughness_uv, m.emissive_uv];
+            let uv = [
+                m.base_color_uv,
+                m.normal_uv,
+                m.metallic_roughness_uv,
+                m.emissive_uv,
+            ];
             if uv.iter().any(|t| t.tex_coord != 0) {
                 self.uv1_materials += 1;
             }
-            if uv.iter().any(|t| t.offset != [0.; 2] || t.scale != [1.; 2] || t.rotation != 0.) {
+            if uv
+                .iter()
+                .any(|t| t.offset != [0.; 2] || t.scale != [1.; 2] || t.rotation != 0.)
+            {
                 self.transformed_materials += 1;
             }
             let transform = |t: &ara_runtime::model::TextureTransform| {
@@ -322,7 +381,13 @@ impl Export {
                 pbr["baseColorTexture"] = info(index, &m.base_color_uv, json!({}));
                 record["baseColorFile"] = json!(format!("textures/{name}.png"));
                 let (min, partial) = alpha_stats(&image.rgba);
-                alpha_class = if min >= 250 { "opaque" } else if partial < 0.15 { "binary" } else { "partial" };
+                alpha_class = if min >= 250 {
+                    "opaque"
+                } else if partial < 0.15 {
+                    "binary"
+                } else {
+                    "partial"
+                };
             }
             // The blend decision the bridge makes: see-through only when it is seen through.
             match m.alpha_mode {
@@ -342,19 +407,33 @@ impl Export {
             // with the factors folded in, so both pipelines read it unscaled.
             if let Some(texture) = m.metallic_roughness_texture.and_then(|i| textures.get(i)) {
                 let image = self.image(texture)?;
-                let name = format!("mr_{}_{:x}_{:x}", hex(&blake(&texture.ktx2)), m.metallic.to_bits(), m.roughness.to_bits());
+                let name = format!(
+                    "mr_{}_{:x}_{:x}",
+                    hex(&blake(&texture.ktx2)),
+                    m.metallic.to_bits(),
+                    m.roughness.to_bits()
+                );
                 let mask: Vec<u8> = image
                     .rgba
-                    .chunks_exact(4)
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
                     .flat_map(|p| {
                         let metal = f32::from(p[2]) / 255. * m.metallic;
                         let smooth = 1. - f32::from(p[1]) / 255. * m.roughness;
-                        [(metal.clamp(0., 1.) * 255.).round() as u8, 255, 0, (smooth.clamp(0., 1.) * 255.).round() as u8]
+                        [
+                            (metal.clamp(0., 1.) * 255.).round() as u8,
+                            255,
+                            0,
+                            (smooth.clamp(0., 1.) * 255.).round() as u8,
+                        ]
                     })
                     .collect();
                 let index = self.file(w, dir, &name, image.size, &mask, false)?;
                 record["maskMapFile"] = json!(format!("textures/{name}.png"));
-                record["maskMapNote"] = json!("R metallic (factor folded in), G 1, B 0, A smoothness = 1 - roughness*roughnessFactor; source was glTF metallicRoughness (G rough, B metal)");
+                record["maskMapNote"] = json!(
+                    "R metallic (factor folded in), G 1, B 0, A smoothness = 1 - roughness*roughnessFactor; source was glTF metallicRoughness (G rough, B metal)"
+                );
                 // glTF's own slot, for readers that import the original: the untouched map.
                 let _ = index;
             }
@@ -362,7 +441,8 @@ impl Export {
                 let image = self.image(texture)?;
                 let name = format!("n_{}", hex(&blake(&texture.ktx2)));
                 let index = self.file(w, dir, &name, image.size, &image.rgba, false)?;
-                material["normalTexture"] = info(index, &m.normal_uv, json!({"scale": m.normal_scale}));
+                material["normalTexture"] =
+                    info(index, &m.normal_uv, json!({"scale": m.normal_scale}));
                 record["normalFile"] = json!(format!("textures/{name}.png"));
                 record["normalScale"] = json!(m.normal_scale);
                 tangents = true;
@@ -415,7 +495,8 @@ impl Export {
         let peak = glow.iter().copied().fold(0f32, f32::max);
         if peak > 0. {
             material["emissiveFactor"] = json!(glow.map(|c| (c / peak).clamp(0., 1.)));
-            material["extensions"]["KHR_materials_emissive_strength"] = json!({"emissiveStrength": peak});
+            material["extensions"]["KHR_materials_emissive_strength"] =
+                json!({"emissiveStrength": peak});
             extensions.push("KHR_materials_emissive_strength");
         }
         record["baseColor"] = json!(base);
@@ -448,14 +529,61 @@ impl Export {
         coords.sort();
         coords.dedup();
         let layers = &terrain.data.header.materials;
-        let resolved: Vec<f32> = layers.iter().filter_map(|r| view.terrain_materials.get(&r.0)).map(|a| a.material.roughness).collect();
-        let roughness = if resolved.is_empty() { 0.5 } else { (resolved.iter().sum::<f32>() / resolved.len() as f32).clamp(0.045, 1.) };
+        let resolved: Vec<f32> = layers
+            .iter()
+            .filter_map(|r| view.terrain_materials.get(&r.0))
+            .map(|a| a.material.roughness)
+            .collect();
+        let roughness = if resolved.is_empty() {
+            0.5
+        } else {
+            (resolved.iter().sum::<f32>() / resolved.len() as f32).clamp(0.045, 1.)
+        };
+        // Each layer's colour: its base colour factor times the mean colour of its base-colour map
+        // (Renderlab flattens the maps against their mean the same way), so sand reads as sand.
+        let mut layer_colours = [[1f32; 3]; 4];
+        for (colour, reference) in layer_colours.iter_mut().zip(layers.iter()) {
+            let Some(asset) = view.terrain_materials.get(&reference.0) else {
+                continue;
+            };
+            let m = &asset.material;
+            *colour = [m.base_color[0], m.base_color[1], m.base_color[2]];
+            if let Some(texture) = m.base_color_texture.and_then(|i| asset.textures.get(i)) {
+                let image = self.image(texture)?;
+                let mean = crate::texture::mean_linear(&image.rgba);
+                for k in 0..3 {
+                    colour[k] *= mean[k];
+                }
+            }
+        }
         let mut meshes = TerrainMeshes::default();
         let mut tiles = 0;
         for coord in &coords {
-            let Some(tile) = meshes.tile(&terrain.data, *coord) else { continue };
+            let Some(tile) = meshes.tile(&terrain.data, *coord) else {
+                continue;
+            };
             let name = format!("terrain_{}_{}", coord.x, coord.z);
-            let index = self.file(w, dir, &name, tile.texture.size, &tile.texture.rgba, true)?;
+            let weights = terrain
+                .data
+                .tiles
+                .get(coord)
+                .map(|t| &t.weights[..])
+                .unwrap_or(&[]);
+            let mut rgba = tile.texture.rgba.clone();
+            if weights.len() * 4 == rgba.len() {
+                for (texel, weight) in rgba.as_chunks_mut::<4>().0.iter_mut().zip(weights) {
+                    let total = weight.iter().map(|w| f32::from(*w)).sum::<f32>().max(1.);
+                    for k in 0..3 {
+                        let linear: f32 = layer_colours
+                            .iter()
+                            .zip(weight)
+                            .map(|(c, w)| c[k] * f32::from(*w) / total)
+                            .sum();
+                        texel[k] = crate::texture::linear_to_srgb(linear);
+                    }
+                }
+            }
+            let index = self.file(w, dir, &name, tile.texture.size, &rgba, true)?;
             let material = w.material(json!({
                 "name": name, "doubleSided": true,
                 "pbrMetallicRoughness": {"baseColorFactor": [1, 1, 1, 1], "metallicFactor": 0.0, "roughnessFactor": roughness,
@@ -483,7 +611,7 @@ impl Export {
             self.nodes += 1;
             tiles += 1;
         }
-        self.note("terrain tiles carry Ara's splat-blended base colour only: the layers' detail, normal and roughness maps and the side projections are not exported");
+        self.note("terrain tiles carry one colour per height sample: the splat weights blending each layer's base colour times the mean of its colour map; the layers' detail, normal and roughness maps and the side projections are not exported");
         let h = &terrain.data.header;
         Ok(json!({
             "residentTiles": tiles, "origin": h.origin, "spacing": h.spacing, "cells": h.cells,
@@ -542,7 +670,7 @@ fn base_alpha(m: &ModelMaterial, draw: &Draw) -> f32 {
 fn alpha_stats(rgba: &[u8]) -> (u8, f32) {
     let mut min = 255u8;
     let mut partial = 0usize;
-    for p in rgba.chunks_exact(4) {
+    for p in rgba.as_chunks::<4>().0 {
         min = min.min(p[3]);
         if (8..248).contains(&p[3]) {
             partial += 1;
@@ -555,7 +683,11 @@ fn alpha_stats(rgba: &[u8]) -> (u8, f32) {
 fn blake(bytes: &[u8]) -> [u8; 8] {
     let mut h = 0xcbf2_9ce4_8422_2325u64;
     let stride = (bytes.len() / 65_536).max(1);
-    for b in bytes.iter().step_by(stride).chain(bytes.len().to_le_bytes().iter()) {
+    for b in bytes
+        .iter()
+        .step_by(stride)
+        .chain(bytes.len().to_le_bytes().iter())
+    {
         h = (h ^ u64::from(*b)).wrapping_mul(0x0000_0100_0000_01b3);
     }
     h.to_be_bytes()
@@ -582,6 +714,18 @@ fn sky(view: &ExternalView<'_>, gaps: &mut Gaps, dir: &Path) -> Result<Value> {
     Ok(match lighting::sky(view, gaps) {
         lighting::SkySource::Atmosphere(_) => json!({"kind": "atmosphere", "skyLight": light}),
         lighting::SkySource::Map { size, pixels } => {
+            // The gradient sky is 64 wide by 128 tall (azimuth by elevation): repeat columns to the
+            // 2:1 equirectangular shape a Unity cubemap import wants.
+            let (size, pixels) = if size[0] < size[1] {
+                let wide = size[1] * 2;
+                let widened: Vec<[f32; 4]> = (0..size[1])
+                    .flat_map(|y| (0..wide).map(move |x| (x, y)))
+                    .map(|(x, y)| pixels[(y * size[0] + x * size[0] / wide) as usize])
+                    .collect();
+                ([wide, size[1]], std::borrow::Cow::Owned(widened))
+            } else {
+                (size, pixels)
+            };
             write_hdr(&dir.join("sky.hdr"), size, &pixels)?;
             json!({"kind": "map", "file": "sky.hdr", "size": size, "skyLight": light,
                 "convention": "equirectangular radiance in cd/m2, row 0 the zenith; the orientation Renderlab's Sky::Map takes"})
@@ -591,7 +735,11 @@ fn sky(view: &ExternalView<'_>, gaps: &mut Gaps, dir: &Path) -> Result<Value> {
 
 /// Writes flat (uncompressed) Radiance RGBE.
 fn write_hdr(path: &Path, size: [u32; 2], pixels: &[[f32; 4]]) -> Result<()> {
-    let mut out = format!("#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y {} +X {}\n", size[1], size[0]).into_bytes();
+    let mut out = format!(
+        "#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y {} +X {}\n",
+        size[1], size[0]
+    )
+    .into_bytes();
     out.reserve(pixels.len() * 4);
     for p in pixels {
         let v = p[0].max(p[1]).max(p[2]);
@@ -601,7 +749,12 @@ fn write_hdr(path: &Path, size: [u32; 2], pixels: &[[f32; 4]]) -> Result<()> {
         }
         let e = v.log2().floor() as i32 + 1;
         let scale = 256. / 2f32.powi(e);
-        out.extend_from_slice(&[(p[0] * scale) as u8, (p[1] * scale) as u8, (p[2] * scale) as u8, (e + 128) as u8]);
+        out.extend_from_slice(&[
+            (p[0] * scale) as u8,
+            (p[1] * scale) as u8,
+            (p[2] * scale) as u8,
+            (e + 128) as u8,
+        ]);
     }
     std::fs::write(path, out)?;
     Ok(())
