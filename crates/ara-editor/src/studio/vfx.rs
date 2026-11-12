@@ -17,8 +17,6 @@ use super::Studio;
 
 /// An emitter card's width in the System Overview.
 const CARD: f32 = 300.0;
-/// Preview rates, in percent of real time.
-const RATES: [u32; 4] = [25, 50, 100, 200];
 
 /// The VFX page's view state (what to show, never the effect itself).
 #[derive(Default)]
@@ -153,7 +151,6 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                 .fill(c.background.0)
                 .child(preview),
         )
-        .child(timeline(s))
         .child(
             row()
                 .min_h(28.0)
@@ -760,51 +757,4 @@ pub(super) fn edit(s: &mut Studio, doc: &str, item: &str, op: &str) {
     if let Err(error) = crate::vfx_edit::module_edit(&mut s.editor, doc, item, op) {
         s.editor.report_failure(&*error);
     }
-}
-
-/// The timeline: restart, play or pause, step and rate (time and particles show in the
-/// status line under it).
-fn timeline(s: &Studio) -> El<Studio> {
-    let l = &s.look;
-    let c = &l.c;
-    let soon = super::unavailable::SOON;
-    let mut rates = row().gap(1.0);
-    for rate in RATES {
-        rates = rates.child(
-            enabled(
-                row()
-                    .key(format!("vfx/rate/{rate}"))
-                    .h(22.0)
-                    .pad_x(7.0)
-                    .align(Align::Center)
-                    .radius(super::style::RADIUS)
-                    .label(format!("Run at {rate}%"))
-                    .child(
-                        text(format!("{rate}%"))
-                            .text_size(11.0)
-                            .family(mono())
-                            .color(c.muted_foreground.0),
-                    ),
-                false,
-            )
-            .tooltip(soon),
-        );
-    }
-    let control = |glyph, label: &str, key: &str| {
-        enabled(
-            icon_button(l, Tone::Ghost, Size::Sm, glyph, label).key(key.to_owned()),
-            false,
-        )
-        .tooltip(soon)
-    };
-    row()
-        .h(34.0)
-        .pad_x(8.0)
-        .gap(6.0)
-        .align(Align::Center)
-        .fill(super::style::tones(l).strip)
-        .child(control(icons::REFRESH_CCW, "Restart", "vfx/restart"))
-        .child(control(icons::PLAY, "Play", "vfx/play"))
-        .child(control(icons::STEP_FORWARD, "Step one frame", "vfx/step"))
-        .child(rates)
 }

@@ -115,19 +115,6 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                 .on_dismiss(|s: &mut Studio| s.local.lighting_menu = None),
         );
     }
-    // Reflection probes recapture on demand once the Scene's renderer can capture them.
-    let capture = enabled(
-        button(
-            l,
-            Tone::Ghost,
-            Size::Sm,
-            Some(icons::REFRESH_CW),
-            "Recapture",
-        )
-        .key("lighting/probe/recapture")
-        .tooltip(super::unavailable::SOON),
-        super::unavailable::probe_capture_available(),
-    );
     let toolbar = row()
         .h(super::style::TOOLBAR + 6.0)
         .pad_x(6.0)
@@ -135,8 +122,7 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         .align(Align::Center)
         .child(search)
         .child(add)
-        .child(presets)
-        .child(capture);
+        .child(presets);
     let body = if rows.is_empty() {
         col().grow(1.0).justify(Justify::Center).child(empty(
             l,
@@ -198,15 +184,9 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         }
         list
     };
-    // Said next to the button rather than only in its tooltip.
-    let unavailable = Some(
-        super::unavailable::note(l, "Reflection probe capture is not available yet.")
-            .key("lighting/probe/unavailable"),
-    );
     col()
         .grow(1.0)
         .child(toolbar)
-        .children(unavailable)
         .child(body)
         .child(el().h(4.0))
 }

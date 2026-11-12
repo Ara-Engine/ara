@@ -215,8 +215,6 @@ impl Editor {
         let (completed, results) = mpsc::channel();
         host.register(Box::new(CaptureService::new(tasks, results)))
             .map_err(|d| anyhow::anyhow!(d.to_string()))?;
-        host.register(Box::new(crate::probe_capture::ProbeService))
-            .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         host.register(Box::new(
             crate::validation_service::ValidationService::default(),
         ))

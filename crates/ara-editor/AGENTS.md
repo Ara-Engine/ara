@@ -55,7 +55,7 @@ attempts per generation and reports once.
 
 Agents: `capture` jobs (`ara_capture`: the Scene with entity marks, the window, its layout)
 are served by the studio's loop (`studio/capture.rs`, written by `capture::Work` on a
-worker); probe jobs (`render.probe.*`) by `studio/probes.rs`.
+worker).
 
 Polish assets: Lucide SVGs (ISC), Inter, JetBrains Mono (OFL; THIRD_PARTY_NOTICES).
 The Scene's ids (packed RGBA8, written by Renderlab beside its image) drive picking and
