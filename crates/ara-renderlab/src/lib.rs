@@ -27,6 +27,8 @@ mod rl;
 
 #[cfg(not(target_vendor = "apple"))]
 mod bridge;
+#[cfg(not(target_vendor = "apple"))]
+mod cpu_log;
 #[cfg(target_vendor = "apple")]
 mod bridge_metal;
 mod grade;

@@ -107,6 +107,8 @@ struct Pending {
         crate::id_target::Readback,
         Option<crate::id_target::Readback>,
     )>,
+    /// The CPU split of this frame (`ARA_RENDERLAB_CPU_LOG`), written when the frame is taken.
+    cpu_row: Option<crate::cpu_log::CpuRow>,
 }
 
 /// Lighting last applied to the engine, so unchanged frames set nothing.
@@ -156,6 +158,8 @@ pub(crate) struct Bridge {
     pending: std::collections::VecDeque<Pending>,
     /// The last frame's eye and view direction, to notice a view that jumps.
     last_view: Option<([f32; 3], [f32; 3])>,
+    /// Per-frame CPU split, when `ARA_RENDERLAB_CPU_LOG` names a file.
+    cpu_log: Option<crate::cpu_log::CpuLog>,
 }
 
 /// A Vulkan adapter for the hosted engine on an instance whose validation follows Ara's one
@@ -288,6 +292,7 @@ impl Bridge {
                 .unwrap_or(options.frames_in_flight)
                 .clamp(1, MAX_IN_FLIGHT),
             pending: std::collections::VecDeque::new(),
+            cpu_log: crate::cpu_log::CpuLog::from_env(),
             last_view: None,
         })
     }
@@ -376,6 +381,7 @@ impl Bridge {
             "{} frames are in flight: finish one before beginning another",
             self.in_flight_limit
         );
+        let began = Instant::now();
         let frame = view.frame;
         // The meter's readings of earlier frames, the previous one's included: the bridge
         // waited for that frame and its histogram pass is queued right behind it, so the
@@ -485,10 +491,31 @@ impl Bridge {
             self.readbacks.discard();
         }
         self.ensure_target(gpu, view.size)?;
-        let rendered = self
-            .engine
-            .render_view(view_id, &lighting::camera(frame)?)?
-            .frame;
+        let camera = lighting::camera(frame)?;
+        let called = Instant::now();
+        let report = self.engine.render_view(view_id, &camera)?;
+        let render_call = called.elapsed();
+        let rendered = report.frame;
+        let cpu_row = self.cpu_log.as_mut().map(|log| {
+            let cpu = &report.cpu;
+            log.begin(
+                began,
+                called.duration_since(began),
+                render_call,
+                [
+                    ("preparation", cpu.preparation),
+                    ("visibility", cpu.visibility),
+                    ("packing", cpu.packing),
+                    ("upload", cpu.upload),
+                    ("encode", cpu.encode),
+                    ("submit", cpu.submit),
+                    ("poll", cpu.poll),
+                    ("shadow_preparation", cpu.shadow_preparation),
+                    ("shadow_upload", cpu.shadow_upload),
+                    ("shadow_encode", cpu.shadow_encode),
+                ],
+            )
+        });
         let target = self.target.as_mut().context("target ensured above")?;
         if self.scene_ids {
             if target.ids.as_ref().is_none_or(|t| t.size() != view.size) {
@@ -561,6 +588,7 @@ impl Bridge {
             done_after_ms: None,
             published,
             readback,
+            cpu_row,
         });
         Ok(())
     }
@@ -613,6 +641,8 @@ impl Bridge {
         let Some(taken) = self.pending.pop_front() else {
             return Ok(None);
         };
+        let in_flight = taken.since.elapsed();
+        let cpu_row = taken.cpu_row;
         let target = self
             .target
             .as_mut()
@@ -661,6 +691,9 @@ impl Bridge {
                 self.pending.len(),
             )
         });
+        if let (Some(log), Some(row)) = (&mut self.cpu_log, cpu_row) {
+            log.finish(row, handoff_ms, in_flight);
+        }
 
         Ok(Some(ExternalFrame {
             image,
