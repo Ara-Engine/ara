@@ -1218,20 +1218,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ara-hotpatch-probe"
-version = "0.0.1-alpha"
-dependencies = [
- "anyhow",
- "ara-frame",
- "ara-gpu",
- "ara-hotpatch",
- "ara-render",
- "ara-render-fidelity",
- "glam 0.30.10",
- "serde_json",
-]
-
-[[package]]
 name = "ara-hotpatch-sim-probe"
 version = "0.0.1-alpha"
 dependencies = [
@@ -1615,23 +1601,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ara-pathtrace"
-version = "0.0.1-alpha"
-dependencies = [
- "anyhow",
- "ara-frame",
- "ara-gpu",
- "ara-landscape",
- "ara-render",
- "ara-render-fidelity",
- "ara-terrain",
- "glam 0.30.10",
- "image",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "ara-perception"
 version = "0.0.1-alpha"
 dependencies = [
@@ -1771,7 +1740,6 @@ dependencies = [
  "ara-nav",
  "ara-ops",
  "ara-pack",
- "ara-pathtrace",
  "ara-physics",
  "ara-platform",
  "ara-play",
@@ -1857,10 +1825,8 @@ dependencies = [
  "ara-hotpatch",
  "ara-json",
  "ara-patch-charts",
- "ara-pathtrace",
  "ara-platform",
  "ara-profile",
- "ara-render-fidelity",
  "ara-vsm",
  "ash 0.38.0+1.4.352",
  "bytemuck",
@@ -1882,7 +1848,6 @@ dependencies = [
  "ara-frame",
  "ara-gpu",
  "ara-hotpatch",
- "ara-pathtrace",
  "ara-render",
  "ara-schema",
  "ara-texture-stream",
@@ -2140,24 +2105,15 @@ dependencies = [
  "ara-components",
  "ara-diag",
  "ara-doc",
- "ara-foliage",
- "ara-frame",
- "ara-gpu",
  "ara-json",
  "ara-ops",
- "ara-pathtrace",
  "ara-play",
  "ara-play-host",
  "ara-proto",
- "ara-render",
- "ara-render-fidelity",
  "ara-rpc",
  "ara-runtime",
- "ara-runtime-render",
  "ara-schema",
  "ara-terrain",
- "ara-vfx",
- "ara-vfx-gpu",
  "blake3",
  "clap",
  "glam 0.30.10",

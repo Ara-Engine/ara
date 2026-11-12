@@ -13,12 +13,6 @@ use std::{
     time::Instant,
 };
 
-struct Previous {
-    frame: u32,
-    test: Vec<[f32; 4]>,
-    reference: Vec<[f32; 4]>,
-}
-
 pub fn main() -> Result<()> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     ensure!(
@@ -132,7 +126,6 @@ fn run(
         renderer.render(&f.camera, exposure)?;
     }
     renderer.set_unseen(false);
-    let mut previous: Option<Previous> = None;
     for frame in &script {
         renderer.gpu_mut().reset_timing_window();
         let started = Instant::now();
@@ -243,17 +236,11 @@ fn run(
                     coverage.unresolved_pixels as f64,
                 );
             }
-            let (_, radiance) = renderer.lab_radiance()?;
             let capture_path = output.join(format!("frame-{:04}.png", frame.frame));
             save_png(&capture.image, &capture_path)?;
             row.evidence
                 .insert("path_traced_reference_removed".into(), 1.);
             row.capture = Some(capture_path.to_string_lossy().into());
-            previous = Some(Previous {
-                frame: frame.frame,
-                test: radiance,
-                reference: Vec::new(),
-            });
         }
         result.frames.push(row);
         if frame.frame % 30 == 0 {

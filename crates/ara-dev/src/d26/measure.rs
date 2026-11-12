@@ -3,10 +3,9 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
-use anyhow::{Context as _, Result, ensure};
+use anyhow::{Context as _, Result};
 use serde_json::Value;
 
 use super::{Options, Section};
@@ -293,24 +292,8 @@ impl Context<'_> {
     }
 }
 
-/// Run a tool under the GPU lock, bounded by `limit`.
-fn run(command: &mut Command, limit: Duration, log: &Path) -> Result<()> {
-    crate::gpu::locked(4 * 3600, || {
-        let launched = super::validity::unix_ms()?;
-        let outcome = crate::process::run(command, Some(Instant::now() + limit));
-        super::validity::record(&log.with_extension("window.json"), launched)?;
-        let outcome = outcome?;
-        ensure!(
-            outcome.success(),
-            "failed or timed out after {} s; see {}",
-            limit.as_secs(),
-            log.display()
-        );
-        Ok(())
-    })
-}
-
 /// The capture tool's timings for a scene's look under `folder`.
+#[cfg(test)]
 fn timings(folder: &Path, scene: &Scene) -> Measured<Output> {
     let path = folder
         .join(scene.project)
