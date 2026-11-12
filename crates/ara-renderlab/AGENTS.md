@@ -142,6 +142,9 @@ field at 3 m, f/0.8). From that folder:
   (crowd: `--ev100 10`); add `--video 60 --video-move 2,0,0 --video-yaw 20` for a moving
   camera, `--video 6 --video-yaw 300` for cuts (or one hard cut inside a moving clip:
   `--video 120 --video-move 4,0,-4 --video-yaw 12 --video-cut-at 60 --video-cut-move -20,0,15 --video-cut-yaw 140`).
+  For GPU timings set `ARA_VIDEO_KEEP=0,40,59,60,61,70,119` (the clip frames to write; unset writes all):
+  the other frames are rendered but not read back or PNG-encoded. Writing every frame idles the GPU
+  ~70% of each frame and the clock drops to 210-540 MHz, which inflates RT times several times.
 - A GPU check renders a real scene: `ara-player --renderer renderlab-rt --headless
   --capture <png> --root <export>` (see the PR that added this crate for the commands).
 

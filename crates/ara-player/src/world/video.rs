@@ -52,8 +52,23 @@ fn pose(position: [f32; 3], forward: [f32; 3], clip: &Clip, i: u32) -> ([f32; 3]
     )
 }
 
+/// The clip frames to write, from `ARA_VIDEO_KEEP` (comma-separated 0-based clip frames);
+/// `None` (unset) keeps every frame. Frames that are not kept are still rendered and presented
+/// but not read back or PNG-encoded. Timing runs need this: reading back and encoding a 1080p
+/// frame takes ~100 ms on the render thread, the GPU idles in between and the driver drops its
+/// clock (to 210-540 MHz), so GPU timings of a full clip are several times too high.
+fn kept_frames() -> Option<Vec<u32>> {
+    std::env::var("ARA_VIDEO_KEEP").ok().map(|list| parse_kept(&list))
+}
+
+/// The frame numbers in a comma-separated list; entries that are not numbers are ignored.
+fn parse_kept(list: &str) -> Vec<u32> {
+    list.split(',').filter_map(|frame| frame.trim().parse().ok()).collect()
+}
+
 /// Renders the clip at `request.size` into `dir` (`00000.png`, …) from the frame's
-/// camera, then restores the presenter's size.
+/// camera, then restores the presenter's size. With `ARA_VIDEO_KEEP` set, only the listed
+/// frames are written.
 pub(super) fn record(
     presenter: &mut Presenter,
     frame: &mut RenderFrame,
@@ -66,13 +81,14 @@ pub(super) fn record(
     std::fs::create_dir_all(dir)?;
     let original = presenter.size();
     presenter.resize(request.size)?;
+    let keep = kept_frames();
     let result = (|| {
         for i in 0..WARMUP + clip.frames {
             let camera = frame.camera.as_mut().context("camera")?;
             (camera.position, camera.forward) = pose(start.position, start.forward, &clip, i);
             let frame = &*frame;
             presenter.present_with(frame, || content(frame))?;
-            if i >= WARMUP {
+            if i >= WARMUP && keep.as_ref().is_none_or(|kept| kept.contains(&(i - WARMUP))) {
                 presenter
                     .live_image()
                     .context("live frame")?
@@ -97,6 +113,12 @@ mod tests {
             yaw: 0.,
             cut,
         }
+    }
+
+    #[test]
+    fn the_keep_list_reads_frame_numbers_and_skips_anything_else() {
+        assert_eq!(parse_kept("0, 40,59 ,x,,119"), vec![0, 40, 59, 119]);
+        assert!(parse_kept("").is_empty());
     }
 
     #[test]
