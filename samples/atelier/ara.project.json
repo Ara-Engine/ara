@@ -1,0 +1,6 @@
+{
+  "engineVersion": "0.0.1-alpha",
+  "layoutVersion": 4,
+  "main": "levels/atelier.scene",
+  "name": "Atelier"
+}

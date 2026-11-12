@@ -1,0 +1,88 @@
+{
+  "handedness": "right",
+  "up": "+Y",
+  "units": "metres",
+  "cameraForward": "-Z (glTF)",
+  "fps": 30,
+  "resolution": [1920, 1080],
+  "interpolation": "position: linear; rotation: slerp; a key with cut=true ends its segment",
+  "clips": [
+    {
+      "name": "still",
+      "note": "Interior from the doorway side: sun patches, sculpture, table, armchair.",
+      "duration": 0,
+      "keys": [
+        {
+          "t": 0,
+          "position": [3.1, 1.55, -0.4],
+          "rotation": [-0.024263791739940643, 0.35814279317855835, 0.009310890920460224, 0.9333051443099976],
+          "lookAt": [-1.4, 1.2, -5.4],
+          "fovYDeg": 52,
+          "cut": false
+        }
+      ]
+    },
+    {
+      "name": "dolly",
+      "note": "A slow push from the courtyard through the doorway toward the table.",
+      "duration": 8,
+      "keys": [
+        {
+          "t": 0,
+          "position": [0.2, 1.5, 6.5],
+          "rotation": [-0.009503140114247799, 0.028535230085253716, 0.0002712970017455518, 0.9995476007461548],
+          "lookAt": [-0.4, 1.3, -4],
+          "fovYDeg": 50,
+          "cut": false
+        },
+        {
+          "t": 8,
+          "position": [-0.2, 1.5, -1.2],
+          "rotation": [-0.03833360970020294, 0.10348515957593918, 0.003991370555013418, 0.9938840270042419],
+          "lookAt": [-1, 1.2, -5],
+          "fovYDeg": 50,
+          "cut": false
+        }
+      ]
+    },
+    {
+      "name": "cut",
+      "note": "A low courtyard pan, a hard cut at 3 s to the chrome sphere.",
+      "duration": 6,
+      "keys": [
+        {
+          "t": 0,
+          "position": [-5, 1.2, 7.5],
+          "rotation": [0.02193841151893139, -0.3019087612628937, 0.006949619855731726, 0.9530590772628784],
+          "lookAt": [0, 1.6, 0.4],
+          "fovYDeg": 46,
+          "cut": false
+        },
+        {
+          "t": 3,
+          "position": [-3, 1.2, 7.5],
+          "rotation": [0.02193841151893139, -0.3019087612628937, 0.006949619855731726, 0.9530590772628784],
+          "lookAt": [2, 1.6, 0.4],
+          "fovYDeg": 46,
+          "cut": true
+        },
+        {
+          "t": 3,
+          "position": [-0.4, 1.4, -0.6],
+          "rotation": [-0.028718188405036926, 0.2896536886692047, 0.008695167489349842, 0.9566611647605896],
+          "lookAt": [-1.6, 1.27, -2.4],
+          "fovYDeg": 40,
+          "cut": false
+        },
+        {
+          "t": 6,
+          "position": [-0.9, 1.4, -0.9],
+          "rotation": [-0.03824755549430847, 0.21641728281974792, 0.00848519429564476, 0.9755146503448486],
+          "lookAt": [-1.6, 1.27, -2.4],
+          "fovYDeg": 40,
+          "cut": false
+        }
+      ]
+    }
+  ]
+}

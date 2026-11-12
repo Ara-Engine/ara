@@ -1,0 +1,116 @@
+{
+  "scene": "atelier",
+  "conventions": {
+    "handedness": "right",
+    "up": "+Y",
+    "units": "metres",
+    "cameraForward": "-Z (glTF)",
+    "note": "Left-handed engines (Unity): negate X on import, flip triangle winding.",
+    "roomForward": "The room runs toward -Z from its front wall at z=0; the courtyard is on +Z."
+  },
+  "exposure": {
+    "mode": "fixed",
+    "ev100": 13,
+    "isoNote": "ISO 100; photometric exposure H = L / (1.2 * 2^EV100)",
+    "toneMapping": "Khronos PBR Neutral in Ara; export linear HDR for comparisons"
+  },
+  "sky": {
+    "kind": "gradient equirect, no sun disc",
+    "zenith": [0.20000000298023224, 0.36000001430511475, 0.8500000238418579],
+    "horizon": [0.7200000286102295, 0.8199999928474426, 0.949999988079071],
+    "ground": [0.2800000011920929, 0.25999999046325684, 0.23000000417232513],
+    "scaleCdPerM2": 9000,
+    "falloff": 3
+  },
+  "sun": {
+    "illuminanceLux": 80000,
+    "color": [1, 0.949999988079071, 0.8600000143051147],
+    "travelDirection": [-0.2996472418308258, -0.6152756214141846, -0.7291415929794312],
+    "angularDiameterDeg": 0.5357,
+    "castsShadows": true
+  },
+  "lights": [
+    {
+      "name": "Pendant over the table",
+      "type": "point",
+      "position": [0.20000000298023224, 2.5, -6],
+      "aimAt": null,
+      "color": [1, 0.8199999928474426, 0.6000000238418579],
+      "lumens": 900,
+      "sourceRadius": 0.10000000149011612,
+      "sourceLength": 0,
+      "range": 9,
+      "coneHalfAnglesDeg": null,
+      "castsShadows": true
+    },
+    {
+      "name": "Floor lamp reading spot",
+      "type": "spot",
+      "position": [-3.4000000953674316, 1.7000000476837158, -5.699999809265137],
+      "aimAt": [-2.799999952316284, 0.4000000059604645, -6.900000095367432],
+      "color": [1, 0.800000011920929, 0.5799999833106995],
+      "lumens": 450,
+      "sourceRadius": 0.03999999910593033,
+      "sourceLength": 0,
+      "range": 6,
+      "coneHalfAnglesDeg": [25, 45],
+      "castsShadows": true
+    },
+    {
+      "name": "Picture light",
+      "type": "spot",
+      "position": [1.600000023841858, 2.6500000953674316, -8.699999809265137],
+      "aimAt": [1.600000023841858, 1.7000000476837158, -8.970000267028809],
+      "color": [1, 0.8999999761581421, 0.75],
+      "lumens": 350,
+      "sourceRadius": 0.019999999552965164,
+      "sourceLength": 0.6000000238418579,
+      "range": 3.5,
+      "coneHalfAnglesDeg": [30, 55],
+      "castsShadows": false
+    },
+    {
+      "name": "Shelf LED strip",
+      "type": "point",
+      "position": [-2.4000000953674316, 1.2000000476837158, -8.649999618530273],
+      "aimAt": null,
+      "color": [1, 0.9300000071525574, 0.800000011920929],
+      "lumens": 300,
+      "sourceRadius": 0.009999999776482582,
+      "sourceLength": 1.399999976158142,
+      "range": 3,
+      "coneHalfAnglesDeg": null,
+      "castsShadows": false
+    },
+    {
+      "name": "Courtyard wall lantern",
+      "type": "point",
+      "position": [2.200000047683716, 2.4000000953674316, 0.6800000071525574],
+      "aimAt": null,
+      "color": [1, 0.7799999713897705, 0.5],
+      "lumens": 600,
+      "sourceRadius": 0.07000000029802322,
+      "sourceLength": 0,
+      "range": 8,
+      "coneHalfAnglesDeg": null,
+      "castsShadows": false
+    },
+    {
+      "name": "Table lamp glow",
+      "type": "point",
+      "position": [0.75, 0.9800000190734863, -6],
+      "aimAt": null,
+      "color": [1, 0.800000011920929, 0.550000011920929],
+      "lumens": 120,
+      "sourceRadius": 0.029999999329447746,
+      "sourceLength": 0,
+      "range": 3,
+      "coneHalfAnglesDeg": null,
+      "castsShadows": false
+    }
+  ],
+  "engineSideExtras": [
+    "mannequin idle animation",
+    "dust particles in the sun shaft"
+  ]
+}

@@ -4,6 +4,7 @@
 //! agent session. Documents, import sidecars and animation controllers use the same
 //! typed commands available to agents through the CLI and MCP.
 pub mod anim;
+pub mod atelier;
 mod bounds;
 pub mod hangar;
 pub mod kits;

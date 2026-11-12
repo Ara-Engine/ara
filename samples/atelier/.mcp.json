@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "ara": {
+      "command": "ara",
+      "args": ["mcp", "--root", "."]
+    }
+  }
+}

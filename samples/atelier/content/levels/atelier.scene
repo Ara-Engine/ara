@@ -1,0 +1,392 @@
+{
+  "$schema": "ara://schema/scene/1",
+  "id": "sc_atelier01",
+  "versions": {
+    "PostProcessVolume": 2
+  },
+  "records": {
+    "e_camcut0": {
+      "name": "Camera cut 0",
+      "order": "aR",
+      "Camera": {
+        "fov": 46
+      },
+      "Transform": {
+        "position": [-5, 1.2, 7.5],
+        "rotation": [3.2245224, -35.11145, 1.8559558]
+      }
+    },
+    "e_camcut1": {
+      "name": "Camera cut 1",
+      "order": "aS",
+      "Camera": {
+        "fov": 46
+      },
+      "Transform": {
+        "position": [-3, 1.2, 7.5],
+        "rotation": [3.2245224, -35.11145, 1.8559558]
+      }
+    },
+    "e_camcut2": {
+      "name": "Camera cut 2",
+      "order": "aT",
+      "Camera": {
+        "fov": 40
+      },
+      "Transform": {
+        "position": [-0.4, 1.4, -0.6],
+        "rotation": [-4.130856, 33.62131, 2.290012]
+      }
+    },
+    "e_camcut3": {
+      "name": "Camera cut 3",
+      "order": "aU",
+      "Camera": {
+        "fov": 40
+      },
+      "Transform": {
+        "position": [-0.9, 1.4, -0.9],
+        "rotation": [-4.9532566, 24.934843, 2.0925171]
+      }
+    },
+    "e_camdolly0": {
+      "name": "Camera dolly 0",
+      "order": "aP",
+      "Camera": {
+        "fov": 50
+      },
+      "Transform": {
+        "position": [0.2, 1.5, 6.5],
+        "rotation": [-1.0912166, 3.2698963, 0.062249932]
+      }
+    },
+    "e_camdolly1": {
+      "name": "Camera dolly 1",
+      "order": "aQ",
+      "Camera": {
+        "fov": 50
+      },
+      "Transform": {
+        "position": [-0.2, 1.5, -1.2],
+        "rotation": [-4.5139885, 11.852828, 0.929008]
+      }
+    },
+    "e_camprop": {
+      "name": "Antique camera",
+      "order": "aB",
+      "MeshRenderer": {
+        "model": "@third_party/khronos_antique_camera/AntiqueCamera.gltf#as_khronosantiquecamera"
+      },
+      "Transform": {
+        "position": [-0.308, 0.765, -5.946],
+        "rotation": [0, 25, 0],
+        "scale": [0.11, 0.11, 0.11]
+      }
+    },
+    "e_camstill0": {
+      "name": "Camera still 0",
+      "order": "aO",
+      "Camera": {
+        "fov": 52
+      },
+      "Transform": {
+        "position": [3.1, 1.55, -0.4],
+        "rotation": [-4.004172, 41.91759, 2.6774445]
+      }
+    },
+    "e_courtyard": {
+      "name": "Courtyard dressing",
+      "order": "aA",
+      "MeshRenderer": {
+        "model": "@kit/atelier_courtyard.gltf#as_kitateliercourtyard",
+        "emissive": [5000, 5000, 5000]
+      },
+      "Transform": {}
+    },
+    "e_dust": {
+      "name": "Dust motes in the sun shaft",
+      "order": "aN",
+      "Transform": {
+        "position": [-1, 0.8, -1.6]
+      },
+      "VisualEffect": {
+        "effect": "dust",
+        "scale": 1.4
+      }
+    },
+    "e_env": {
+      "name": "Gradient sky and fixed exposure",
+      "order": "a0",
+      "Environment": {
+        "sky": [0.20000000298023224, 0.36000001430511475, 0.8500000238418579, 1],
+        "horizon": [0.7200000286102295, 0.8199999928474426, 0.949999988079071, 1],
+        "ground": [0.2800000011920929, 0.25999999046325684, 0.23000000417232513, 1],
+        "intensity": 9000
+      },
+      "PostProcessVolume": {
+        "overrides": [
+          {
+            "exposure": "manual",
+            "ev100": 13
+          },
+          {
+            "module": "toneMapping",
+            "toneMapping": "neutral"
+          }
+        ]
+      }
+    },
+    "e_furniture": {
+      "name": "Furniture",
+      "order": "a9",
+      "MeshRenderer": {
+        "model": "@kit/atelier_furniture.gltf#as_kitatelierfurniture",
+        "emissive": [6000, 6000, 6000]
+      },
+      "Transform": {}
+    },
+    "e_helmet": {
+      "name": "Flight helmet",
+      "order": "aC",
+      "MeshRenderer": {
+        "model": "@third_party/khronos_flight_helmet/FlightHelmet.gltf#as_khronosflighthelmet"
+      },
+      "Transform": {
+        "position": [-2.463, 2.22, -8.682],
+        "rotation": [0, 200, 0],
+        "scale": [0.9, 0.9, 0.9]
+      }
+    },
+    "e_lantern": {
+      "name": "Lantern",
+      "order": "aE",
+      "MeshRenderer": {
+        "model": "@third_party/lantern_01/Lantern_01_2k.gltf#as_lantern01"
+      },
+      "Transform": {
+        "position": [-5.6, 0.48, 4],
+        "rotation": [0, 20, 0],
+        "scale": [1.6, 1.6, 1.6]
+      }
+    },
+    "e_lcup": {
+      "name": "Table lamp glow",
+      "order": "a7",
+      "Light": {
+        "color": [1, 0.800000011920929, 0.550000011920929, 1],
+        "intensity": 120,
+        "range": 3,
+        "sourceRadius": 0.029999999329447746
+      },
+      "Transform": {
+        "position": [0.75, 0.98, -6]
+      }
+    },
+    "e_lfloor": {
+      "name": "Floor lamp reading spot",
+      "order": "a3",
+      "Light": {
+        "kind": "spot",
+        "color": [1, 0.800000011920929, 0.5799999833106995, 1],
+        "intensity": 450,
+        "range": 6,
+        "innerAngle": 25,
+        "outerAngle": 45,
+        "sourceRadius": 0.03999999910593033
+      },
+      "Transform": {
+        "position": [-3.4, 1.7, -5.7],
+        "rotation": [-47.290604, -18.733858, -19.184677]
+      }
+    },
+    "e_llantern": {
+      "name": "Courtyard wall lantern",
+      "order": "a6",
+      "Light": {
+        "color": [1, 0.7799999713897705, 0.5, 1],
+        "intensity": 600,
+        "range": 8,
+        "sourceRadius": 0.07000000029802322
+      },
+      "Transform": {
+        "position": [2.2, 2.4, 0.68]
+      }
+    },
+    "e_lpendant": {
+      "name": "Pendant over the table",
+      "order": "a2",
+      "Light": {
+        "color": [1, 0.8199999928474426, 0.6000000238418579, 1],
+        "intensity": 900,
+        "range": 9,
+        "sourceRadius": 0.10000000149011612
+      },
+      "Transform": {
+        "position": [0.2, 2.5, -6]
+      }
+    },
+    "e_lpicture": {
+      "name": "Picture light",
+      "order": "a4",
+      "Light": {
+        "kind": "spot",
+        "color": [1, 0.8999999761581421, 0.75, 1],
+        "intensity": 350,
+        "range": 3.5,
+        "innerAngle": 30,
+        "outerAngle": 55,
+        "sourceRadius": 0.019999999552965164,
+        "sourceLength": 0.6000000238418579
+      },
+      "Transform": {
+        "position": [1.6, 2.65, -8.7],
+        "rotation": [-74.13427, 0, 0]
+      }
+    },
+    "e_lshelf": {
+      "name": "Shelf LED strip",
+      "order": "a5",
+      "Light": {
+        "color": [1, 0.9300000071525574, 0.800000011920929, 1],
+        "intensity": 300,
+        "range": 3,
+        "sourceRadius": 0.009999999776482582,
+        "sourceLength": 1.399999976158142
+      },
+      "Transform": {
+        "position": [-2.4, 1.2, -8.65]
+      }
+    },
+    "e_mannequin": {
+      "name": "Mannequin (idle)",
+      "order": "aM",
+      "Animator": {
+        "controller": "@anim/human.animation#an_locomotion"
+      },
+      "MeshRenderer": {
+        "model": "@third_party/m2m_human/human-base-animations.glb#as_m2mhuman",
+        "materialOverrides": [
+          {
+            "material": "@materials/humanpalette0.graph#gr_humanpalette0"
+          }
+        ]
+      },
+      "Transform": {
+        "position": [2.9, 0, -4.5],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_plant0": {
+      "name": "Plant",
+      "order": "aF",
+      "MeshRenderer": {
+        "model": "@third_party/shrub_03/shrub_03_1k.gltf#as_shrub03"
+      },
+      "Transform": {
+        "position": [5.09, 0.622, 2.197]
+      }
+    },
+    "e_plant1": {
+      "name": "Plant",
+      "order": "aG",
+      "MeshRenderer": {
+        "model": "@third_party/wild_rooibos_bush/wild_rooibos_bush_1k.gltf#as_wildrooibosbush"
+      },
+      "Transform": {
+        "position": [5.156, 0.622, 3.807],
+        "rotation": [0, 40, 0]
+      }
+    },
+    "e_plant2": {
+      "name": "Plant",
+      "order": "aH",
+      "MeshRenderer": {
+        "model": "@third_party/shrub_03/shrub_03_1k.gltf#as_shrub03"
+      },
+      "Transform": {
+        "position": [5.58, 0.622, 6.26],
+        "rotation": [0, 80, 0],
+        "scale": [1.1, 1.1, 1.1]
+      }
+    },
+    "e_plant3": {
+      "name": "Plant",
+      "order": "aI",
+      "MeshRenderer": {
+        "model": "@third_party/crystalline_iceplant/crystalline_iceplant_1k.gltf#as_crystallineiceplant"
+      },
+      "Transform": {
+        "position": [5.659, 0.624, 6.885],
+        "rotation": [0, 10, 0],
+        "scale": [1.2, 1.2, 1.2]
+      }
+    },
+    "e_plant4": {
+      "name": "Plant",
+      "order": "aJ",
+      "MeshRenderer": {
+        "model": "@third_party/wild_rooibos_bush/wild_rooibos_bush_1k.gltf#as_wildrooibosbush"
+      },
+      "Transform": {
+        "position": [-2.147, 0.622, 1.877],
+        "rotation": [0, 120, 0],
+        "scale": [0.9, 0.9, 0.9]
+      }
+    },
+    "e_plant5": {
+      "name": "Plant",
+      "order": "aK",
+      "MeshRenderer": {
+        "model": "@third_party/crystalline_iceplant/crystalline_iceplant_1k.gltf#as_crystallineiceplant"
+      },
+      "Transform": {
+        "position": [2.545, 0.624, 1.376],
+        "scale": [1.2, 1.2, 1.2]
+      }
+    },
+    "e_plant6": {
+      "name": "Plant",
+      "order": "aL",
+      "MeshRenderer": {
+        "model": "@third_party/wild_rooibos_bush/wild_rooibos_bush_1k.gltf#as_wildrooibosbush"
+      },
+      "Transform": {
+        "position": [4.019, 0.002, -8.784],
+        "rotation": [0, 200, 0]
+      }
+    },
+    "e_radio": {
+      "name": "Radio",
+      "order": "aD",
+      "MeshRenderer": {
+        "model": "@third_party/vintage_radio_transceiver/vintage_radio_transceiver_2k.gltf#as_vintageradiotransceiver"
+      },
+      "Transform": {
+        "position": [-1.748, 1.191, -8.651],
+        "rotation": [0, 170, 0],
+        "scale": [0.8, 0.8, 0.8]
+      }
+    },
+    "e_shell": {
+      "name": "Room and courtyard",
+      "order": "a8",
+      "MeshRenderer": {
+        "model": "@kit/atelier_shell.gltf#as_kitateliershell"
+      },
+      "Transform": {}
+    },
+    "e_sun": {
+      "name": "Sun",
+      "order": "a1",
+      "Light": {
+        "kind": "directional",
+        "color": [1, 0.949999988079071, 0.8600000143051147, 1],
+        "intensity": 80000
+      },
+      "Transform": {
+        "position": [0, 40, 30],
+        "rotation": [-40.15893, 17.43641, 14.19002]
+      }
+    }
+  }
+}
