@@ -15,21 +15,40 @@ No engine code was changed for any of these.
    is 93 to 104 ms of the interior frames (23.7 ms of the courtyard one). The scene has one
    sun and six local lights; the cost tracks how much of the frame is indoors (the courtyard
    view is a third of it). Draw counts were not measured.
-2. **Flat surfaces show low-frequency mottling.** Plaster walls, the ceiling and the
-   courtyard ground are flat-colour materials but render with soft blotches (visible in every
-   still; strongest on the ceiling and the packed earth). Headless captures settle 16 frames
-   (`settle_frames: 16` in the capture JSON). Not tried yet: a longer settle or the windowed
-   path. It would read as noise in any engine-to-engine comparison.
+2. **Flat plaster and the ceiling render with hand-wide blotches (not the material; GI is the suspect).**
+   Crops: [`preview/defects/ceiling_2x.jpg`](preview/defects/ceiling_2x.jpg) and
+   [`far_wall_2x.jpg`](preview/defects/far_wall_2x.jpg) (2x, from the committed still).
+   Diagnosis on the M5 (Renderlab RT through the ara-gpu backend; the Mac runs only this
+   path, so the non-RT path is untested here):
+   - The plaster is a plain material (no texture): flat base colour 0.66/0.62/0.55, then
+     0.9 neutral, then 0.85/0.84/0.80, all the same blotches, only their brightness and
+     warmth change.
+   - The pattern is **deterministic**: `--seed 5` gives a bit-identical image to seed 0 (and
+     the same still twice is bit-identical), so it is a fixed spatial pattern of the indirect
+     light, not frame noise.
+   - **GI cannot be switched off on this backend**, so the (b) and (c) renders were not
+     possible: `RENDERLAB_ABLATE=gi` and `ara capture --without global-illumination` both give a
+     bit-identical image and an unchanged `IndirectCache` pass (2 ms). `ablated()` is applied
+     in Renderlab's wgpu engine (`src/engine/mod.rs`) and I found no call to it in `backend_ara`. Whether the
+     blotches vanish with GI off (so are the indirect light) is a question for the PC's
+     RT and non-RT paths: render `e_camstill0` with `RENDERLAB_ABLATE=gi`.
+   - Brightness: at EV100 11.5 the ceiling's display luminance is 0.20 (sRGB 152/118/86) against
+     0.76 (250/222/181, partly clipped by the display transform) for the sunlit floor patch,
+     about 1:3.7; as scene luminance about 700 against 2,600 cd/m2 or more. The far wall in
+     shade is 0.17 and the floor in shade 0.16. At the first EV100 of 13 the same ceiling was 0.056.
+   - The brown cast is warm bounce: the indirect light comes off a beige marble floor and the
+     terracotta wall, under a warm sun; there is little blue sky fill in the room.
+   Not hidden by art: the blotches stay in every render.
 3. **No visible particles.** The dust motes (`VisualEffect` "dust" in the front sun shaft)
    do not appear in any Mac capture; the Metal backend's particle support is the known gap
    (`crates/ara-renderlab/AGENTS.md`). Kept in the scene and listed as an engine-side extra.
-4. **The mannequin has no neutral idle through the locomotion helper.** `anim::locomotion`
-   needs two gaits (a single `Walk` fails with `ARA7300 ... 1D blends need at least two
-   samples`); with two, a mannequin with no `CharacterController` showed a mid-stride pose
-   in the capture, not the idle (cause not investigated; the controller's `speed`
-   parameter is fed by `CharacterMotion`, which it does not have). Used instead: `Animator.idle` set to a
-   clip name of the model (`Idle_FoldArms`), which plays correctly and needs no controller
-   document.
+4. **No relaxed standing idle for the mannequin.** `anim::locomotion` needs two gaits (a single `Walk` fails with `ARA7300 ... 1D blends need at least two samples`),
+   and with a controller but no `CharacterController` the mannequin showed a mid-stride pose.
+   Using `Animator.idle` with a clip name works, but none of the library's idles is a relaxed
+   upright stand: `Idle_A` leans forward on a staggered stance, `Idle_FoldArms` is a wide
+   stance, `Idle_Talking` and `Idle_Torch` gesture, `Idle_Rail` is bent over. Atelier stands
+   the mannequin (`Idle_Talking`) in the courtyard, in the dolly and cut clips and out of the
+   still.
 
 ## P2: friction
 

@@ -10,7 +10,7 @@
   },
   "exposure": {
     "mode": "fixed",
-    "ev100": 12.5,
+    "ev100": 11.5,
     "isoNote": "ISO 100; photometric exposure H = L / (1.2 * 2^EV100)",
     "toneMapping": "Khronos PBR Neutral in Ara; export linear HDR for comparisons"
   },

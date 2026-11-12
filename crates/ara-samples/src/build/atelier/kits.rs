@@ -61,14 +61,16 @@ pub fn shell(root: &Path, lock: &Lock) -> Result<String> {
     const PAVING: usize = 4;
     const TERRACOTTA: usize = 5;
     const GROUND: usize = 6;
+    const SAND: usize = 7;
     let mut k = Kit::new(vec![
-        Material::textured("marble floor", "marble_01").tinted([0.96, 0.92, 0.85]),
-        Material::flat("cream plaster", [0.66, 0.62, 0.55], 0.9, 0.0),
+        Material::textured("marble floor", "marble_01").tinted([1.0, 0.98, 0.95]),
+        Material::flat("white plaster", [0.85, 0.84, 0.8], 0.9, 0.0),
         Material::flat("black steel", [0.05, 0.05, 0.055], 0.42, 1.0),
         Material::glass("window glass", [0.88, 0.96, 1.0], 0.14),
         Material::textured("courtyard stone", "concrete_floor_02").tinted([0.78, 0.74, 0.68]),
         Material::flat("terracotta plaster", [0.55, 0.22, 0.12], 0.88, 0.0),
         Material::flat("packed earth", [0.33, 0.28, 0.22], 0.95, 0.0),
+        Material::flat("sand lime render", [0.3, 0.27, 0.22], 0.9, 0.0),
     ]);
     let v = Vec3::new;
     let floor_m = meters(lock, "marble_01") * 3.0;
@@ -126,7 +128,23 @@ pub fn shell(root: &Path, lock: &Lock) -> Result<String> {
         (v(-7.0, 0.0, 0.4), v(-6.6, 1.3, 9.0)),
         (v(-7.0, 0.0, 8.6), v(7.0, 1.3, 9.0)),
     ] {
-        slab(&mut k, PLASTER, a, b, Vec2::ONE);
+        slab(&mut k, SAND, a, b, Vec2::ONE);
+    }
+    // A 2 cm sand render skin over the building's outer faces: sunlit white plaster would
+    // clip to flat white at the interior exposure and lose all modelling outside.
+    for (a, b) in [
+        (v(-4.42, 0.0, 0.4), v(-2.2, 4.42, 0.42)),
+        (v(2.2, 0.0, 0.4), v(4.42, 4.42, 0.42)),
+        (v(-2.2, 3.4, 0.4), v(2.2, 4.42, 0.42)),
+        // East wall around its window (z -7.4..-1.8, y 0.4..3.6).
+        (v(4.4, 0.0, -9.42), v(4.42, 4.4, -7.4)),
+        (v(4.4, 0.0, -1.8), v(4.42, 4.4, 0.42)),
+        (v(4.4, 0.0, -7.4), v(4.42, 0.4, -1.8)),
+        (v(4.4, 3.6, -7.4), v(4.42, 4.4, -1.8)),
+        (v(-4.42, 0.0, -9.42), v(-4.4, 4.4, 0.42)),
+        (v(-4.4, 0.0, -9.42), v(4.4, 4.4, -9.4)),
+    ] {
+        slab(&mut k, SAND, a, b, Vec2::ONE);
     }
     k.write(root, lock, "atelier_shell")
 }
@@ -135,7 +153,7 @@ pub fn shell(root: &Path, lock: &Lock) -> Result<String> {
 /// glass and brass, the armchair, bookshelf, lamps, rug and the painting.
 pub fn furniture(root: &Path, lock: &Lock) -> Result<String> {
     const OAK: usize = 0;
-    const LACQUER: usize = 1;
+    const WALNUT: usize = 1;
     const LEATHER: usize = 2;
     const STEEL: usize = 3;
     const BRASS: usize = 4;
@@ -145,24 +163,25 @@ pub fn furniture(root: &Path, lock: &Lock) -> Result<String> {
     const BULB: usize = 8;
     const RUG: usize = 9;
     const BOOKS: usize = 10;
+    const TERRACOTTA_BOOK: usize = 13;
     let mut k = Kit::new(vec![
         Material::flat("dark oak", [0.2, 0.12, 0.07], 0.5, 0.0),
-        Material::flat("red lacquer", [0.5, 0.03, 0.025], 0.1, 0.0),
-        Material::textured("leather", "fabric_leather_02").tinted([0.55, 0.36, 0.24]),
+        Material::flat("walnut", [0.3, 0.18, 0.1], 0.4, 0.0),
+        Material::flat("graphite leather", [0.09, 0.09, 0.1], 0.45, 0.0),
         Material::flat("brushed steel", [0.78, 0.79, 0.8], 0.34, 1.0),
         Material::flat("brushed brass", [0.93, 0.72, 0.36], 0.28, 1.0),
         Material::flat("chrome", [0.95, 0.95, 0.95], 0.03, 1.0),
         Material::flat("limestone plinth", [0.8, 0.77, 0.7], 0.45, 0.0),
         Material::glass("clear glass", [0.9, 0.97, 1.0], 0.16),
         Material::emitter("warm bulb", [1.0, 0.8, 0.55]),
-        Material::flat("indigo wool rug", [0.09, 0.14, 0.26], 1.0, 0.0),
-        Material::flat("book teal", [0.05, 0.3, 0.32], 0.7, 0.0),
-        Material::flat("book ochre", [0.62, 0.42, 0.08], 0.7, 0.0),
-        Material::flat("book cream", [0.78, 0.74, 0.62], 0.75, 0.0),
-        Material::flat("book crimson", [0.45, 0.06, 0.08], 0.7, 0.0),
+        Material::flat("oatmeal wool rug", [0.66, 0.6, 0.5], 1.0, 0.0),
+        Material::flat("book cream", [0.78, 0.74, 0.64], 0.75, 0.0),
+        Material::flat("book charcoal", [0.12, 0.12, 0.13], 0.7, 0.0),
+        Material::flat("book tan", [0.5, 0.4, 0.28], 0.75, 0.0),
+        Material::flat("book terracotta", [0.55, 0.22, 0.12], 0.7, 0.0),
         Material::flat("canvas white", [0.85, 0.84, 0.8], 0.9, 0.0),
-        Material::flat("canvas blue", [0.1, 0.22, 0.55], 0.85, 0.0),
-        Material::flat("canvas yellow", [0.85, 0.62, 0.08], 0.85, 0.0),
+        Material::flat("canvas charcoal", [0.14, 0.14, 0.15], 0.85, 0.0),
+        Material::flat("canvas oatmeal", [0.62, 0.55, 0.42], 0.85, 0.0),
     ]);
     let v = Vec3::new;
     // Sculpture: marble plinth, brass disc and a chrome sphere in the front sun patch.
@@ -170,9 +189,9 @@ pub fn furniture(root: &Path, lock: &Lock) -> Result<String> {
     block(&mut k, MARBLE, s + v(0.0, 0.45, 0.0), v(0.7, 0.9, 0.7));
     post(&mut k, BRASS, s + v(0.0, 0.9, 0.0), 0.3, 0.04);
     k.sphere(CHROME, s + v(0.0, 1.27, 0.0), 0.33, 48, Vec2::ONE);
-    // Table (red lacquer top on steel legs), rug beneath, objects on it.
+    // Table (walnut top on steel legs), rug beneath, objects on it.
     let t = v(0.2, 0.0, -6.0);
-    block(&mut k, LACQUER, t + v(0.0, 0.74, 0.0), v(1.9, 0.05, 0.95));
+    block(&mut k, WALNUT, t + v(0.0, 0.74, 0.0), v(1.9, 0.05, 0.95));
     for (dx, dz) in [(-0.9, -0.42), (0.9, -0.42), (-0.9, 0.42), (0.9, 0.42)] {
         post(&mut k, STEEL, t + v(dx, 0.0, dz), 0.025, 0.74);
     }
@@ -236,7 +255,7 @@ pub fn furniture(root: &Path, lock: &Lock) -> Result<String> {
     block(&mut k, 14, p + v(0.0, 0.0, 0.02), v(1.22, 0.92, 0.02));
     block(&mut k, 15, p + v(-0.2, -0.05, 0.035), v(0.6, 0.62, 0.01));
     block(&mut k, 16, p + v(0.3, 0.12, 0.035), v(0.4, 0.45, 0.01));
-    block(&mut k, LACQUER, p + v(0.25, -0.25, 0.04), v(0.3, 0.2, 0.01));
+    block(&mut k, TERRACOTTA_BOOK, p + v(0.25, -0.25, 0.04), v(0.3, 0.2, 0.01));
     k.write(root, lock, "atelier_furniture")
 }
 

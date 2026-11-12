@@ -127,7 +127,7 @@
         "overrides": [
           {
             "exposure": "manual",
-            "ev100": 12.5
+            "ev100": 11.5
           },
           {
             "module": "toneMapping",
@@ -261,7 +261,7 @@
       "name": "Mannequin (idle)",
       "order": "aN",
       "Animator": {
-        "idle": "Idle_FoldArms"
+        "idle": "Idle_Talking"
       },
       "MeshRenderer": {
         "model": "@third_party/m2m_human/human-base-animations.glb#as_m2mhuman",
@@ -272,8 +272,8 @@
         ]
       },
       "Transform": {
-        "position": [1.9, 0, -5],
-        "rotation": [0, -90, 0]
+        "position": [-3.6, 0, 2.2],
+        "rotation": [0, 150, 0]
       }
     },
     "e_plant0": {

@@ -1,7 +1,7 @@
 //! "Atelier": a small, clean cross-engine comparison scene. A white-plaster studio with
 //! a terracotta wall, lit by one sun through a doorway, an east window and a roof slot,
 //! opening onto a limestone courtyard with a few plants; so bounce light matters. Metal
-//! (chrome, brass, steel), glass, red lacquer, leather, marble, oak and emissive bulbs;
+//! (chrome, brass, steel), glass, walnut, graphite leather, marble, oak and emissive bulbs;
 //! one idling mannequin; six local lights with explicit source sizes.
 //!
 //! Built to cross engines: one fixed exposure, physical light units, a gradient sky
@@ -28,7 +28,7 @@ pub const SCENE: (&str, &str) = ("levels/atelier.scene", "sc_atelier01");
 
 /// Fixed exposure (EV100 at ISO 100, ACES-style reference of 1.2·2^EV cd/m² at white
 /// in Ara's meter convention), the same in every engine.
-const EV100: f32 = 12.5;
+const EV100: f32 = 11.5;
 /// The sun: illuminance on a surface facing it, lux, and the direction its light
 /// travels (unit, world space; it shines in through the doorway and the east window).
 const SUN_LUX: f32 = 75_000.0;
@@ -341,7 +341,16 @@ pub fn build(ctx: &Ctx) -> Result<()> {
     ] {
         ctx.third_party(&mut models, name, asset)?;
     }
-    super::outpost::human(ctx, &mut models)?;
+    // A pale clay mannequin: the suit palette recast, not Outpost's graphite.
+    let palette = crate::kit::recolor(
+        &ctx.root,
+        &ctx.lock,
+        "m2m_human",
+        "color-palette",
+        [0.78, 0.76, 0.72],
+        "human_suit",
+    )?;
+    super::materials::palette(ctx, &mut models, "human", "m2m_human", &palette)?;
     for (name, path) in kits_written(&ctx.root, &ctx.lock)? {
         ctx.model(&mut models, &name, &path, &format!("as_kit{}", short(&name)))?;
     }
@@ -425,14 +434,15 @@ pub fn build(ctx: &Ctx) -> Result<()> {
     {
         s.prop(Prop::new(&format!("e_plant{i}"), "Plant", model, at, yaw).scaled(scale).decor());
     }
-    // The mannequin stands in the window's sun stripe beside the table, arms folded.
+    // The mannequin stands in the courtyard, in view of the dolly and the cut clip but not the
+    // interior still: none of the library's idle clips is a relaxed standing pose (wide stance).
     s.entity(
         "e_mannequin",
         "Mannequin (idle)",
         json!({
-            "Transform": transform(Vec3::new(1.9, 0.0, -5.0), -90.0, 1.0),
+            "Transform": transform(Vec3::new(-3.6, 0.0, 2.2), 150.0, 1.0),
             "MeshRenderer": models.get("human").renderer,
-            "Animator": {"idle": "Idle_FoldArms"},
+            "Animator": {"idle": "Idle_Talking"},
         }),
     );
     s.entity(

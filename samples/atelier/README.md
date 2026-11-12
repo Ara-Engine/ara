@@ -30,7 +30,7 @@ direction the light moves, not where it comes from.
 
 | | |
 |---|---|
-| Exposure | fixed, **EV100 12.5**, no auto-exposure, no compensation (photometric `H = L / (1.2 * 2^EV100)`) |
+| Exposure | fixed, **EV100 11.5**, no auto-exposure, no compensation (photometric `H = L / (1.2 * 2^EV100)`) |
 | Tone mapping | Khronos PBR Neutral in Ara; for comparisons use linear HDR or each engine's neutral |
 | Post | no bloom, vignette, grading, fog, decals or material graphs |
 
@@ -60,9 +60,10 @@ shadow flag yet (see FINDINGS).
 
 | Material | Base colour | Rough | Metal | Notes |
 |---|---|---|---|---|
-| Cream plaster (walls, ceiling, courtyard walls) | 0.66, 0.62, 0.55 | 0.9 | 0 | |
+| White plaster (interior walls, ceiling) | 0.85, 0.84, 0.8 | 0.9 | 0 | plain, untextured |
+| Sand lime render (2 cm outer skin, courtyard walls) | 0.3, 0.27, 0.22 | 0.9 | 0 | keeps modelling outside at the interior exposure |
 | Terracotta plaster (west wall) | 0.55, 0.22, 0.12 | 0.88 | 0 | colour-bounce source |
-| Marble floor | marble_01 x (0.96, 0.92, 0.85) | texture | texture | 1.5 m texture repeat |
+| Marble floor | marble_01 x (1.0, 0.98, 0.95) | texture | texture | 1.5 m texture repeat |
 | Courtyard stone | concrete_floor_02 x (0.78, 0.74, 0.68) | texture | texture | |
 | Packed earth (ground) | 0.33, 0.28, 0.22 | 0.95 | 0 | |
 | Black steel (frames, legs) | 0.05, 0.05, 0.055 | 0.42 | 1 | |
@@ -70,19 +71,19 @@ shadow flag yet (see FINDINGS).
 | Chrome sphere | 0.95 | 0.03 | 1 | mirror-like |
 | Brushed brass | 0.93, 0.72, 0.36 | 0.28 | 1 | |
 | Brushed steel | 0.78, 0.79, 0.8 | 0.34 | 1 | |
-| Red lacquer (table) | 0.5, 0.03, 0.025 | 0.1 | 0 | glossy |
-| Leather (armchair) | fabric_leather_02 x (0.55, 0.36, 0.24) | texture | texture | |
+| Walnut (table top) | 0.3, 0.18, 0.1 | 0.4 | 0 | |
+| Graphite leather (armchair) | 0.09, 0.09, 0.1 | 0.45 | 0 | |
 | Limestone (plinth, planters) | 0.8, 0.77, 0.7 | 0.45 | 0 | |
-| Dark oak, teak, books, rug, canvas | flat colours | 0.5-1.0 | 0 | |
+| Dark oak, teak, oatmeal rug (0.66, 0.6, 0.5), books (cream, charcoal, tan, terracotta), canvas (white, charcoal, oatmeal, terracotta) | flat colours | 0.5-1.0 | 0 | one accent colour, the terracotta |
 | Emissive bulbs and lantern glass | 6000 / 5000 nits x (1.0, 0.8, 0.55) | | | KHR_materials_emissive_strength |
 
 ## Assets
 
 All CC0, pinned in `samples/assets.lock.json` (sources and licences in
 [THIRD_PARTY_ASSETS.md](../THIRD_PARTY_ASSETS.md)): Poly Haven textures `marble_01`,
-`concrete_floor_02`, `fabric_leather_02`; Poly Haven models `potted_plant_01`,
+`concrete_floor_02`; Poly Haven models `potted_plant_01`,
 `potted_plant_02`, `fern_02`, `shrub_04`, `lantern_01`, `vintage_radio_transceiver`;
-Khronos `FlightHelmet` and `AntiqueCamera`; the Mesh2Motion mannequin. The room, furniture
+Khronos `FlightHelmet` and `AntiqueCamera`; the Mesh2Motion mannequin (a pale clay suit). The room, furniture
 and courtyard are generated glTF kits (`content/kit/`, git-ignored).
 
 ## Camera clips
@@ -92,11 +93,11 @@ between keys, a key with `cut: true` ends its segment.
 
 | Clip | Length | What |
 |---|---|---|
-| `still` | 1 frame | interior from the east side: sun patches, chrome sphere, table, armchair |
+| `still` | 1 frame | interior from the east side: sun patches and window shafts, chrome sphere, table, armchair |
 | `dolly` | 8 s | push from the courtyard through the doorway toward the table |
 | `cut` | 6 s | 3 s low courtyard pan, hard cut to the chrome sphere |
 
 ## Engine-side extras (do not export)
 
-The mannequin's idle animation (skinned meshes are baked at one pose by the exporter), the
+The mannequin (stands in the courtyard; seen in the dolly and cut clips, not the still) and its idle animation (skinned meshes are baked at one pose by the exporter), the
 dust particles in the sun shaft, and per-light shadow choices (see FINDINGS).
