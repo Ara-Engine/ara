@@ -39,6 +39,7 @@ this crate alone.
 - `terrain.rs`: resident terrain tiles and foliage instances as meshes; `splat.rs`:
   the tiles' layer maps (atlas, weights and the splat program).
 - `bridge.rs`: the frame loop and the image handoff; `shared.rs`: the shared ring.
+  `Bridge::begin` syncs the scene on the caller's thread, then `lent.rs` moves the engine (`Rig`: engine, target, meter readbacks) to a worker thread that records and submits the frame, the ids, the shared-slot copy and the meter pass; `finish`, `pick_id` and the next `begin` take the engine back (`Lent::try_home`/`wait`). The caller never touches the engine while a frame is being recorded.
   `bridge_metal.rs`: Apple's loop, on the presenter's device (nothing crosses); backend refusals go to `gaps`.
 - `id_target.rs`: the id texture Renderlab writes and its CPU readback; `Scene::tag` and `Terrain::tag` (`scene.rs`, `terrain.rs`) give objects the editor's ids.
 - `gaps.rs`: `ARA_RENDERLAB_UNSUPPORTED`/`ARA_RENDERLAB_LIMIT` reporting.

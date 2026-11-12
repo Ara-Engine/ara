@@ -7,6 +7,7 @@ use crate::{
     decals::Decals,
     effects::Effects,
     gaps::Gaps,
+    lent::Lent,
     lighting::{self, Metering},
     meter::Readbacks,
     scene::{MAX_GROUPS, Scene},
@@ -53,9 +54,97 @@ struct Target {
     ids: Option<crate::id_target::IdTarget>,
 }
 
+/// What the frame worker works on: the engine and everything its frame jobs touch. It is
+/// away on the worker while a frame is recorded and submitted (`Bridge::begin`) and home
+/// again when the studio thread next needs the engine (`Bridge::finish`, a click, the next
+/// frame's sync).
+struct Rig {
+    /// Declared before `engine`: the shared ring lives on the engine's device and
+    /// must drop first.
+    target: Option<Target>,
+    engine: Engine,
+    /// The GPU histogram passes in flight for the meter.
+    readbacks: Readbacks,
+    /// What the meter's passes report on the worker (the bridge's `gaps` stays on the
+    /// studio thread).
+    gaps: Gaps,
+    /// What the last job did, until `Bridge::reap` takes it.
+    drawn: Option<Result<Drawn>>,
+}
+
+/// One frame's job for the worker.
+struct Draw {
+    view: ViewId,
+    camera: renderlab::engine::Camera,
+    size: [u32; 2],
+    /// Ids are written beside the frame (`Options::scene_ids`).
+    scene_ids: bool,
+    /// The meter's reading and exposure to queue a histogram pass for, when it is due.
+    meter: Option<(f32, f32)>,
+}
+
+/// What a frame job produced.
+struct Drawn {
+    frame: renderlab::engine::FrameId,
+    /// Whether the meter's pass was queued, when one was asked for.
+    meter_queued: Option<bool>,
+}
+
+impl Rig {
+    /// Records and submits `draw`'s frame, then queues the work that follows it: the ids, the
+    /// copy into the shared slot and the meter's pass. Runs on the frame worker.
+    fn draw(&mut self, draw: Draw) -> Result<Drawn> {
+        let frame = self.engine.render_view(draw.view, &draw.camera)?.frame;
+        let target = self
+            .target
+            .as_mut()
+            .context("the frame was begun without a target")?;
+        if draw.scene_ids {
+            if target.ids.as_ref().is_none_or(|t| t.size() != draw.size) {
+                target.ids = Some(crate::id_target::IdTarget::new(
+                    self.engine.device(),
+                    draw.size,
+                ));
+            }
+            if let Some(ids) = &target.ids {
+                ids.write(&mut self.engine, draw.view)?;
+            }
+        }
+        // Shared: the copy into the shared slot queues behind the frame right away.
+        if let Some(shared) = &mut target.shared {
+            match &target.ids {
+                Some(ids) => shared.set_id(ids.texture().clone()),
+                None if crate::shared::scene_ids_pattern() => {
+                    shared.stage_pattern(&self.engine)?;
+                }
+                None => {}
+            }
+            shared.publish(&self.engine, draw.view)?;
+        }
+        // The meter: it does not wait; a refused pass is asked for again next frame.
+        let meter_queued = draw.meter.map(|(meter, stops)| {
+            self.engine.view_output(draw.view).is_some_and(|output| {
+                self.readbacks.submit(
+                    self.engine.device(),
+                    self.engine.queue(),
+                    output,
+                    meter,
+                    stops,
+                    &mut self.gaps,
+                )
+            })
+        });
+        Ok(Drawn {
+            frame,
+            meter_queued,
+        })
+    }
+}
+
 /// A frame begun and not yet taken.
 struct Pending {
-    frame: renderlab::engine::FrameId,
+    /// The engine's id for it, known once the worker has submitted it.
+    frame: Option<renderlab::engine::FrameId>,
     view: ViewId,
     since: Instant,
     /// The engine reported it complete.
@@ -72,10 +161,8 @@ struct Applied {
 }
 
 pub(crate) struct Bridge {
-    /// Declared before `engine`: the shared ring lives on the engine's device and
-    /// must drop first.
-    target: Option<Target>,
-    engine: Engine,
+    /// The engine and its frame state, on the frame worker while a frame is submitted.
+    rig: Lent<Rig>,
     path: ActivePath,
     scene: Scene,
     terrain: Terrain,
@@ -90,8 +177,6 @@ pub(crate) struct Bridge {
     desc: ViewDesc,
     /// The look last applied to the view without its table, so unchanged frames set nothing.
     last_look: Option<ViewLook>,
-    /// The GPU histogram passes in flight for the meter.
-    readbacks: Readbacks,
     max_reflection_roughness: Option<f32>,
     skies: Skies,
     /// The frames cross by CPU copy: asked for, or the shared route is unavailable.
@@ -206,9 +291,19 @@ impl Bridge {
         );
         // The meter's pipeline and buffers, made now rather than on the first metered frame.
         let readbacks = Readbacks::new(engine.device());
+        let rig = Lent::new(
+            "renderlab-frame",
+            Rig {
+                target: None,
+                engine,
+                readbacks,
+                gaps: Gaps::default(),
+                drawn: None,
+            },
+        )
+        .context("Renderlab could not start its frame worker")?;
         Ok(Self {
-            target: None,
-            engine,
+            rig,
             path,
             scene: Scene::default(),
             terrain: Terrain::default(),
@@ -224,7 +319,6 @@ impl Bridge {
                 desc
             },
             last_look: None,
-            readbacks,
             max_reflection_roughness: options.max_reflection_roughness,
             skies: Skies::new(options.constant_sky),
             cpu_copy: options.cpu_copy_handoff,
@@ -252,7 +346,10 @@ impl Bridge {
         let (Some(view), true) = (self.view, self.scene_ids) else {
             return Ok(None);
         };
+        // The ids are of the frame the worker may still be submitting.
+        self.rig.wait();
         let Ok(request) = self
+            .rig
             .engine
             .request_ids(view, renderlab::IdRect::pixel(pixel[0], pixel[1]))
         else {
@@ -300,6 +397,8 @@ impl Bridge {
             self.pending.is_none(),
             "a frame is in flight: finish it before beginning another"
         );
+        // The sync below needs the engine on this thread.
+        self.rig.wait();
         let frame = view.frame;
         // The meter's readings of earlier frames, the previous one's included: the bridge
         // waited for that frame and its histogram pass is queued right behind it, so the
@@ -308,7 +407,8 @@ impl Bridge {
         // frame back. Readings that finish while automatic exposure is off are dropped, not
         // kept for when it comes back on.
         let automatic = view.look.ev100.is_none();
-        for reading in self.readbacks.poll(self.engine.device(), &mut self.gaps) {
+        let rig = self.rig.wait();
+        for reading in rig.readbacks.poll(rig.engine.device(), &mut rig.gaps) {
             if automatic {
                 self.metering
                     .observe(view.look, reading.meter, reading.stops, &reading.histogram);
@@ -323,7 +423,7 @@ impl Bridge {
         for _ in 0..2 {
             let known = self.scene.largest_triangles();
             let (tiles, assumed) = self.terrain.sync(
-                &mut self.engine,
+                &mut self.rig.engine,
                 view,
                 TERRAIN_GROUPS,
                 nonrt.then_some(known),
@@ -331,7 +431,7 @@ impl Bridge {
             )?;
             let (foliage, foliage_key) = self.terrain.foliage();
             self.scene.sync(
-                &mut self.engine,
+                &mut self.rig.engine,
                 frame,
                 foliage,
                 foliage_key,
@@ -344,14 +444,16 @@ impl Bridge {
         }
         // Terrain tiles follow the frame's draws in the editor's id numbering.
         self.terrain
-            .tag(&mut self.engine, frame.draws.len() as u32 + 1)?;
-        self.decals.sync(&mut self.engine, frame, &mut self.gaps)?;
-        self.effects.sync(&mut self.engine, frame, &mut self.gaps)?;
+            .tag(&mut self.rig.engine, frame.draws.len() as u32 + 1)?;
+        self.decals
+            .sync(&mut self.rig.engine, frame, &mut self.gaps)?;
+        self.effects
+            .sync(&mut self.rig.engine, frame, &mut self.gaps)?;
 
         let (stops, metered) = lighting::exposure_stops(view, &mut self.metering);
         let (settings, look) =
             lighting::settings(view, stops, self.max_reflection_roughness, &mut self.gaps);
-        self.engine.set_settings(settings)?;
+        self.rig.engine.set_settings(settings)?;
         let authored = crate::grade::authored(view);
         let grade = crate::grade::key(view.look, authored);
         let regrade = self.applied.grade != Some(grade);
@@ -372,17 +474,17 @@ impl Bridge {
             };
             (self.desc.width, self.desc.height) = (view.size[0], view.size[1]);
             match self.view {
-                Some(id) => self.engine.set_view(id, &self.desc)?,
-                None => self.view = Some(self.engine.create_view(&self.desc)?),
+                Some(id) => self.rig.engine.set_view(id, &self.desc)?,
+                None => self.view = Some(self.rig.engine.create_view(&self.desc)?),
             }
             self.last_look = Some(look);
         }
         let view_id = self.view.context("the view was created above")?;
         self.skies
-            .apply(&mut self.engine, view, &mut self.gaps, self.cut)?;
+            .apply(&mut self.rig.engine, view, &mut self.gaps, self.cut)?;
         let sun = lighting::sun(frame);
         if self.applied.sun != sun {
-            self.engine.set_sun(sun)?;
+            self.rig.engine.set_sun(sun)?;
             self.applied.sun = sun;
         }
         let lights = lighting::lights(
@@ -390,7 +492,7 @@ impl Bridge {
             &mut self.gaps,
         );
         if self.applied.lights != lights {
-            self.engine.set_lights(&lights)?;
+            self.rig.engine.set_lights(&lights)?;
             self.applied.lights = lights;
         }
 
@@ -402,64 +504,29 @@ impl Bridge {
             self.last_view = Some(view);
         }
         if std::mem::take(&mut self.cut) {
-            self.engine.cut_view(view_id);
+            self.rig.engine.cut_view(view_id);
             // As Ara resets its exposure history: the meter snaps to its target.
             self.metering.snap();
             // Readings in flight describe the old view.
-            self.readbacks.discard();
+            self.rig.readbacks.discard();
         }
         self.ensure_target(gpu, view.size)?;
-        let rendered = self
-            .engine
-            .render_view(view_id, &lighting::camera(frame)?)?
-            .frame;
-        let target = self.target.as_mut().context("target ensured above")?;
-        // Shared: the copy into the shared slot queues behind the frame right away.
-        if self.scene_ids {
-            if target.ids.as_ref().is_none_or(|t| t.size() != view.size) {
-                target.ids = Some(crate::id_target::IdTarget::new(
-                    self.engine.device(),
-                    view.size,
-                ));
-            }
-            if let Some(ids) = &target.ids {
-                ids.write(&mut self.engine, view_id)?;
-            }
-        }
-        if let Some(shared) = &mut target.shared {
-            match &target.ids {
-                Some(ids) => shared.set_id(ids.texture().clone()),
-                None if crate::shared::scene_ids_pattern() => {
-                    shared.stage_pattern(&self.engine)?;
-                }
-                None => {}
-            }
-            shared.publish(&self.engine, view_id)?;
-        }
-
-        // The meter: queue this frame's histogram pass when the meter asks (every frame while
-        // it snaps, then every 16th). It does not wait; a refused pass is asked for again
-        // next frame.
-        if let Some(meter) = metered
-            && self.metering.due()
-        {
-            let queued = self.engine.view_output(view_id).is_some_and(|output| {
-                self.readbacks.submit(
-                    self.engine.device(),
-                    self.engine.queue(),
-                    output,
-                    meter,
-                    stops,
-                    &mut self.gaps,
-                )
-            });
-            if !queued {
-                self.metering.retry();
-            }
-        }
-
+        let camera = lighting::camera(frame)?;
+        // The meter's pass: asked for every frame while it snaps, then every 16th.
+        let meter = metered.filter(|_| self.metering.due());
+        let draw = Draw {
+            view: view_id,
+            camera,
+            size: view.size,
+            scene_ids: self.scene_ids,
+            meter: meter.map(|meter| (meter, stops)),
+        };
+        // The frame is recorded and submitted on the worker, with the ids, the copy into the
+        // shared slot and the meter's pass behind it; this thread is free until the GPU is
+        // done (`Self::finish`).
+        self.rig.send(move |rig| rig.drawn = Some(rig.draw(draw)));
         self.pending = Some(Pending {
-            frame: rendered,
+            frame: None,
             view: view_id,
             since: Instant::now(),
             done: false,
@@ -467,10 +534,34 @@ impl Bridge {
         Ok(())
     }
 
+    /// Takes the result of the frame job once the worker has handed the engine back: the
+    /// frame's id, or why it could not be drawn.
+    fn reap(&mut self) -> Result<()> {
+        let Some(drawn) = self.rig.wait().drawn.take() else {
+            return Ok(());
+        };
+        match drawn {
+            Ok(drawn) => {
+                if let Some(pending) = &mut self.pending {
+                    pending.frame = Some(drawn.frame);
+                }
+                if drawn.meter_queued == Some(false) {
+                    self.metering.retry();
+                }
+                Ok(())
+            }
+            Err(error) => {
+                self.pending = None;
+                Err(error)
+            }
+        }
+    }
+
     /// Reads the engine's events: the GPU's pass timings, and whether the frame in flight has
     /// completed (any caller's poll may be the one that sees it).
     fn pump(&mut self) -> Result<renderlab::engine::Events> {
-        let events = self.engine.poll()?;
+        self.reap()?;
+        let events = self.rig.engine.poll()?;
         if let Some(sample) = events.gpu.last() {
             let ms = |pass: Option<std::time::Duration>| pass.map(|d| d.as_secs_f64() * 1000.);
             self.gpu_ms = ms(Some(sample.render_span));
@@ -489,7 +580,7 @@ impl Bridge {
             && events
                 .completed
                 .iter()
-                .any(|c| c.frame == Some(pending.frame))
+                .any(|c| c.frame.is_some() && c.frame == pending.frame)
         {
             pending.done = true;
         }
@@ -503,6 +594,10 @@ impl Bridge {
         if self.pending.is_none() {
             return Ok(None);
         }
+        // The worker is still recording or submitting it.
+        if !self.rig.try_home() {
+            return Ok(None);
+        }
         self.pump()?;
         let Some(pending) = &self.pending else {
             return Ok(None);
@@ -512,7 +607,8 @@ impl Bridge {
         }
         let view_id = pending.view;
         self.pending = None;
-        let target = self
+        let rig = &mut *self.rig;
+        let target = rig
             .target
             .as_mut()
             .context("a frame is in flight without a target")?;
@@ -529,11 +625,11 @@ impl Bridge {
             }
             target.image
         } else {
-            let read = self.engine.capture_view(view_id)?;
+            let read = rig.engine.capture_view(view_id)?;
             id_texels = target
                 .ids
                 .as_ref()
-                .map(|ids| ids.read(&self.engine))
+                .map(|ids| ids.read(&rig.engine))
                 .transpose()?;
             upload(gpu, target, &read.rgba8)?
         };
@@ -552,10 +648,10 @@ impl Bridge {
     /// The presenter-device image for `size` (recreated on a resize), with the
     /// shared ring wherever the two devices can share images.
     fn ensure_target(&mut self, gpu: &mut GpuDevice, size: [u32; 2]) -> Result<()> {
-        if self.target.as_ref().is_some_and(|t| t.size != size) {
+        if self.rig.target.as_ref().is_some_and(|t| t.size != size) {
             self.release(gpu)?;
         }
-        if self.target.is_some() {
+        if self.rig.target.is_some() {
             return Ok(());
         }
         let image = gpu.create_image(
@@ -569,7 +665,7 @@ impl Bridge {
         let shared = if self.cpu_copy {
             None
         } else {
-            match SharedHandoff::new(&self.engine, gpu, size) {
+            match SharedHandoff::new(&self.rig.engine, gpu, size) {
                 Ok(shared) => Some(shared),
                 Err(error) => {
                     // Once: the reason does not change with the size.
@@ -581,7 +677,7 @@ impl Bridge {
                 }
             }
         };
-        self.target = Some(Target {
+        self.rig.target = Some(Target {
             image,
             size,
             staging: None,
@@ -625,7 +721,10 @@ impl Bridge {
     pub fn release(&mut self, gpu: &mut GpuDevice) -> Result<()> {
         // A frame in flight draws into the target: it goes with it.
         self.pending = None;
-        if let Some(target) = self.target.take() {
+        // The worker may still be drawing into the target: the engine comes home first.
+        let rig = self.rig.wait();
+        rig.drawn = None;
+        if let Some(target) = rig.target.take() {
             // The import hands its slots back on this device before the image goes.
             drop(target.shared);
             if let Some(id) = target.id {
