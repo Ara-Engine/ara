@@ -224,6 +224,8 @@ impl MetalDevice {
     }
     /// Check that all submitted work completed before a UI shows its images. Scene
     /// and UI share one Metal graphics queue, so no GPU dependency is added.
+    /// [`Self::publish_submission_to_ui`] is the per-submission form of this call;
+    /// on Metal both are empty of GPU work.
     pub fn publish_completed_to_ui(&self) -> Result<()> {
         let completed = Device::completed(self)?;
         if (0..2).any(|q| completed[q] < self.submitted[q]) {
@@ -231,6 +233,13 @@ impl MetalDevice {
                 "Cannot publish an unfinished frame to the UI".into(),
             ));
         }
+        Ok(())
+    }
+    /// Make one completed graphics submission visible to the UI. Scene and UI share
+    /// one Metal graphics queue, so this is a no-op. On Vulkan,
+    /// [`Self::publish_completed_to_ui`] waits for every queue at a frame boundary
+    /// and refuses unfinished frames; this waits for `point` alone.
+    pub fn publish_submission_to_ui(&self, _point: TimelinePoint) -> Result<()> {
         Ok(())
     }
     fn consume_completion(

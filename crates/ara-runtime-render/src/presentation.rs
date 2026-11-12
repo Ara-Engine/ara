@@ -255,7 +255,7 @@ impl Presenter {
     }
 
     pub(crate) fn ensure_device(&mut self) -> Result<()> {
-        if self.renderer.is_some() {
+        if self.device.is_some() {
             return Ok(());
         }
         let mut warm = RenderFrame::default();
@@ -280,14 +280,18 @@ impl Presenter {
             receives_decals: true,
         });
         let scene = self.scene(&warm, &[])?;
-        let renderer = if let Some(gpu) = self.initial_device.take() {
-            Renderer::with_device(scene, [64, 64], gpu)?
+        // One device with hardware ray queries where the GPU has them, so the
+        // ray-tracing opt-in can switch on without recreating it. Nothing traces
+        // rays unless the options opt in. On Apple this is the Metal device.
+        let device = if let Some(gpu) = self.initial_device.take() {
+            crate::PresentationDevice::from_device(gpu)
         } else {
-            // One device with hardware ray queries where the GPU has them, so the
-            // ray-tracing opt-in (the fidelity renderer) can switch on without
-            // recreating it. Nothing traces rays unless the options opt in.
-            Renderer::new_hybrid(scene, [64, 64], &self.extensions, &self.cache)?
+            crate::PresentationDevice::open(&self.extensions, &self.cache)?
         };
+        // The renderer keeps a lease, so moving `device` into `self` leaves the
+        // allocation in place. `Drop` still drops the renderer before the device.
+        let renderer = Renderer::on_device(scene, [64, 64], device.lease())?;
+        self.device = Some(device);
         self.renderer = Some(renderer);
         Ok(())
     }
@@ -807,18 +811,24 @@ impl Presenter {
 impl Drop for Presenter {
     fn drop(&mut self) {
         let _ = self.drain();
-        if let Some(renderer) = &mut self.renderer {
-            if let Some(mut external) = self.external.take() {
-                let _ = external.release(renderer.gpu_mut());
+        let external = self.external.take();
+        let live = self.live.take();
+        let image = self.published.take();
+        if let Some(device) = self.device.as_mut() {
+            let gpu = device.gpu_mut();
+            if let Some(mut external) = external {
+                let _ = external.release(gpu);
             }
-            if let Some(live) = self.live.take() {
-                let _ = live.destroy(renderer.gpu_mut());
+            if let Some(live) = live {
+                let _ = live.destroy(gpu);
             }
-            if let Some(image) = self.published.take() {
-                let _ = renderer.gpu_mut().retire(Resource::Image(image.image));
+            if let Some(image) = image {
+                let _ = gpu.retire(Resource::Image(image.image));
             }
-            let _ = renderer.gpu_mut().collect();
+            let _ = gpu.collect();
         }
+        // The bootstrap renderer borrows `device`. Drop it before the device field.
+        self.renderer.take();
     }
 }
 

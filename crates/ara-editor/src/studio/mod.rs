@@ -187,7 +187,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     })?;
     let cache = rt.state().editor.host.root().join(".ara/gpu");
     let mut quit = false;
-    let renderer = viewport::prepare_renderer(
+    let prepared = viewport::prepare_renderer(
         scene,
         extent,
         present_extensions(),
@@ -204,7 +204,8 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         },
     )
     .map_err(|e| anyhow::anyhow!("{e}"))?;
-    let Some(mut renderer) = renderer else {
+    // `scene_device` is declared first so it drops after `renderer`.
+    let Some((scene_device, mut renderer)) = prepared else {
         return Ok(());
     };
     let device = serde_json::to_string(renderer.gpu().info()).unwrap_or_default();
@@ -222,10 +223,11 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         rt.touch(|s| SceneSync::new(s.editor.models.revision(), s.editor.host.store().revision()));
     let mut revision = rt.state().editor.host.store().revision();
     let mut extraction = rt.state().editor.extraction_revision;
-    // SAFETY: the renderer outlives the compositor (retired and dropped below, before
-    // it); this thread submits for both.
+    // SAFETY: `scene_device` outlives the compositor (retired and dropped below,
+    // before it). The scene renderer borrows that device. This thread submits
+    // for both.
     let mut compositor =
-        unsafe { compositor::Compositor::new(&renderer, rt.state().editor.state.light)? };
+        unsafe { compositor::Compositor::new(scene_device.gpu(), rt.state().editor.state.light)? };
     // SAFETY: as the compositor's.
     let mut game = unsafe { game::Game::new(&renderer)? };
     // SAFETY: as the compositor's.
@@ -281,7 +283,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     loop {
         // Vulkan's Scene may run on its own queue: finish external reads before recycling images.
         #[cfg(any(windows, target_os = "linux"))]
-        if !compositor.scene_ready(&renderer)? {
+        if !compositor.scene_ready(scene_device.gpu())? {
             // Cancelling a bake must not wait for the GPU reads this gate waits on.
             rt.touch(|s| {
                 server.pump(&mut s.editor);
@@ -1105,7 +1107,14 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     if !retired {
         // A bake still has work on the GPU: destroying its renderer under it is worse than
         // leaving the GPU objects to the process exit, which follows at once.
-        std::mem::forget((scene_view, graph_layer, compositor, game, renderer));
+        std::mem::forget((
+            scene_view,
+            graph_layer,
+            compositor,
+            game,
+            renderer,
+            scene_device,
+        ));
         return Ok(());
     }
     renderer.wait_scene_frame().ok();

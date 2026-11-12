@@ -1220,7 +1220,7 @@ impl SceneView {
             self.published
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Scene has no completed fidelity frame"))?
-                .capture(renderer, &mut capture)?;
+                .capture(renderer.gpu_mut(), &mut capture)?;
         }
         if matches!(request.mode, ViewMode::Lit)
             && let Some(renderlab) = &self.renderlab

@@ -317,7 +317,8 @@ impl Effects {
         // the request), exactly as presented frames are.
         let output =
             renderer.finish(background.image, background.sampled_index, background.state)?;
-        crate::readback::replace(renderer, output, capture)?;
+        let extent = renderer.size();
+        crate::readback::replace(renderer.gpu_mut(), output, extent, capture)?;
         Ok(())
     }
 }

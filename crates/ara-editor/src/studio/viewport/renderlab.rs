@@ -140,7 +140,9 @@ impl RenderlabScene {
         capture: &mut ara_render::capture::Capture,
     ) -> Result<()> {
         match &self.published {
-            Some(image) if image.size() == renderer.size() => image.capture(renderer, capture),
+            Some(image) if image.size() == renderer.size() => {
+                image.capture(renderer.gpu_mut(), capture)
+            }
             _ => Ok(()),
         }
     }
