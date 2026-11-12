@@ -4,6 +4,8 @@
 //! left in `CopySource` on that device. The scene mapping is the one the wgpu path
 //! uses (`scene`, `terrain`, `decals`, `effects`); what the backend does not draw yet
 //! it reports, and the bridge passes each report on once (`ARA_RENDERLAB_UNSUPPORTED`).
+//! A frame splits as on the wgpu path: `begin` submits it and returns, `finish` takes it
+//! once the GPU has finished it, without waiting; `render` is the two with a wait between.
 use crate::{
     ActivePath, Options,
     decals::Decals,
@@ -16,11 +18,14 @@ use crate::{
     terrain::Terrain,
 };
 use anyhow::{Context, Result, anyhow};
-use ara_gpu::{Access, Barrier, Device, GpuDevice, Image, Queue, Resource, commands::Command};
+use ara_gpu::{
+    Access, Barrier, Buffer, Device, GpuDevice, Image, Queue, Resource, TimelinePoint,
+    commands::Command,
+};
 use ara_runtime_render::{EXTERNAL_PASSES, ExternalFrame, ExternalView};
 use renderlab::{
     IdLayer, ViewId,
-    backend_ara::cache::ShaderCache,
+    backend_ara::{cache::ShaderCache, histogram::HistogramDesc},
     engine::{Light, Outputs, Settings, Sun, ViewDesc, ViewLook},
 };
 
@@ -33,6 +38,16 @@ struct Applied {
     grade: Option<u64>,
 }
 
+/// A frame submitted and not yet taken: its displayed image, its packed ids with their
+/// readback, the point queued behind them, and the newest finished frame's GPU times.
+struct Pending {
+    image: Image,
+    ids: Option<(Image, Buffer)>,
+    point: TimelinePoint,
+    gpu_ms: Option<f64>,
+    passes: [(&'static str, f64); EXTERNAL_PASSES],
+}
+
 pub(crate) struct Bridge {
     engine: Engine,
     scene: Scene,
@@ -43,6 +58,11 @@ pub(crate) struct Bridge {
     applied: Applied,
     skies: Skies,
     metering: Metering,
+    /// The meter's histograms in flight: each request with the meter and exposure of the
+    /// frame it binned.
+    metered: Vec<(u64, f32, f32)>,
+    /// The frame [`Bridge::begin`] submitted, until [`Bridge::finish`] takes it.
+    pending: Option<Pending>,
     max_reflection_roughness: Option<f32>,
     /// The one view the bridge renders (the presenter's), created on the first frame.
     view: Option<ViewId>,
@@ -91,6 +111,8 @@ impl Bridge {
             applied: Applied::default(),
             skies: Skies::new(options.constant_sky),
             metering: Metering::new(),
+            metered: Vec::new(),
+            pending: None,
             max_reflection_roughness: options.max_reflection_roughness,
             view: None,
             // The Scene host's ids (`Options::scene_ids`): the view writes them beside
@@ -121,11 +143,15 @@ impl Bridge {
         Ok(None)
     }
 
-    pub fn render(
-        &mut self,
-        gpu: &mut GpuDevice,
-        view: &ExternalView<'_>,
-    ) -> Result<ExternalFrame> {
+    /// Starts drawing `view` and returns without waiting for the GPU: the scene is synced and
+    /// the frame, its ids' pack and copy and the meter's histogram are submitted.
+    /// [`Self::finish`] takes the result. One frame is in flight at a time: it is an error to
+    /// begin another before it is taken.
+    pub fn begin(&mut self, gpu: &mut GpuDevice, view: &ExternalView<'_>) -> Result<()> {
+        anyhow::ensure!(
+            self.pending.is_none(),
+            "a frame is in flight: finish it before beginning another"
+        );
         let frame = view.frame;
         self.report_unsupported(view);
         // Terrain tiles take at most half the mesh-material groups; entity draws and
@@ -148,6 +174,18 @@ impl Bridge {
         self.decals.sync(&mut self.engine, frame, &mut self.gaps)?;
         self.effects.sync(&mut self.engine, frame, &mut self.gaps)?;
 
+        // The meter's readings of earlier frames, taken before this frame's exposure is
+        // chosen, as the wgpu bridge takes its own: usually the frame before last. Readings
+        // that finish while automatic exposure is off are dropped.
+        let automatic = view.look.ev100.is_none();
+        for reading in self.engine.histograms(gpu)? {
+            let at = self.metered.iter().position(|m| m.0 == reading.request);
+            if let Some((_, meter, stops)) = at.map(|at| self.metered.remove(at))
+                && automatic
+            {
+                self.metering.observe(view.look, meter, stops, &reading.bins);
+            }
+        }
         let (stops, metered) = lighting::exposure_stops(view, &mut self.metering);
         let (settings, look) =
             lighting::settings(view, stops, self.max_reflection_roughness, &mut self.gaps);
@@ -204,6 +242,8 @@ impl Bridge {
         if std::mem::take(&mut self.cut) {
             self.engine.cut_view(view_id);
             self.metering.snap();
+            // Readings in flight describe the old view.
+            self.metered.clear();
         }
         self.engine
             .render_view(gpu, view_id, &lighting::camera(frame)?)?;
@@ -219,14 +259,21 @@ impl Bridge {
             .context("Renderlab's Metal backend produced no displayed image")?
             .image;
         // The meter: on the frames it asks for (every frame while it snaps, then every
-        // 16th), the displayed image is read back and binned on the CPU, as the wgpu
-        // path's histogram pass bins it. The frame is complete when `render` returns.
+        // 16th), the displayed image is binned on the GPU as the wgpu path's histogram pass
+        // bins it, without waiting; the reading arrives on a later frame. One refused (four
+        // in flight) is asked for again next frame.
         if let Some(meter) = metered
             && self.metering.due()
         {
-            let rgba8 = read_back(gpu, "Renderlab.Meter", image, view.size)?;
-            let histogram = crate::meter::histogram_of_rgba8(&rgba8, view.size[0] as usize);
-            self.metering.observe(view.look, meter, stops, &histogram);
+            let desc = HistogramDesc {
+                bins: crate::meter::BINS as u32,
+                log_min: crate::meter::LOG_DARKEST,
+                stride: crate::meter::STRIDE,
+            };
+            match self.engine.view_histogram(gpu, view_id, desc) {
+                Ok(request) => self.metered.push((request, meter, stops)),
+                Err(_) => self.metering.retry(),
+            }
         }
         let (gpu_ms, passes) = self
             .engine
@@ -238,27 +285,73 @@ impl Bridge {
                 )
             })
             .unwrap_or((None, [("", 0.); EXTERNAL_PASSES]));
-        // The view's opaque ids packed into RGBA8 on this device, and the same texels on
-        // the CPU for clicks: one copy, waited for, on the frames of a host that asked.
-        let (id, id_texels) = if self.desc.outputs.ids {
+        // The view's opaque ids packed into RGBA8 on this device, and a copy of the same
+        // texels for clicks on the frames of a host that asked; otherwise an empty submission.
+        // Either is queued behind the frame: its point says when the frame is done.
+        let (ids, point) = if self.desc.outputs.ids {
             let packed = self.engine.view_ids_packed(gpu, view_id, IdLayer::Opaque)?;
-            let (image, size) = (packed.image, packed.size);
-            (
-                Some(image),
-                Some(read_back(gpu, "Renderlab.Ids", image, size)?),
-            )
+            let (packed, size) = (packed.image, packed.size);
+            let (readback, point) = copy_back(gpu, "Renderlab.Ids", packed, size)?;
+            (Some((packed, readback)), point)
         } else {
-            (None, None)
+            (None, gpu.submit(gpu.begin(Queue::Graphics).finish(), &[])?)
         };
-        Ok(ExternalFrame {
+        self.pending = Some(Pending {
             image,
-            id,
-            id_texels,
+            ids,
+            point,
             gpu_ms,
             passes,
+        });
+        Ok(())
+    }
+
+    /// Whether a frame was begun and not yet taken by [`Self::finish`].
+    pub fn in_flight(&self) -> bool {
+        self.pending.is_some()
+    }
+
+    /// Takes the frame [`Self::begin`] started once the GPU has finished it, with its ids'
+    /// texels; `None` while it draws or when none is in flight. Never waits for the GPU.
+    pub fn finish(&mut self, gpu: &mut GpuDevice) -> Result<Option<ExternalFrame>> {
+        let Some(pending) = &self.pending else {
+            return Ok(None);
+        };
+        if gpu.completed()?[pending.point.queue.index()] < pending.point.value {
+            return Ok(None);
+        }
+        let pending = self.pending.take().context("checked above")?;
+        let (id, id_texels) = match pending.ids {
+            Some((packed, readback)) => {
+                let texels = gpu.read_completed(readback, pending.point);
+                gpu.retire(Resource::Buffer(readback))?;
+                (Some(packed), Some(texels?))
+            }
+            None => (None, None),
+        };
+        Ok(Some(ExternalFrame {
+            image: pending.image,
+            id,
+            id_texels,
+            gpu_ms: pending.gpu_ms,
+            passes: pending.passes,
             // The frame was drawn on the presenter's device: nothing crossed.
             handoff_ms: 0.,
-        })
+        }))
+    }
+
+    /// Draws `view` and returns its completed frame: [`Self::begin`], a wait for it, then
+    /// [`Self::finish`].
+    pub fn render(
+        &mut self,
+        gpu: &mut GpuDevice,
+        view: &ExternalView<'_>,
+    ) -> Result<ExternalFrame> {
+        self.begin(gpu, view)?;
+        let point = self.pending.as_ref().context("begun above")?.point;
+        gpu.wait(point)?;
+        self.finish(gpu)?
+            .context("the frame was waited for and is not done")
     }
 
     /// Frame-level features this path has no mapping for yet.
@@ -353,10 +446,15 @@ fn jumped(last: ([f32; 3], [f32; 3]), now: ([f32; 3], [f32; 3])) -> bool {
     dot < std::f32::consts::FRAC_1_SQRT_2 || moved > 20. * 20.
 }
 
-/// An RGBA8 image's rows (the displayed image, the packed ids), read back on the
-/// presenter's device in a pass labelled `label` and waited for. `image` is in
-/// `CopySource`, and stays there.
-fn read_back(gpu: &mut GpuDevice, label: &str, image: Image, size: [u32; 2]) -> Result<Vec<u8>> {
+/// Copies an RGBA8 image's rows (the packed ids) into a new host-readable buffer on the
+/// presenter's device, in a pass labelled `label`, and submits without waiting: the rows are
+/// readable once the returned point completes. `image` is in `CopySource`, and stays there.
+fn copy_back(
+    gpu: &mut GpuDevice,
+    label: &str,
+    image: Image,
+    size: [u32; 2],
+) -> Result<(Buffer, TimelinePoint)> {
     let bytes = u64::from(size[0]) * u64::from(size[1]) * 4;
     let buffer = gpu.create_readback_buffer(bytes)?;
     let mut commands = gpu.begin(Queue::Graphics);
@@ -379,8 +477,5 @@ fn read_back(gpu: &mut GpuDevice, label: &str, image: Image, size: [u32; 2]) -> 
     }]);
     commands.push(Command::EndPass);
     let point = gpu.submit(commands.finish(), &[])?;
-    gpu.resolve(point)?;
-    let rgba8 = gpu.read(buffer)?;
-    gpu.retire(Resource::Buffer(buffer))?;
-    Ok(rgba8)
+    Ok((buffer, point))
 }

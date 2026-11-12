@@ -156,19 +156,17 @@ impl ExternalRenderer for Renderlab {
         self.bridge.pick_id(pixel)
     }
 
-    // Apple's engine draws on the presenter's own device and keeps the blocking `render`.
-    #[cfg(not(target_vendor = "apple"))]
+    // Both bridges split a frame: the wgpu one across Renderlab's own device and the
+    // presenter's, the Metal one on the presenter's own device.
     fn begin(&mut self, gpu: &mut GpuDevice, view: &ExternalView<'_>) -> Result<bool> {
         self.bridge.begin(gpu, view)?;
         Ok(true)
     }
 
-    #[cfg(not(target_vendor = "apple"))]
     fn in_flight(&self) -> bool {
         self.bridge.in_flight()
     }
 
-    #[cfg(not(target_vendor = "apple"))]
     fn finish(&mut self, gpu: &mut GpuDevice) -> Result<Option<ExternalFrame>> {
         self.bridge.finish(gpu)
     }
