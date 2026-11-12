@@ -1,6 +1,6 @@
 # ara-render2d
 
-Owned Vulkan 2D render path on ara-gpu, with its own graph, ToneMap and capture (ara-render-fidelity uses the graph).
+Owned Vulkan 2D render path on ara-gpu, with its own graph, ToneMap and capture.
 
 ## Public API
 

@@ -1,8 +1,7 @@
 # ara-render-fidelity
 
 The authored look as numbers a renderer consumes. No GPU work happens here: Renderlab draws
-(`ara-renderlab`), the editor and the player hand it what this crate resolves. The ray-traced
-fidelity view that used to live here (and its cooked shaders) is deleted.
+(`ara-renderlab`), the editor and the player hand it what this crate resolves.
 
 ## Public API
 - `environment::FrameEnvironment::resolve(&frame.look, camera, env.exposure)`: the scene's

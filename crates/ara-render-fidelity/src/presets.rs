@@ -453,10 +453,6 @@ pub struct Plan {
     pub requested: QualityPreset,
     /// Resolutions and work budgets.
     pub raster: RasterPlan,
-    /// Ray tracing was requested on a device without verified ray queries
-    /// ([`verified_ray_tracing`]); hosts report ARA6008 so the declined opt-in is
-    /// never silent.
-    pub rt_fallback: bool,
 }
 
 /// High/Epic local reflection captures (512-texel tiles, `captures` at most). Authored
@@ -506,7 +502,6 @@ impl Plan {
             preset,
             requested,
             raster,
-            rt_fallback: options.ray_tracing && !capabilities.ray_tracing,
         })
     }
 }
@@ -591,18 +586,14 @@ mod tests {
                 let scale = preset.raster_scale();
                 let render = display.map(|v| (v as f32 * scale).round() as u32);
                 assert!(plan.raster.render_size == render && plan.raster.display_size == display);
-                assert!(!plan.rt_fallback);
             }
         }
-        // Non-RT devices keep the requested preset on raster even when opting in,
-        // and report the declined opt-in (ARA6008).
+        // Non-RT devices keep the requested preset even when opting in.
         let choice = QualityChoice::Preset(QualityPreset::Epic);
         let epic = Plan::resolve(choice, &raster, display, traced).unwrap();
         assert_eq!(epic.preset, QualityPreset::Epic);
-        assert!(epic.rt_fallback);
         for preset in QualityPreset::ALL {
-            let plan = Plan::resolve(QualityChoice::Preset(preset), &RT, display, traced).unwrap();
-            assert!(!plan.rt_fallback);
+            Plan::resolve(QualityChoice::Preset(preset), &RT, display, traced).unwrap();
         }
         let auto = Plan::resolve(
             QualityChoice::Auto,

@@ -802,8 +802,8 @@ as `resources/<package>` or `<package>` works too. For an arbitrary single cohor
 
 ```powershell
 $env:ARA_SHADER_DIR='D:\shader-iteration\fidelity'
-$env:ARA_SHADER_PACKAGE='ara-render-fidelity'
-& "$env:CARGO_TARGET_DIR\perf\ara-shader-cook.exe" crates/ara-render-fidelity/shaders/pipelines.json $env:ARA_SHADER_DIR --watch
+$env:ARA_SHADER_PACKAGE='ara-render2d'
+& "$env:CARGO_TARGET_DIR\perf\ara-shader-cook.exe" crates/ara-render2d/shaders/pipelines.json $env:ARA_SHADER_DIR --watch
 ```
 
 Set those environment variables before starting the player/editor. The cooker
