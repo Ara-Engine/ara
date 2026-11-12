@@ -62,8 +62,8 @@ pub fn shell(root: &Path, lock: &Lock) -> Result<String> {
     const TERRACOTTA: usize = 5;
     const GROUND: usize = 6;
     let mut k = Kit::new(vec![
-        Material::textured("oak floor", "wood_table_001").tinted([0.92, 0.84, 0.74]),
-        Material::flat("white plaster", [0.82, 0.8, 0.76], 0.9, 0.0),
+        Material::textured("marble floor", "marble_01").tinted([0.96, 0.92, 0.85]),
+        Material::flat("cream plaster", [0.66, 0.62, 0.55], 0.9, 0.0),
         Material::flat("black steel", [0.05, 0.05, 0.055], 0.42, 1.0),
         Material::glass("window glass", [0.88, 0.96, 1.0], 0.14),
         Material::textured("courtyard stone", "concrete_floor_02").tinted([0.78, 0.74, 0.68]),
@@ -71,26 +71,26 @@ pub fn shell(root: &Path, lock: &Lock) -> Result<String> {
         Material::flat("packed earth", [0.33, 0.28, 0.22], 0.95, 0.0),
     ]);
     let v = Vec3::new;
-    let floor_m = meters(lock, "wood_table_001");
+    let floor_m = meters(lock, "marble_01") * 3.0;
     let stone_m = meters(lock, "concrete_floor_02");
     // Floors: the room, the courtyard paving and the ground around it.
     slab(&mut k, FLOOR, v(-4.4, -0.3, -9.4), v(4.4, 0.0, 0.4), floor_m);
     slab(&mut k, PAVING, v(-7.0, -0.3, 0.4), v(7.0, 0.0, 9.0), stone_m);
     slab(&mut k, GROUND, v(-60.0, -0.6, -60.0), v(60.0, -0.31, 80.0), Vec2::ONE);
-    // Ceiling and roof with the sun slot (x -1.2..1.2, z -1.4..-0.6).
+    // Ceiling and roof with the sun slot (x -1.6..1.6, z -2.6..-1.6).
     for (a, b) in [
-        (v(-4.4, CEILING, -0.6), v(4.4, 4.4, 0.4)),
-        (v(-4.4, CEILING, -9.4), v(4.4, 4.4, -1.4)),
-        (v(-4.4, CEILING, -1.4), v(-1.2, 4.4, -0.6)),
-        (v(1.2, CEILING, -1.4), v(4.4, 4.4, -0.6)),
+        (v(-4.4, CEILING, -1.6), v(4.4, 4.4, 0.4)),
+        (v(-4.4, CEILING, -9.4), v(4.4, 4.4, -2.6)),
+        (v(-4.4, CEILING, -2.6), v(-1.6, 4.4, -1.6)),
+        (v(1.6, CEILING, -2.6), v(4.4, 4.4, -1.6)),
     ] {
         slab(&mut k, PLASTER, a, b, Vec2::ONE);
     }
-    // Front wall (z 0..0.4) with a 3.2 x 3.0 m doorway.
+    // Front wall (z 0..0.4) with a 4.4 x 3.4 m doorway.
     for (a, b) in [
-        (v(-4.4, 0.0, 0.0), v(-1.6, CEILING, 0.4)),
-        (v(1.6, 0.0, 0.0), v(4.4, CEILING, 0.4)),
-        (v(-1.6, 3.0, 0.0), v(1.6, CEILING, 0.4)),
+        (v(-4.4, 0.0, 0.0), v(-2.2, CEILING, 0.4)),
+        (v(2.2, 0.0, 0.0), v(4.4, CEILING, 0.4)),
+        (v(-2.2, 3.4, 0.0), v(2.2, CEILING, 0.4)),
     ] {
         slab(&mut k, PLASTER, a, b, Vec2::ONE);
     }
@@ -98,25 +98,25 @@ pub fn shell(root: &Path, lock: &Lock) -> Result<String> {
     slab(&mut k, PLASTER, v(-4.4, 0.0, -9.4), v(4.4, CEILING, -9.0), Vec2::ONE);
     slab(&mut k, PLASTER, v(-4.4, 0.0, -9.0), v(-4.0, CEILING, 0.0), Vec2::ONE);
     slab(&mut k, TERRACOTTA, v(-4.0, 0.0, -9.0), v(-3.97, CEILING, 0.0), Vec2::ONE);
-    // East wall with a 4.2 x 3.0 m window (z -6.6..-2.4, y 0.5..3.5).
+    // East wall with a 5.6 x 3.2 m window (z -7.4..-1.8, y 0.4..3.6).
     for (a, b) in [
-        (v(4.0, 0.0, -9.0), v(4.4, CEILING, -6.6)),
-        (v(4.0, 0.0, -2.4), v(4.4, CEILING, 0.0)),
-        (v(4.0, 0.0, -6.6), v(4.4, 0.5, -2.4)),
-        (v(4.0, 3.5, -6.6), v(4.4, CEILING, -2.4)),
+        (v(4.0, 0.0, -9.0), v(4.4, CEILING, -7.4)),
+        (v(4.0, 0.0, -1.8), v(4.4, CEILING, 0.0)),
+        (v(4.0, 0.0, -7.4), v(4.4, 0.4, -1.8)),
+        (v(4.0, 3.6, -7.4), v(4.4, CEILING, -1.8)),
     ] {
         slab(&mut k, PLASTER, a, b, Vec2::ONE);
     }
     // Window frame and mullions, and the glass pane in the middle of the wall.
-    let (z0, z1, y0, y1) = (-6.6, -2.4, 0.5, 3.5);
+    let (z0, z1, y0, y1) = (-7.4, -1.8, 0.4, 3.6);
     let (xa, xb) = (4.14, 4.26);
     slab(&mut k, STEEL, v(xa, y0, z0), v(xb, y0 + 0.06, z1), Vec2::ONE);
     slab(&mut k, STEEL, v(xa, y1 - 0.06, z0), v(xb, y1, z1), Vec2::ONE);
     for z in [z0, z1 - 0.06] {
         slab(&mut k, STEEL, v(xa, y0, z), v(xb, y1, z + 0.06), Vec2::ONE);
     }
-    slab(&mut k, STEEL, v(xa, 2.0, z0), v(xb, 2.05, z1), Vec2::ONE);
-    for z in [-5.2, -3.8] {
+    slab(&mut k, STEEL, v(xa, 2.2, z0), v(xb, 2.25, z1), Vec2::ONE);
+    for z in [-6.0, -4.6, -3.2] {
         slab(&mut k, STEEL, v(xa, y0, z - 0.025), v(xb, y1, z + 0.025), Vec2::ONE);
     }
     slab(&mut k, GLASS, v(4.2, y0 + 0.06, z0 + 0.06), v(4.212, y1 - 0.06, z1 - 0.06), Vec2::ONE);
@@ -152,7 +152,7 @@ pub fn furniture(root: &Path, lock: &Lock) -> Result<String> {
         Material::flat("brushed steel", [0.78, 0.79, 0.8], 0.34, 1.0),
         Material::flat("brushed brass", [0.93, 0.72, 0.36], 0.28, 1.0),
         Material::flat("chrome", [0.95, 0.95, 0.95], 0.03, 1.0),
-        Material::textured("marble", "marble_01"),
+        Material::flat("limestone plinth", [0.8, 0.77, 0.7], 0.45, 0.0),
         Material::glass("clear glass", [0.9, 0.97, 1.0], 0.16),
         Material::emitter("warm bulb", [1.0, 0.8, 0.55]),
         Material::flat("indigo wool rug", [0.09, 0.14, 0.26], 1.0, 0.0),
@@ -269,7 +269,7 @@ pub fn courtyard(root: &Path, lock: &Lock) -> Result<String> {
         block(&mut k, SOIL, v(x, 0.605, z), v(w - 0.08, 0.02, d - 0.08));
     }
     // Wall lantern right of the doorway: bracket, frame and glowing glass.
-    let l = v(2.2, 2.4, 0.5);
+    let l = v(3.3, 2.4, 0.5);
     block(&mut k, STEEL, l + v(0.0, 0.0, 0.08), v(0.04, 0.5, 0.04));
     block(&mut k, STEEL, l + v(0.0, 0.0, 0.18), v(0.2, 0.34, 0.2));
     block(&mut k, LANTERN, l + v(0.0, 0.0, 0.18), v(0.17, 0.3, 0.17));

@@ -10,7 +10,7 @@
   },
   "exposure": {
     "mode": "fixed",
-    "ev100": 13,
+    "ev100": 12.5,
     "isoNote": "ISO 100; photometric exposure H = L / (1.2 * 2^EV100)",
     "toneMapping": "Khronos PBR Neutral in Ara; export linear HDR for comparisons"
   },
@@ -23,9 +23,9 @@
     "falloff": 3
   },
   "sun": {
-    "illuminanceLux": 80000,
-    "color": [1, 0.949999988079071, 0.8600000143051147],
-    "travelDirection": [-0.2996472418308258, -0.6152756214141846, -0.7291415929794312],
+    "illuminanceLux": 75000,
+    "color": [1, 0.9100000262260437, 0.7599999904632568],
+    "travelDirection": [-0.44938385486602783, -0.43740028142929077, -0.7789320349693298],
     "angularDiameterDeg": 0.5357,
     "castsShadows": true
   },
@@ -85,7 +85,7 @@
     {
       "name": "Courtyard wall lantern",
       "type": "point",
-      "position": [2.200000047683716, 2.4000000953674316, 0.6800000071525574],
+      "position": [3.299999952316284, 2.4000000953674316, 0.6800000071525574],
       "aimAt": null,
       "color": [1, 0.7799999713897705, 0.5],
       "lumens": 600,

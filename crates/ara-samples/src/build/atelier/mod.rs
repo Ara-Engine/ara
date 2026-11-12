@@ -13,7 +13,7 @@
 mod kits;
 
 use super::{
-    Ctx, anim, clean,
+    Ctx, clean,
     outpost::light,
     place::{Models, Prop, Scene, short, transform},
 };
@@ -25,16 +25,15 @@ use std::path::Path;
 
 /// Level scene.
 pub const SCENE: (&str, &str) = ("levels/atelier.scene", "sc_atelier01");
-const ANIMATION: (&str, &str) = ("anim/human.animation", "ac_human1");
 
 /// Fixed exposure (EV100 at ISO 100, ACES-style reference of 1.2·2^EV cd/m² at white
 /// in Ara's meter convention), the same in every engine.
-const EV100: f32 = 13.0;
+const EV100: f32 = 12.5;
 /// The sun: illuminance on a surface facing it, lux, and the direction its light
 /// travels (unit, world space; it shines in through the doorway and the east window).
-const SUN_LUX: f32 = 80_000.0;
-const SUN_COLOR: [f32; 3] = [1.0, 0.95, 0.86];
-const SUN_DIRECTION: Vec3 = Vec3::new(-0.30, -0.616, -0.73);
+const SUN_LUX: f32 = 75_000.0;
+const SUN_COLOR: [f32; 3] = [1.0, 0.91, 0.76];
+const SUN_DIRECTION: Vec3 = Vec3::new(-0.45, -0.438, -0.78);
 /// Gradient sky (linear colour, cd/m² at scale 1): no sun disc; the sun is the light.
 const SKY_ZENITH: [f32; 3] = [0.2, 0.36, 0.85];
 const SKY_HORIZON: [f32; 3] = [0.72, 0.82, 0.95];
@@ -118,7 +117,7 @@ const LAMPS: [Lamp; 6] = [
     Lamp {
         id: "e_llantern",
         name: "Courtyard wall lantern",
-        position: Vec3::new(2.2, 2.4, 0.68),
+        position: Vec3::new(3.3, 2.4, 0.68),
         target: None,
         color: [1.0, 0.78, 0.5],
         lumens: 600.0,
@@ -173,9 +172,9 @@ const CLIPS: [(&str, &str, &[Pose]); 3] = [
         "Interior from the doorway side: sun patches, sculpture, table, armchair.",
         &[key(
             0.0,
-            Vec3::new(3.1, 1.55, -0.4),
-            Vec3::new(-1.4, 1.2, -5.4),
-            52.0,
+            Vec3::new(3.4, 1.5, -0.3),
+            Vec3::new(-1.2, 1.15, -4.6),
+            56.0,
             false,
         )],
     ),
@@ -335,9 +334,10 @@ pub fn build(ctx: &Ctx) -> Result<()> {
         ("antique_camera", "khronos_antique_camera"),
         ("lantern", "lantern_01"),
         ("radio", "vintage_radio_transceiver"),
-        ("shrub", "shrub_03"),
-        ("rooibos", "wild_rooibos_bush"),
-        ("iceplant", "crystalline_iceplant"),
+        ("shrub", "shrub_04"),
+        ("fern", "fern_02"),
+        ("pot_a", "potted_plant_01"),
+        ("pot_b", "potted_plant_02"),
     ] {
         ctx.third_party(&mut models, name, asset)?;
     }
@@ -345,26 +345,6 @@ pub fn build(ctx: &Ctx) -> Result<()> {
     for (name, path) in kits_written(&ctx.root, &ctx.lock)? {
         ctx.model(&mut models, &name, &path, &format!("as_kit{}", short(&name)))?;
     }
-    let human = ctx.lock.get("m2m_human").expect("m2m_human pinned");
-    anim::locomotion(
-        ctx,
-        ANIMATION.0,
-        ANIMATION.1,
-        "an_locomotion",
-        &human.dir(&ctx.root).join("human-base-animations.glb"),
-        "Idle_A",
-        &[
-            anim::Gait {
-                clip: "Walk",
-                speed: 1.5,
-            },
-            anim::Gait {
-                clip: "Jog",
-                speed: 3.2,
-            },
-        ],
-    )?;
-
     ctx.new_document(SCENE.0, "scene", SCENE.1)?;
     let mut s = Scene::new(&models);
     s.entity(
@@ -432,26 +412,27 @@ pub fn build(ctx: &Ctx) -> Result<()> {
     // Foliage: planters, the doorway and a corner of the room.
     for (i, (model, at, yaw, scale)) in [
         ("shrub", Vec3::new(5.7, 0.62, 2.2), 0.0, 1.0),
-        ("rooibos", Vec3::new(5.7, 0.62, 3.2), 40.0, 1.0),
+        ("fern", Vec3::new(5.7, 0.62, 3.4), 40.0, 1.0),
         ("shrub", Vec3::new(5.7, 0.62, 5.6), 80.0, 1.1),
-        ("iceplant", Vec3::new(5.7, 0.62, 6.8), 10.0, 1.2),
-        ("rooibos", Vec3::new(-2.6, 0.62, 1.3), 120.0, 0.9),
-        ("iceplant", Vec3::new(2.6, 0.62, 1.3), 0.0, 1.2),
-        ("rooibos", Vec3::new(3.3, 0.0, -8.4), 200.0, 1.0),
+        ("fern", Vec3::new(5.7, 0.62, 6.8), 10.0, 1.0),
+        ("fern", Vec3::new(-2.6, 0.62, 1.3), 120.0, 1.0),
+        ("shrub", Vec3::new(2.6, 0.62, 1.3), 0.0, 0.9),
+        ("pot_a", Vec3::new(3.3, 0.0, -8.4), 200.0, 1.0),
+        ("pot_b", Vec3::new(-3.4, 0.0, -0.9), 30.0, 1.0),
     ]
     .into_iter()
     .enumerate()
     {
         s.prop(Prop::new(&format!("e_plant{i}"), "Plant", model, at, yaw).scaled(scale).decor());
     }
-    // The mannequin idles in the east window's sun stripe, looking out.
+    // The mannequin stands in the window's sun stripe beside the table, arms folded.
     s.entity(
         "e_mannequin",
         "Mannequin (idle)",
         json!({
-            "Transform": transform(Vec3::new(2.9, 0.0, -4.5), 90.0, 1.0),
+            "Transform": transform(Vec3::new(1.9, 0.0, -5.0), -90.0, 1.0),
             "MeshRenderer": models.get("human").renderer,
-            "Animator": {"controller": format!("@{}#an_locomotion", ANIMATION.0)},
+            "Animator": {"idle": "Idle_FoldArms"},
         }),
     );
     s.entity(

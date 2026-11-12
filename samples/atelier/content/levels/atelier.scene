@@ -7,7 +7,7 @@
   "records": {
     "e_camcut0": {
       "name": "Camera cut 0",
-      "order": "aR",
+      "order": "aS",
       "Camera": {
         "fov": 46
       },
@@ -18,7 +18,7 @@
     },
     "e_camcut1": {
       "name": "Camera cut 1",
-      "order": "aS",
+      "order": "aT",
       "Camera": {
         "fov": 46
       },
@@ -29,7 +29,7 @@
     },
     "e_camcut2": {
       "name": "Camera cut 2",
-      "order": "aT",
+      "order": "aU",
       "Camera": {
         "fov": 40
       },
@@ -40,7 +40,7 @@
     },
     "e_camcut3": {
       "name": "Camera cut 3",
-      "order": "aU",
+      "order": "aV",
       "Camera": {
         "fov": 40
       },
@@ -51,7 +51,7 @@
     },
     "e_camdolly0": {
       "name": "Camera dolly 0",
-      "order": "aP",
+      "order": "aQ",
       "Camera": {
         "fov": 50
       },
@@ -62,7 +62,7 @@
     },
     "e_camdolly1": {
       "name": "Camera dolly 1",
-      "order": "aQ",
+      "order": "aR",
       "Camera": {
         "fov": 50
       },
@@ -85,13 +85,13 @@
     },
     "e_camstill0": {
       "name": "Camera still 0",
-      "order": "aO",
+      "order": "aP",
       "Camera": {
-        "fov": 52
+        "fov": 56
       },
       "Transform": {
-        "position": [3.1, 1.55, -0.4],
-        "rotation": [-4.004172, 41.91759, 2.6774445]
+        "position": [3.4, 1.5, -0.3],
+        "rotation": [-4.6533523, 46.83621, 3.3976548]
       }
     },
     "e_courtyard": {
@@ -105,7 +105,7 @@
     },
     "e_dust": {
       "name": "Dust motes in the sun shaft",
-      "order": "aN",
+      "order": "aO",
       "Transform": {
         "position": [-1, 0.8, -1.6]
       },
@@ -127,7 +127,7 @@
         "overrides": [
           {
             "exposure": "manual",
-            "ev100": 13
+            "ev100": 12.5
           },
           {
             "module": "toneMapping",
@@ -209,7 +209,7 @@
         "sourceRadius": 0.07000000029802322
       },
       "Transform": {
-        "position": [2.2, 2.4, 0.68]
+        "position": [3.3, 2.4, 0.68]
       }
     },
     "e_lpendant": {
@@ -259,9 +259,9 @@
     },
     "e_mannequin": {
       "name": "Mannequin (idle)",
-      "order": "aM",
+      "order": "aN",
       "Animator": {
-        "controller": "@anim/human.animation#an_locomotion"
+        "idle": "Idle_FoldArms"
       },
       "MeshRenderer": {
         "model": "@third_party/m2m_human/human-base-animations.glb#as_m2mhuman",
@@ -272,28 +272,28 @@
         ]
       },
       "Transform": {
-        "position": [2.9, 0, -4.5],
-        "rotation": [0, 90, 0]
+        "position": [1.9, 0, -5],
+        "rotation": [0, -90, 0]
       }
     },
     "e_plant0": {
       "name": "Plant",
       "order": "aF",
       "MeshRenderer": {
-        "model": "@third_party/shrub_03/shrub_03_1k.gltf#as_shrub03"
+        "model": "@third_party/shrub_04/shrub_04_1k.gltf#as_shrub04"
       },
       "Transform": {
-        "position": [5.09, 0.622, 2.197]
+        "position": [5.433, 0.626, 2.202]
       }
     },
     "e_plant1": {
       "name": "Plant",
       "order": "aG",
       "MeshRenderer": {
-        "model": "@third_party/wild_rooibos_bush/wild_rooibos_bush_1k.gltf#as_wildrooibosbush"
+        "model": "@third_party/fern_02/fern_02_1k.gltf#as_fern02"
       },
       "Transform": {
-        "position": [5.156, 0.622, 3.807],
+        "position": [5.066, 0.651, 3.357],
         "rotation": [0, 40, 0]
       }
     },
@@ -301,10 +301,10 @@
       "name": "Plant",
       "order": "aH",
       "MeshRenderer": {
-        "model": "@third_party/shrub_03/shrub_03_1k.gltf#as_shrub03"
+        "model": "@third_party/shrub_04/shrub_04_1k.gltf#as_shrub04"
       },
       "Transform": {
-        "position": [5.58, 0.622, 6.26],
+        "position": [5.651, 0.627, 5.89],
         "rotation": [0, 80, 0],
         "scale": [1.1, 1.1, 1.1]
       }
@@ -313,46 +313,55 @@
       "name": "Plant",
       "order": "aI",
       "MeshRenderer": {
-        "model": "@third_party/crystalline_iceplant/crystalline_iceplant_1k.gltf#as_crystallineiceplant"
+        "model": "@third_party/fern_02/fern_02_1k.gltf#as_fern02"
       },
       "Transform": {
-        "position": [5.659, 0.624, 6.885],
-        "rotation": [0, 10, 0],
-        "scale": [1.2, 1.2, 1.2]
+        "position": [5.172, 0.651, 6.446],
+        "rotation": [0, 10, 0]
       }
     },
     "e_plant4": {
       "name": "Plant",
       "order": "aJ",
       "MeshRenderer": {
-        "model": "@third_party/wild_rooibos_bush/wild_rooibos_bush_1k.gltf#as_wildrooibosbush"
+        "model": "@third_party/fern_02/fern_02_1k.gltf#as_fern02"
       },
       "Transform": {
-        "position": [-2.147, 0.622, 1.877],
-        "rotation": [0, 120, 0],
-        "scale": [0.9, 0.9, 0.9]
+        "position": [-2.752, 0.651, 1.917],
+        "rotation": [0, 120, 0]
       }
     },
     "e_plant5": {
       "name": "Plant",
       "order": "aK",
       "MeshRenderer": {
-        "model": "@third_party/crystalline_iceplant/crystalline_iceplant_1k.gltf#as_crystallineiceplant"
+        "model": "@third_party/shrub_04/shrub_04_1k.gltf#as_shrub04"
       },
       "Transform": {
-        "position": [2.545, 0.624, 1.376],
-        "scale": [1.2, 1.2, 1.2]
+        "position": [2.359, 0.625, 1.302],
+        "scale": [0.9, 0.9, 0.9]
       }
     },
     "e_plant6": {
       "name": "Plant",
       "order": "aL",
       "MeshRenderer": {
-        "model": "@third_party/wild_rooibos_bush/wild_rooibos_bush_1k.gltf#as_wildrooibosbush"
+        "model": "@third_party/potted_plant_01/potted_plant_01_1k.gltf#as_pottedplant01"
       },
       "Transform": {
-        "position": [4.019, 0.002, -8.784],
+        "position": [3.242, 0.014, -8.429],
         "rotation": [0, 200, 0]
+      }
+    },
+    "e_plant7": {
+      "name": "Plant",
+      "order": "aM",
+      "MeshRenderer": {
+        "model": "@third_party/potted_plant_02/potted_plant_02_1k.gltf#as_pottedplant02"
+      },
+      "Transform": {
+        "position": [-3.314, 0, -0.844],
+        "rotation": [0, 30, 0]
       }
     },
     "e_radio": {
@@ -380,12 +389,12 @@
       "order": "a1",
       "Light": {
         "kind": "directional",
-        "color": [1, 0.949999988079071, 0.8600000143051147, 1],
-        "intensity": 80000
+        "color": [1, 0.9100000262260437, 0.7599999904632568, 1],
+        "intensity": 75000
       },
       "Transform": {
         "position": [0, 40, 30],
-        "rotation": [-40.15893, 17.43641, 14.19002]
+        "rotation": [-29.315851, 26.704145, 14.162673]
       }
     }
   }
