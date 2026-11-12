@@ -93,8 +93,7 @@ fn agent_selects_a_kit_piece_and_toggles_its_source_emission_without_derived_glt
     // The selected kit piece draws after each edit. What the old renderer let this test read
     // from the pictures (a lamp's emissive factor and switch moving the mean colour, a sibling
     // node restoring the same local geometry) does not hold on Renderlab: a factor edit leaves
-    // the picture unchanged and the mean colour follows automatic metering (see the bridge's
-    // gap table). So each step asserts a picture and a hash.
+    // the picture unchanged (see the bridge's gap table). So each step asserts a picture.
     let red = capture(&mut agent, &world, &output, "red");
     patch(
         &mut agent,
