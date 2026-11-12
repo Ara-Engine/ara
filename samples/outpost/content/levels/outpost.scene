@@ -3691,6 +3691,7 @@
       "name": "Signal cache 1",
       "order": "b2o",
       "Light": {
+        "castShadows": false,
         "color": [0.6, 1, 0.4, 1],
         "intensity": 65,
         "range": 3
@@ -3709,6 +3710,7 @@
       "name": "Signal cache 2",
       "order": "b2p",
       "Light": {
+        "castShadows": false,
         "color": [0.6, 1, 0.4, 1],
         "intensity": 65,
         "range": 3
@@ -3729,6 +3731,7 @@
       "name": "Signal cache 3",
       "order": "b2q",
       "Light": {
+        "castShadows": false,
         "color": [0.6, 1, 0.4, 1],
         "intensity": 65,
         "range": 3
@@ -3749,6 +3752,7 @@
       "name": "Signal cache 4",
       "order": "b2r",
       "Light": {
+        "castShadows": false,
         "color": [0.6, 1, 0.4, 1],
         "intensity": 65,
         "range": 3
@@ -3767,6 +3771,7 @@
       "name": "Signal cache 5",
       "order": "b2s",
       "Light": {
+        "castShadows": false,
         "color": [0.6, 1, 0.4, 1],
         "intensity": 65,
         "range": 3
@@ -3787,6 +3792,7 @@
       "name": "Signal cache 6",
       "order": "b2t",
       "Light": {
+        "castShadows": false,
         "color": [0.6, 1, 0.4, 1],
         "intensity": 65,
         "range": 3
@@ -3807,6 +3813,7 @@
       "name": "Signal cache 7",
       "order": "b2u",
       "Light": {
+        "castShadows": false,
         "color": [0.6, 1, 0.4, 1],
         "intensity": 65,
         "range": 3
@@ -3825,6 +3832,7 @@
       "name": "Signal cache 8",
       "order": "b2v",
       "Light": {
+        "castShadows": false,
         "color": [0.6, 1, 0.4, 1],
         "intensity": 65,
         "range": 3
@@ -3845,6 +3853,7 @@
       "name": "Signal cache 9",
       "order": "b2w",
       "Light": {
+        "castShadows": false,
         "color": [0.6, 1, 0.4, 1],
         "intensity": 65,
         "range": 3
@@ -3865,6 +3874,7 @@
       "name": "Signal cache 10",
       "order": "b2x",
       "Light": {
+        "castShadows": false,
         "color": [0.6, 1, 0.4, 1],
         "intensity": 65,
         "range": 3
@@ -3883,6 +3893,7 @@
       "name": "Signal cache 11",
       "order": "b2y",
       "Light": {
+        "castShadows": false,
         "color": [0.6, 1, 0.4, 1],
         "intensity": 65,
         "range": 3
@@ -3903,6 +3914,7 @@
       "name": "Signal cache 12",
       "order": "b2z",
       "Light": {
+        "castShadows": false,
         "color": [0.6, 1, 0.4, 1],
         "intensity": 65,
         "range": 3

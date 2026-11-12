@@ -1993,6 +1993,14 @@ public partial struct Light : IComponent<Light>
     [Range(0, 16), Default(1)]
     public float VolumetricScattering;
     /// <summary>
+    /// Whether a local light casts shadows. Off, it lights surfaces through geometry and costs no shadow work: turn it off for small, dim or distant lights (markers, lamps inside a lit room) that nobody would see a shadow from. A directional light's shadows follow <c>atmosphereSunLight</c> and the renderer's quality, not this.
+    /// </summary>
+    /// <remarks>
+    /// Default: true.
+    /// </remarks>
+    [Default(true)]
+    public bool CastShadows;
+    /// <summary>
     /// Radius of the emitter: a point's or spot's sphere (or tube, with <c>sourceLength</c>) or the disc. Larger sources give broader highlights and softer shadows; zero is an ideal point (Unreal's Source Radius).
     /// </summary>
     /// <remarks>
@@ -5258,7 +5266,7 @@ public static class EngineComponents
         "{\"target\":null,\"distance\":5,\"height\":0.8,\"yaw\":0,\"pitch\":20,\"sensitivity\":2.5,\"player\":1}",
         "{\"density\":0.002,\"baseHeight\":0,\"falloff\":60,\"albedo\":[0.9,0.9,0.9,1],\"anisotropy\":0.3,\"volumetric\":true,\"volumetricDistance\":60,\"volumetricEmissive\":[0,0,0],\"volumetricExtinctionScale\":1}",
         "{\"kind\":\"fixed\",\"connectedBody\":0,\"anchorA\":[0,0,0],\"anchorB\":[0,0,0],\"axis\":[1,0,0],\"normal\":[0,1,0],\"translationMin\":[0,0,0],\"translationMax\":[0,0,0],\"rotationMin\":[0,0,0],\"rotationMax\":[0,0,0]}",
-        "{\"kind\":\"point\",\"color\":[1,1,1,1],\"intensity\":800,\"units\":\"lumens\",\"range\":10,\"innerAngle\":20,\"outerAngle\":30,\"volumetricScattering\":1,\"sourceRadius\":0,\"sourceLength\":0,\"sourceWidth\":0.64,\"sourceHeight\":0.64,\"barnDoorAngle\":88,\"barnDoorLength\":0.2,\"profile\":null,\"profileIntensity\":false,\"sourceAngle\":0.5357,\"atmosphereSunLight\":true,\"atmosphereSunLightIndex\":0,\"atmosphereSunDiskColorScale\":[1,1,1],\"perPixelAtmosphereTransmittance\":false}",
+        "{\"kind\":\"point\",\"color\":[1,1,1,1],\"intensity\":800,\"units\":\"lumens\",\"range\":10,\"innerAngle\":20,\"outerAngle\":30,\"volumetricScattering\":1,\"castShadows\":true,\"sourceRadius\":0,\"sourceLength\":0,\"sourceWidth\":0.64,\"sourceHeight\":0.64,\"barnDoorAngle\":88,\"barnDoorLength\":0.2,\"profile\":null,\"profileIntensity\":false,\"sourceAngle\":0.5357,\"atmosphereSunLight\":true,\"atmosphereSunLightIndex\":0,\"atmosphereSunDiskColorScale\":[1,1,1],\"perPixelAtmosphereTransmittance\":false}",
         "{\"position\":[0,0,0],\"color\":[1,1,1],\"radius\":5,\"shadows\":false}",
         "{\"enabled\":true,\"shape\":\"sphere\",\"size\":[10,10,10],\"density\":0.1,\"radialFalloff\":1,\"heightFalloff\":0,\"albedo\":[0.9,0.9,0.9,1],\"emissive\":[0,0,0],\"priority\":0}",
         "{\"shape\":\"box\",\"size\":[1,1,1],\"model\":null,\"node\":null,\"primitive\":null,\"materialOverrides\":[],\"color\":[1,1,1,1],\"roughness\":0.6,\"metallic\":0,\"emissive\":[0,0,0],\"emissiveEnabled\":true,\"emissiveStrength\":1,\"emissiveFactor\":null,\"emissiveMaterials\":[],\"castShadows\":true,\"receivesDecals\":true}",
@@ -6735,6 +6743,7 @@ internal static class EngineValueCodecs
             InnerAngle = Field(v, "innerAngle", "20").GetSingle(),
             OuterAngle = Field(v, "outerAngle", "30").GetSingle(),
             VolumetricScattering = Field(v, "volumetricScattering", "1").GetSingle(),
+            CastShadows = Field(v, "castShadows", "true").GetBoolean(),
             SourceRadius = Field(v, "sourceRadius", "0").GetSingle(),
             SourceLength = Field(v, "sourceLength", "0").GetSingle(),
             SourceWidth = Field(v, "sourceWidth", "0.64").GetSingle(),
@@ -6788,6 +6797,10 @@ internal static class EngineValueCodecs
         w.WritePropertyName("volumetricScattering");
         {
         WriteFloat(w, v.VolumetricScattering);
+        }
+        w.WritePropertyName("castShadows");
+        {
+        w.WriteBooleanValue(v.CastShadows);
         }
         w.WritePropertyName("sourceRadius");
         {

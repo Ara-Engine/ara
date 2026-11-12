@@ -136,7 +136,7 @@ pub(crate) fn lights<'a>(
             inner,
             outer,
             source_radius,
-            cast_shadows: None,
+            cast_shadows: light.shadows,
         };
         out.push(match light.kind {
             LightKind::Spot => {
@@ -164,7 +164,7 @@ pub(crate) fn lights<'a>(
                 candela,
                 range,
                 source_radius,
-                cast_shadows: None,
+                cast_shadows: light.shadows,
             },
         });
     }
@@ -428,6 +428,37 @@ pub(crate) fn settings(
 
 #[cfg(test)]
 mod tests {
+    use ara_runtime::extract::LightView;
+
+    /// A light authored not to cast shadows is handed to Renderlab as such; the others are left
+    /// to its own ranking of which lights get shadows.
+    #[test]
+    fn a_light_that_does_not_cast_shadows_is_told_so() {
+        let lit = |shadows| LightView {
+            lumens: 800.,
+            color: [1.; 3],
+            shadows,
+            ..LightView::default()
+        };
+        let marker = lit(Some(false));
+        let plain = lit(None);
+        let spot = LightView {
+            kind: ara_runtime::components::LightKind::Spot,
+            ..lit(Some(false))
+        };
+        let out = lights([&marker, &plain, &spot], &mut Gaps::default());
+        let flags: Vec<Option<bool>> = out
+            .iter()
+            .map(|light| match light {
+                Light::Point { cast_shadows, .. } | Light::Spot { cast_shadows, .. } => {
+                    *cast_shadows
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(flags, [Some(false), None, Some(false)]);
+    }
+
     use super::*;
 
     fn look() -> FrameEnvironment {
