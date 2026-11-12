@@ -325,28 +325,14 @@ pub struct EditorState {
     pub light: bool,
     /// Disable decorative transitions while preserving all interaction feedback.
     pub reduce_motion: bool,
-    /// Scene viewport quality override, the user preference `viewport.quality`:
-    /// `None` uses the project's `rendering.quality`, `Some(Auto)` detects from the
-    /// GPU, `Some(Preset(..))` forces Low/Medium/High/Epic. Serialized as text
-    /// (absent, `auto`, `low` … `epic`).
-    #[serde(with = "render_quality_text")]
-    pub render_quality: Option<QualityChoice>,
     /// This GPU's automatic preset (`QualityPreset::detect`), filled when the
     /// window's device starts; runtime only, never persisted.
     #[serde(skip)]
     pub detected_quality: Option<QualityPreset>,
-    /// Effects turned off for diagnosis (View > Rendering Debug): the Scene view
-    /// applies them at once, Play from its next start. Session only, never persisted.
-    #[serde(skip)]
-    pub render_debug: ara_play::RenderDebug,
     /// Mesh Paint mode (`paint.*` commands, `editor.paint`): its brush and colours
     /// while on; presses in the Scene paint the selected meshes. Session only.
     #[serde(skip)]
     pub paint: Option<crate::paint::PaintSettings>,
-    /// Whether the effective quality is above Low (the Scene's quality toggle reads it):
-    /// false only when it resolves to Low. Derived from `render_quality` (and the
-    /// project's default) in `apply_settings`; never set it directly.
-    pub quality: bool,
     /// View pose.
     pub camera: Camera,
     /// Transform handle type.
@@ -436,8 +422,6 @@ pub struct EditorState {
     pub settings_category: String,
     /// Settings window lists only values that differ from their defaults.
     pub settings_modified: bool,
-    /// Live viewport debug view: `lit`, `baseColor`, `normals`, `depth`, …
-    pub view_mode: String,
     /// Hide every editor visual in the viewport (G).
     pub game_view: bool,
     /// Hide the viewport toolbar and widgets (Shift+G).
@@ -462,10 +446,7 @@ impl Default for EditorState {
             collapsed_areas: DEFAULT_COLLAPSED.iter().map(|a| (*a).to_owned()).collect(),
             light: false,
             reduce_motion: false,
-            render_quality: None,
             detected_quality: None,
-            render_debug: ara_play::RenderDebug::default(),
-            quality: true,
             camera: Camera::default(),
             tool: Tool::Translate,
             local: false,
@@ -510,7 +491,6 @@ impl Default for EditorState {
             settings_scope: "user".into(),
             settings_category: String::new(),
             settings_modified: false,
-            view_mode: "lit".into(),
             game_view: false,
             hide_overlays: false,
             hide_gizmos: false,
@@ -526,13 +506,7 @@ impl EditorState {
     /// mode, viewport-hidden entities or quality. Selection, gizmos and the grid are
     /// UI overlays and need no Scene frame.
     pub(crate) fn scene_changed(&self, other: &Self) -> bool {
-        self.doc != other.doc
-            || self.camera != other.camera
-            || self.view_mode != other.view_mode
-            || self.hidden != other.hidden
-            || self.quality != other.quality
-            || self.render_quality != other.render_quality
-            || self.render_choice() != other.render_choice()
+        self.doc != other.doc || self.camera != other.camera || self.hidden != other.hidden
     }
     pub(crate) fn panels_changed(&self, other: &Self) -> bool {
         self.doc != other.doc
@@ -561,8 +535,6 @@ impl EditorState {
             || self.collapsed_areas != other.collapsed_areas
             || self.light != other.light
             || self.reduce_motion != other.reduce_motion
-            || self.quality != other.quality
-            || self.render_quality != other.render_quality
             || self.detected_quality != other.detected_quality
             || self.tool != other.tool
             || self.local != other.local
@@ -583,7 +555,6 @@ impl EditorState {
             || self.settings_scope != other.settings_scope
             || self.settings_category != other.settings_category
             || self.settings_modified != other.settings_modified
-            || self.view_mode != other.view_mode
             || self.game_view != other.game_view
             || self.hide_overlays != other.hide_overlays
             || self.hide_gizmos != other.hide_gizmos
@@ -602,15 +573,6 @@ impl EditorState {
         if let Some(theme) = text("appearance.theme") {
             self.light = theme == "light";
         }
-        if let Some(quality) = text("viewport.quality") {
-            self.render_quality = match quality.as_str() {
-                "project" => None,
-                other => other.parse().ok(),
-            };
-        }
-        // The one place `quality` is derived.
-        self.quality = self.resolve_quality(self.render_choice()) != Some(QualityPreset::Low);
-
         if let Some(v) = self
             .settings
             .get("appearance.reduceMotion")
@@ -626,11 +588,6 @@ impl EditorState {
             .and_then(Value::as_str)
             .and_then(|q| q.parse().ok())
             .unwrap_or_default()
-    }
-    /// What the Scene view renders with: the override, else the project's default.
-    pub fn render_choice(&self) -> QualityChoice {
-        self.render_quality
-            .unwrap_or_else(|| self.project_quality())
     }
     /// The preset `choice` runs at on this GPU (`None` while Auto is undetected).
     pub fn resolve_quality(&self, choice: QualityChoice) -> Option<QualityPreset> {
@@ -1142,31 +1099,6 @@ pub fn preset_title(preset: QualityPreset) -> &'static str {
     }
 }
 
-/// `EditorState::render_quality` as text: absent (the project's default), `auto`,
-/// `low`, `medium`, `high` or `epic`.
-mod render_quality_text {
-    use ara_render_fidelity::presets::QualityChoice;
-    use serde::{Deserialize, Deserializer, Serializer};
-
-    pub fn serialize<S: Serializer>(
-        value: &Option<QualityChoice>,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error> {
-        match value {
-            Some(choice) => serializer.serialize_some(&choice.to_string()),
-            None => serializer.serialize_none(),
-        }
-    }
-
-    pub fn deserialize<'de, D: Deserializer<'de>>(
-        deserializer: D,
-    ) -> Result<Option<QualityChoice>, D::Error> {
-        Option::<String>::deserialize(deserializer)?
-            .map(|text| text.parse().map_err(serde::de::Error::custom))
-            .transpose()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1193,37 +1125,17 @@ mod tests {
     }
 
     #[test]
-    fn quality_is_derived_from_the_override_the_project_and_the_gpu() {
+    fn the_project_quality_reads_as_it_resolves_on_this_gpu() {
         let mut state = EditorState::default();
         state
             .settings
-            .insert("viewport.quality".into(), json!("project"));
-        state
-            .settings
             .insert("rendering.quality".into(), json!("auto"));
-        state.apply_settings();
-        assert_eq!(state.render_quality, None);
-        assert!(state.quality, "an undetected Auto is not Low");
-        assert_eq!(state.quality_label(state.render_choice()), "Auto");
-        // Auto on a GPU without ray tracing resolves to Low.
+        assert_eq!(state.quality_label(state.project_quality()), "Auto");
         state.detected_quality = Some(QualityPreset::Low);
-        state.apply_settings();
-        assert!(!state.quality);
-        assert_eq!(state.quality_label(state.render_choice()), "Auto · Low");
-        state
-            .settings
-            .insert("viewport.quality".into(), json!("high"));
-        state.apply_settings();
-        assert_eq!(
-            state.render_quality,
-            Some(QualityChoice::Preset(QualityPreset::High))
-        );
-        assert!(state.quality);
-        // Serialized as text; detection is runtime only.
+        assert_eq!(state.quality_label(state.project_quality()), "Auto · Low");
+        // Detection is runtime only.
         let value = serde_json::to_value(&state).expect("state serializes");
-        assert_eq!(value["renderQuality"], "high");
         let back: EditorState = serde_json::from_value(value).expect("state deserializes");
-        assert_eq!(back.render_quality, state.render_quality);
         assert_eq!(back.detected_quality, None);
     }
 }

@@ -402,7 +402,7 @@ pub(super) struct EditorPalette {
     pub open: bool,
 }
 
-/// Appearance and rendering preferences shared by native controls and protocol clients.
+/// Appearance preferences shared by native controls and protocol clients.
 #[derive(Schema, Deserialize)]
 #[ara(params)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -412,12 +412,6 @@ pub(super) struct EditorPreferences {
     pub session: String,
     /// Disable 140 ms decorative transitions.
     pub reduce_motion: Option<bool>,
-    /// Legacy switch: true uses the project's default quality (Auto if that is Low),
-    /// false the Low raster view. Prefer `renderQuality`.
-    pub quality: Option<bool>,
-    /// Scene viewport quality: `project` (the project's default), `auto`, `low`,
-    /// `medium`, `high` or `epic`. A user preference, never saved in the project.
-    pub render_quality: Option<String>,
 }
 /// Set or reset one setting; the edit is an undoable op attributed to the session.
 #[derive(Schema, Deserialize)]
@@ -472,7 +466,7 @@ pub(super) struct EditorCommand {
     /// Optional target: `{"entity": "e_…"}`, `{"asset": "path"}`, `{"panel": "inspector"}`, `{"field": "Transform.position"}`.
     pub target: Option<Value>,
 }
-/// Viewport presentation: debug view, game view, overlays and the maximized panel.
+/// Viewport presentation: game view, overlays and the maximized panel.
 #[derive(Schema, Deserialize)]
 #[ara(params)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -480,8 +474,6 @@ pub(super) struct EditorView {
     /// Live protocol session, validated by the host.
     #[expect(dead_code, reason = "Host validates sessions before dispatch")]
     pub session: String,
-    /// `lit`, `baseColor`, `normals`, `depth`, `roughnessMetal`, `entityIds`, `shadowCascades`, `wireframe` or `litWireframe`.
-    pub view_mode: Option<String>,
     /// Hide every editor visual in the viewport.
     pub game_view: Option<bool>,
     /// Hide the viewport toolbar and widgets.
