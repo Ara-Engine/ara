@@ -11,8 +11,8 @@ use crate::{
     fidelity::{EnvironmentMap, native::Content},
 };
 use anyhow::{Context, Result};
-use ara_gpu::{GpuDevice, Image, commands::PassTiming};
 use ara_frame::capture::{Capture, CaptureRequest, FeatureCapture, ShaderMetadata, ViewMode};
+use ara_gpu::{GpuDevice, Image, commands::PassTiming};
 use ara_render_fidelity::environment::FrameEnvironment;
 use ara_runtime::{extract::Draw, material::MaterialAsset};
 use std::{collections::BTreeMap, sync::Arc, time::Instant};
@@ -93,8 +93,10 @@ impl Presenter {
         external: Option<Box<dyn ExternalRenderer>>,
     ) -> Result<()> {
         self.drain()?;
-        if let (Some(mut old), Some(renderer)) = (self.external.take(), &mut self.renderer) {
-            old.release(renderer.gpu_mut())?;
+        if let Some(mut old) = self.external.take()
+            && let Some(device) = self.device.as_mut()
+        {
+            old.release(device.gpu_mut())?;
         }
         self.external = external;
         Ok(())
@@ -136,7 +138,7 @@ impl Presenter {
         let foliage_percent = self.user_content_budget().1;
         let terrain_detail = self.user_terrain_detail();
         let gpu = self
-            .renderer
+            .device
             .as_mut()
             .context("presentation device")?
             .gpu_mut();
@@ -242,16 +244,28 @@ impl Presenter {
             .as_ref()
             .context("external capture published no image")?
             .output();
-        let renderer = self.renderer.as_mut().context("presentation device")?;
-        let rgba = crate::readback::read_rgba8(renderer.gpu_mut(), image, request.size)?;
+        let rgba = crate::readback::read_rgba8(
+            self.device
+                .as_mut()
+                .context("presentation device")?
+                .gpu_mut(),
+            image,
+            request.size,
+        )?;
         let pixels = rgba.len() / 4;
+        let info = self
+            .device
+            .as_ref()
+            .context("presentation device")?
+            .gpu()
+            .info();
         Capture::from_feature(
             FeatureCapture {
                 rgba,
                 ids: vec![0; pixels],
                 names: &[],
                 hash: &name,
-                device: renderer.gpu().info(),
+                device: info,
                 timings: &timings,
                 // The external renderer compiles its own shaders; no Ara cook applies.
                 shaders: &ShaderMetadata {
@@ -270,13 +284,21 @@ impl Presenter {
     /// (stability, video). Ara's renderer reads its completed view through
     /// `request`; an external renderer's published image is read as it is.
     pub fn live_image(&mut self, request: &CaptureRequest) -> Result<image::RgbaImage> {
-        let renderer = self.renderer.as_mut().context("presentation device")?;
         if self.external.is_none() {
+            let renderer = self.renderer.as_mut().context("presentation device")?;
             return Ok(renderer.capture_completed(request)?.image);
         }
         let published = self.published.as_ref().context("no presented frame")?;
         let size = published.size();
-        let rgba = crate::readback::read_rgba8(renderer.gpu_mut(), published.output(), size)?;
+        let output = published.output();
+        let rgba = crate::readback::read_rgba8(
+            self.device
+                .as_mut()
+                .context("presentation device")?
+                .gpu_mut(),
+            output,
+            size,
+        )?;
         image::RgbaImage::from_raw(size[0], size[1], rgba).context("presented image dimensions")
     }
 }
