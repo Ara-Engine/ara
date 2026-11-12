@@ -1,0 +1,12 @@
+[
+  {"node": "timer", "entity": "e_run", "component": "GlintRun", "field": "ticks", "clock": true, "template": "{value}"},
+  {"node": "checkpoint", "entity": "e_run", "component": "GlintRun", "field": "reached", "template": "Checkpoint {value} / 2"},
+  {"node": "falls", "entity": "e_run", "component": "GlintRun", "field": "falls", "template": "Falls {value}"},
+  {"node": "best", "entity": "e_run", "component": "GlintRun", "field": "bestTicks", "clock": true, "template": "Best {value}"},
+  {"node": "prompt", "entity": "e_run", "component": "GlintRun", "field": "state", "template": "{value}",
+    "labels": {"0": "Roll to start the clock", "1": "Reach the beacon", "2": "Beacon reached"}},
+  {"node": "win", "entity": "e_run", "component": "GlintRun", "field": "finished", "visibility": true},
+  {"node": "win-time", "entity": "e_run", "component": "GlintRun", "field": "ticks", "clock": true, "template": "Time {value}"},
+  {"node": "win-best", "entity": "e_run", "component": "GlintRun", "field": "bestTicks", "clock": true, "template": "Best {value}"},
+  {"node": "win-falls", "entity": "e_run", "component": "GlintRun", "field": "falls", "template": "Falls {value}"}
+]

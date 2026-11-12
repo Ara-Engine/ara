@@ -1,0 +1,32 @@
+<!-- ara:asset ui_glint000000001 -->
+<ui id="glint">
+  <panel id="hud">
+    <panel id="top">
+      <panel id="timer-card" class="card"><text id="timer-label" class="eyebrow" text="TIME"/><text id="timer" text="0:00"/></panel>
+      <panel id="status-card" class="card"><text id="checkpoint" text="Checkpoint 0 / 2"/><text id="falls" text="Falls 0"/><text id="best" text="Best --"/></panel>
+    </panel>
+    <panel id="help"><text id="prompt" text="Roll to start the clock"/><text id="hints" text="WASD roll    Space jump    Right mouse drag camera    Esc pause"/></panel>
+    <panel id="win" class="overlay"><panel id="win-dialog" class="modal">
+      <text id="win-eyebrow" class="eyebrow" text="Foundry Steps"/><text id="win-title" class="title" text="Beacon reached."/>
+      <text id="win-time" text="Time 0:00"/><text id="win-best" text="Best 0:00"/><text id="win-falls" text="Falls 0"/>
+      <text id="win-restart" class="accent" text="Press E to roll again"/>
+      <button id="win-leave" action="leave" text="Back to title"/>
+    </panel></panel>
+  </panel>
+  <panel id="main-menu" class="screen"><panel id="menu-content">
+    <text id="menu-eyebrow" class="eyebrow" text="A rolling course"/>
+    <panel id="title-lockup"><text id="logo" class="logo" text="GLINT"/><panel id="title-rule"/></panel>
+    <text id="menu-description" text="Steer a chrome ball over a floating foundry. Two checkpoints, a moving platform and spinning bars between you and the beacon."/>
+    <panel id="menu-buttons"><button id="solo" action="solo" text="Roll"/><button id="quit" action="quit" text="Quit game"/></panel>
+  </panel></panel>
+  <panel id="lobby" class="screen">
+    <text id="lobby-eyebrow" class="eyebrow" text="Course 1"/><text id="lobby-title" class="title" text="Foundry Steps"/>
+    <text id="lobby-text" text="Reach the beacon. The clock starts on your first move; falling puts you back at your last checkpoint."/>
+    <panel id="lobby-row" class="row"><button id="ready" action="ready" text="Start rolling"/><button id="lobby-leave" action="leave" text="Back"/></panel>
+  </panel>
+  <panel id="loading" class="screen"><text id="loading-eyebrow" class="eyebrow" text="Glint"/><text id="loading-title" class="title" text="Heating the foundry..."/><text id="loading-progress" text="Loading the course, physics and scripts."/></panel>
+  <panel id="pause" class="overlay"><panel id="pause-dialog" class="modal">
+    <text id="pause-eyebrow" class="eyebrow" text="Paused"/><text id="pause-title" class="title" text="Take a breath."/>
+    <button id="resume" action="resume" text="Resume"/><button id="pause-leave" action="leave" text="Leave run"/>
+  </panel></panel>
+</ui>

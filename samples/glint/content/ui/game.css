@@ -1,0 +1,31 @@
+ui { width:100%; height:100%; color:#f2efe8; font-family:Noto Sans; font-size:17px; }
+panel { display:flex; flex-direction:column; gap:10px; }
+text { flex-shrink:0; }
+#hud { width:100%; height:100%; }
+.screen { position:absolute; left:0px; top:0px; width:100%; height:100%; padding:56px; gap:16px; background:#14181ff2; }
+.eyebrow { color:#d99468; font-size:14px; }
+.title { font-size:34px; color:#fff6e8; }
+.accent { color:#f2b27a; }
+.row { flex-direction:row; gap:10px; align-items:center; }
+button { background:#262d36f0; color:#f2efe8; padding:14px; border-radius:4px; border-width:1px; border-color:#5b6672; font-size:18px; font-family:Noto Sans; width:240px; }
+button:hover { background:#3a4552; border-color:#d99468; }
+button:focus { border-width:2px; border-color:#f2b27a; background:#34404d; }
+button:active { background:#d99468; color:#14181f; }
+#main-menu { padding:0px; background:#00000000; }
+#menu-content { position:absolute; left:80px; top:80px; width:560px; gap:22px; }
+#title-lockup { gap:4px; }
+.logo { font-size:96px; color:#fff1dc; white-space:nowrap; }
+#title-rule { width:84px; height:4px; background:#d99468; }
+#menu-description { width:470px; color:#d6d2c8; font-size:18px; }
+#menu-buttons { gap:12px; }
+#solo { background:#d99468; color:#14181f; border-color:#d99468; }
+#solo:hover { background:#f2b27a; }
+#top { position:absolute; left:24px; right:24px; top:20px; flex-direction:row; justify-content:space-between; align-items:start; }
+.card { width:210px; gap:4px; padding:14px; background:#14181fd9; border-radius:6px; }
+#timer { font-size:38px; color:#fff6e8; white-space:nowrap; }
+#checkpoint { white-space:nowrap; }
+#help { position:absolute; left:24px; bottom:20px; gap:5px; background:#14181fd9; border-radius:6px; padding:12px; }
+#prompt { color:#f2b27a; font-size:17px; }
+#hints { font-size:14px; color:#d6d2c8; white-space:nowrap; }
+.overlay { position:absolute; left:0px; top:0px; width:100%; height:100%; justify-content:center; align-items:center; background:#0a0d1299; }
+.modal { width:520px; background:#171d25f5; padding:32px; border-radius:8px; border-width:1px; border-color:#6b7683; gap:16px; }

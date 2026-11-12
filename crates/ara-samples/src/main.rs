@@ -279,7 +279,8 @@ fn main() -> Result<()> {
                     "Atelier",
                     lock,
                 )?)?,
-                other => anyhow::bail!("unknown project {other} (outpost, showcase, atelier)"),
+                "glint" => build::glint::build(&build::Ctx::open(&samples, "glint", "Glint", lock)?)?,
+                other => anyhow::bail!("unknown project {other} (outpost, showcase, atelier, glint)"),
             }
             println!("built {project}");
         }
