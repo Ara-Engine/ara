@@ -33,8 +33,8 @@ raking across the route, a dark sky and yard, and warm local lights.
 | | |
 |---|---|
 | Exposure | fixed **EV100 11.0**, Khronos PBR Neutral, no bloom or grading |
-| Sun | 25,000 lux on a surface facing it, colour (1.0, 0.7, 0.48), light travels (-0.85, -0.22, -0.47): about 13 degrees above the horizon, from the right and ahead |
-| Sky | gradient numbers: zenith (0.03, 0.06, 0.2), horizon (0.8, 0.4, 0.2), glow (0.7, 0.2, 0.05), 1,200 cd/m2 scale; a very thin warm height fog (density 0.0001) |
+| Sun | 25,000 lux on a surface facing it, colour (1.0, 0.64, 0.4), light travels (-0.88, -0.19, -0.43): about 11 degrees above the horizon, from the right and ahead, so rails and gantry beams throw long shadows across the deck |
+| Sky | two temperatures: a cool zenith (0.1, 0.17, 0.38), a neutral horizon (0.55, 0.52, 0.56), a narrow warm glow (0.55, 0.17, 0.05), 1,600 cd/m2 scale; a very thin cool height fog (density 0.0001) |
 | Furnace mouths (2) | point, 15,000,000 lm, radius 2 m, range 90 m, at the mouths of the furnaces beside the route |
 | Furnace feet (4) | point, 6,000,000 lm, radius 1.6 m, range 90 m, at the chimneys' bases |
 | Checkpoint lights (2) | point, 150,000 lm, radius 0.3 m, range 18 m, amber, 2.4 m above each pad |

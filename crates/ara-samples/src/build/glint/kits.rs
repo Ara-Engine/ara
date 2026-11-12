@@ -286,6 +286,19 @@ fn pipe(kit: &mut Kit, material: usize, radius: f32, start: Vec3, along: u32, le
     kit.cylinder(material, radius, length, 20, Mat4::from_translation(start) * rotation, Vec2::ONE);
 }
 
+/// The ball's contact shadow: two stacked opaque discs, unit diameter, lying flat on their own
+/// origin, a pale penumbra under a dark core. (Alpha blend, tried first, drew solid black on
+/// Renderlab.) `BallShadow` moves and scales it.
+pub fn blob(root: &Path, lock: &Lock) -> Result<String> {
+    let mut k = Kit::new(vec![
+        Material::flat("shadow penumbra", [0.2, 0.17, 0.14], 0.95, 0.0),
+        Material::flat("shadow core", [0.075, 0.065, 0.055], 0.95, 0.0),
+    ]);
+    k.cylinder(0, 0.5, 0.004, 40, Mat4::IDENTITY, Vec2::ONE);
+    k.cylinder(1, 0.3, 0.004, 40, Mat4::from_translation(Vec3::new(0.0, 0.006, 0.0)), Vec2::ONE);
+    k.write(root, lock, "glint_blob")
+}
+
 /// The foundry yard far below the course: textured ground, route markings, slag channels,
 /// furnaces, chimneys and tanks with banding, gantry frames, pipe racks, plate stacks, sheds
 /// and a glazed control tower. Pure scenery, no collision.
@@ -303,20 +316,22 @@ pub fn yard(root: &Path, lock: &Lock) -> Result<String> {
     const STEEL: usize = 10;
     const PLATES: usize = 11;
     const DARKWIN: usize = 12;
+    const EMBER: usize = 13;
     let mut k = Kit::new(vec![
         Material::textured("yard concrete", "concrete_floor_02").tinted([0.075, 0.08, 0.095]),
         Material::flat("sooty brick", [0.1, 0.09, 0.09], 0.92, 0.0),
         Material::flat("tank steel", [0.16, 0.18, 0.22], 0.6, 0.45),
         Material::emitter("slag", [1.0, 0.38, 0.08]),
-        Material::textured("shed cladding", "metal_plate").tinted([0.1, 0.11, 0.14]),
+        Material::flat("shed paint", [0.07, 0.075, 0.095], 0.78, 0.1),
         Material::glass("control glass", [0.6, 0.8, 0.9], 0.3),
         Material::emitter("window light", [1.0, 0.82, 0.55]),
         Material::flat("pipe steel", [0.34, 0.35, 0.37], 0.5, 0.8),
         Material::flat("amber paint", [0.85, 0.42, 0.08], 0.5, 0.0),
         Material::flat("road marking", [0.7, 0.66, 0.55], 0.85, 0.0),
-        Material::flat("black girder steel", [0.06, 0.065, 0.07], 0.55, 1.0),
+        Material::flat("black girder steel", [0.06, 0.065, 0.07], 0.7, 0.6),
         Material::textured("stacked plate", "metal_plate").tinted([0.2, 0.22, 0.26]),
         Material::flat("dark window", [0.015, 0.025, 0.045], 0.12, 0.2),
+        Material::emitter("ember", [0.55, 0.14, 0.04]),
     ]);
     let v = Vec3::new;
     let floor = YARD_FLOOR;
@@ -338,8 +353,9 @@ pub fn yard(root: &Path, lock: &Lock) -> Result<String> {
     }
     // Furnaces: a dark block, a framed glowing mouth, a hood, a stack, amber hazard borders.
     for (x, z) in FURNACES {
-        slab_box(&mut k, SHED, v(x - 9.0, floor, z - 6.0), v(x + 9.0, floor + 11.0, z + 6.0), plate_m);
-        slab_box(&mut k, SLAG, v(x - 5.0, floor + 1.2, z - 6.05), v(x + 5.0, floor + 6.0, z - 6.0), Vec2::ONE);
+        slab_box(&mut k, STEEL, v(x - 9.0, floor, z - 6.0), v(x + 9.0, floor + 11.0, z + 6.0), Vec2::ONE);
+        slab_box(&mut k, EMBER, v(x - 5.0, floor + 1.2, z - 6.05), v(x + 5.0, floor + 6.0, z - 6.0), Vec2::ONE);
+        slab_box(&mut k, SLAG, v(x - 3.0, floor + 2.2, z - 6.12), v(x + 3.0, floor + 4.6, z - 6.05), Vec2::ONE);
         for (a, b) in [
             (v(x - 5.6, floor + 0.9, z - 6.3), v(x - 5.0, floor + 6.6, z - 5.9)),
             (v(x + 5.0, floor + 0.9, z - 6.3), v(x + 5.6, floor + 6.6, z - 5.9)),
@@ -347,7 +363,7 @@ pub fn yard(root: &Path, lock: &Lock) -> Result<String> {
         ] {
             slab_box(&mut k, STEEL, a, b, Vec2::ONE);
         }
-        slab_box(&mut k, SHED, v(x - 6.0, floor + 6.6, z - 7.4), v(x + 6.0, floor + 7.6, z - 5.8), plate_m);
+        slab_box(&mut k, STEEL, v(x - 6.0, floor + 6.6, z - 7.4), v(x + 6.0, floor + 7.6, z - 5.8), Vec2::ONE);
         k.cylinder(BRICK, 1.6, 16.0, 24, Mat4::from_translation(v(x + 5.0, floor + 11.0, z + 2.0)), Vec2::ONE);
         for band in [0.0, 5.0, 10.0] {
             k.cylinder(PIPE, 1.7, 0.4, 24, Mat4::from_translation(v(x + 5.0, floor + 11.5 + band, z + 2.0)), Vec2::ONE);
@@ -402,8 +418,6 @@ pub fn yard(root: &Path, lock: &Lock) -> Result<String> {
             }
         }
         slab_box(&mut k, STEEL, v(-8.4, top, z - 0.5), v(8.4, top + 0.9, z + 0.5), Vec2::ONE);
-        slab_box(&mut k, AMBER, v(-1.5, top - 1.4, z - 0.9), v(1.5, top, z + 0.9), Vec2::ONE);
-        slab_box(&mut k, WINDOW, v(-0.5, top - 2.2, z - 0.5), v(0.5, top - 1.4, z + 0.5), Vec2::ONE);
     }
     // Pipe racks: two long runs along the route on frames, one run across the yard.
     for (x, h) in [(-18.0, 6.0), (18.0, 4.5)] {

@@ -45,6 +45,25 @@ public static class Course
         return mover.Travel * (MathF.Cos(phase * omega) * omega / tick.Dt);
     }
 
+    /// <summary>The top of the highest <see cref="Surface"/> at or below a point, if any lies under it.</summary>
+    public static bool FloorBelow(Vector3 position, out float top)
+    {
+        Span<Entity> buffer = stackalloc Entity[64];
+        var found = false;
+        top = 0;
+        foreach (var entity in World.Query<Surface>(buffer))
+        {
+            var centre = World.Read<Transform>(entity).Position;
+            var half = World.Read<Surface>(entity).Half;
+            var surface = centre.Y + half.Y;
+            if (surface > position.Y + 0.05f || (found && surface <= top)) continue;
+            if (MathF.Abs(position.X - centre.X) > half.X || MathF.Abs(position.Z - centre.Z) > half.Z) continue;
+            top = surface;
+            found = true;
+        }
+        return found;
+    }
+
     /// <summary>Places a physics body at a point and stops it.</summary>
     public static void Teleport(Entity entity, Vector3 point)
     {

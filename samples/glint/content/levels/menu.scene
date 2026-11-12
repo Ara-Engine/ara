@@ -369,7 +369,7 @@
       "order": "aC",
       "MeshRenderer": {
         "model": "@kit/glint_yard.gltf#as_kitglintyard",
-        "emissive": [6000, 6000, 6000]
+        "emissive": [1800, 1800, 1800]
       },
       "Transform": {}
     }

@@ -82,3 +82,19 @@ No engine code was changed. Items marked *from reading* were not confirmed by ru
     interact so that the ball sat 75 to 90 percent of the way down the frame for the first
     three settings tried; (distance 5.5, height 1.4, pitch 20) puts it at about 65 percent.
     Found by capturing each setting; the schema docs do not say where the ball lands.
+15. **Colour alpha does not blend on Renderlab, on primitives or on a glass kit.** A `MeshRenderer`
+    box or sphere with `color` alpha 0.3 drew opaque black, and so did a glTF disc with a
+    `Material::glass` (alpha blend, opacity 0.09 to 0.24; the same kind of material is fine in
+    Atelier's window glass, where something is seen through it). The ball's contact shadow is
+    therefore two opaque discs, a pale penumbra under a dark core, moved by a script.
+16. **Textured metal sheet mirrors the sky.** A shed clad in `metal_plate` (the ARM map makes it
+    fully metallic) reflected the pink horizon as one flat peach wall. Flat non-metal paint
+    fixed it; the surprise is that the `Material::textured` factors stay at metallic 1.
+17. **The look costs render time.** The grey box rendered at 33.8 ms GPU (720p, M5, loaded); the
+    dressed dusk yard is 65 ms at the start view, 77 ms mid-course and 88 ms at the goal, with
+    the same simulation cost. About twenty local lights with shadows, a yard of a few thousand
+    triangles, GI and a few hundred draws; `External.Pass.Shading` is 55 to 70 ms of it.
+18. **The project cook cache is large on a small disk.** `samples/glint/.ara/cache/intermediates`
+    holds about 0.9 GB after a few dozen kit rebuilds (Atelier 0.4 GB) and is rewritten when the
+    cache is cleared, which matters on a machine held to a 30 GB free-space floor. The cache is
+    safe to delete and cooks again on the next capture.

@@ -65,6 +65,7 @@ fn models(ctx: &Ctx) -> Result<Models> {
         ("glint_pad", kits::pad(root, lock)?),
         ("glint_goal", kits::goal(root, lock)?),
         ("glint_yard", kits::yard(root, lock)?),
+        ("glint_blob", kits::blob(root, lock)?),
     ] {
         ctx.model(&mut models, name, &path, &format!("as_kit{}", short(name)))?;
     }
@@ -129,7 +130,7 @@ fn art(s: &mut Scene) {
         Prop::new("e_yard", "Foundry yard", "glint_yard", Vec3::ZERO, 0.0)
             .at_origin()
             .decor()
-            .renderer(json!({"emissive": [6000, 6000, 6000]})),
+            .renderer(json!({"emissive": [1800, 1800, 1800]})),
     );
     // Steam and sparks: engine-side extras (they do not export).
     for (i, (x, z, _, h)) in CHIMNEYS.iter().enumerate() {
@@ -233,6 +234,17 @@ fn game(ctx: &Ctx) -> Result<()> {
         }),
     );
     s.commands.push(ball_glow("e_ball"));
+    // The contact shadow: a black film disc moved by BallShadow (colour alpha on a primitive
+    // does not blend on Renderlab, so it is a glTF kit with a blended material).
+    s.entity(
+        "e_shadow",
+        "Ball contact shadow",
+        json!({
+            "Transform": {"position": [0, 0.02, -2.0], "scale": [1.5, 1, 1.5]},
+            "MeshRenderer": models.get("glint_blob").renderer,
+            "BallShadow": {},
+        }),
+    );
     // An establishing shot for previews; a higher priority number keeps the follow camera active.
     s.entity(
         "e_camwide",

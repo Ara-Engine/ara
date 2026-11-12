@@ -135,7 +135,7 @@
     },
     "e_camwide": {
       "name": "Establishing camera",
-      "order": "af",
+      "order": "ag",
       "Camera": {
         "fov": 66,
         "priority": 10
@@ -374,7 +374,7 @@
     },
     "e_run": {
       "name": "Run",
-      "order": "ag",
+      "order": "ah",
       "GlintRun": {
         "start": [0, 0.6000000238418579, -2]
       }
@@ -519,6 +519,18 @@
         "position": [0, -2.3, 94]
       }
     },
+    "e_shadow": {
+      "name": "Ball contact shadow",
+      "order": "af",
+      "BallShadow": {},
+      "MeshRenderer": {
+        "model": "@kit/glint_blob.gltf#as_kitglintblob"
+      },
+      "Transform": {
+        "position": [0, 0.02, -2],
+        "scale": [1.5, 1, 1.5]
+      }
+    },
     "e_smoke0": {
       "name": "Chimney smoke",
       "order": "aD",
@@ -620,7 +632,7 @@
       "order": "aC",
       "MeshRenderer": {
         "model": "@kit/glint_yard.gltf#as_kitglintyard",
-        "emissive": [6000, 6000, 6000]
+        "emissive": [1800, 1800, 1800]
       },
       "Transform": {}
     }
