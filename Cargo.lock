@@ -1410,32 +1410,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ara-landscape"
-version = "0.0.1-alpha"
-dependencies = [
- "anyhow",
- "ara-asset-format",
- "ara-doc",
- "ara-foliage",
- "ara-frame",
- "ara-gpu",
- "ara-json",
- "ara-material",
- "ara-render",
- "ara-schema",
- "ara-shader-cook",
- "ara-terrain",
- "ara-texture-stream",
- "blake3",
- "bytemuck",
- "glam 0.30.10",
- "half",
- "image",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "ara-material"
 version = "0.0.1-alpha"
 dependencies = [
@@ -2294,7 +2268,6 @@ dependencies = [
  "ara-asset-format",
  "ara-frame",
  "ara-gpu",
- "ara-render",
  "ash 0.38.0+1.4.352",
  "bytemuck",
  "glam 0.30.10",
