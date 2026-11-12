@@ -118,10 +118,10 @@ impl Presenter {
         }
     }
 
-    /// Distance in metres to which terrain layers use their normal and metal/roughness
-    /// maps (`Quality::terrain_detail`): the user's view-distance tier, or the
-    /// presenter's own quality without settings.
-    pub(crate) fn user_terrain_detail(&self) -> f32 {
+    /// The view-distance quality the renderers share (`Quality::terrain_detail`,
+    /// `lod_pixels`, `min_pixels`): the user's view-distance tier, or the presenter's own
+    /// quality without settings.
+    pub(crate) fn user_view_quality(&self) -> ara_frame::look::Quality {
         let tier = self.graphics.as_ref().map(|settings| {
             let caps = self.graphics_capabilities();
             settings
@@ -133,7 +133,6 @@ impl Presenter {
             .or(self.quality())
             .unwrap_or(QualityPreset::High)
             .raster_quality()
-            .terrain_detail
     }
 
     pub(crate) fn user_content_budget(&self) -> (u64, u32) {

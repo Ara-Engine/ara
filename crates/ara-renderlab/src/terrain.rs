@@ -11,6 +11,7 @@
 //! distance levels of detail, the virtual texture, and wind. Tiles and foliage follow
 //! tile residency, so streaming still decides what exists.
 use crate::rl::Engine;
+use crate::scene::CULLED;
 use crate::{gaps::Gaps, scene, texture};
 use anyhow::Result;
 use ara_runtime::extract::Draw;
@@ -70,6 +71,82 @@ struct Tile {
     texture: Option<TextureId>,
 }
 
+/// The draws the bridge derives from the terrain's foliage (`Terrain::foliage`).
+pub(crate) struct Foliage<'a> {
+    pub draws: &'a [Draw],
+    /// Each draw's cooked level of detail, or `scene::CULLED`.
+    pub lods: &'a [u8],
+    /// What the draws and their levels were built from: while it is unchanged, draws already
+    /// placed are not looked at again.
+    pub key: u64,
+}
+
+/// Every respawned foliage draw changes the scene Renderlab lights (its GI cache relights on any
+/// change), so a steady trickle of level swaps, which a moving camera produces every frame, costs
+/// far more than the same swaps in one burst now and then (measured: 96 draws a frame took the
+/// Outpost orbit from 10 to 1.7 frames a second). Frames between two bursts:
+const LOD_BURST_FRAMES: u32 = 16;
+/// Foliage draws that may change level (or appear or vanish) in one burst, nearest first.
+const LOD_SWAPS_PER_BURST: usize = 768;
+
+/// What a foliage draw needs to pick its level of detail: where it is and how big it is.
+struct Instance {
+    /// World position of the foliage instance.
+    at: [f32; 3],
+    /// The part's total uniform scale (instance scale times the part's own).
+    scale: f32,
+    /// Index into `Terrain::parts`'s entries (model digest, primitive).
+    part: (u64, usize),
+}
+
+/// The cooked levels of detail of a model part, for `Terrain::choose_lods`.
+struct PartLods {
+    /// Bound radius of the part's vertices around the origin of its model space.
+    radius: f32,
+    /// The mesh's largest extent: what a level's relative error is a fraction of.
+    extent: f32,
+    /// Relative error of each coarser level (`Primitive::lods`), finest coarser first.
+    errors: Vec<f32>,
+    /// Triangles of the finest level and of each coarser one.
+    triangles: Vec<usize>,
+}
+
+impl PartLods {
+    fn of(draw: &Draw) -> Option<Self> {
+        let ara_runtime::extract::Geometry::Model { model, primitive } = &draw.geometry else {
+            return None;
+        };
+        let p = model.primitives.get(*primitive)?;
+        let (mut min, mut max) = ([f32::MAX; 3], [f32::MIN; 3]);
+        let mut radius = 0f32;
+        for v in &p.vertices {
+            for axis in 0..3 {
+                min[axis] = min[axis].min(v.position[axis]);
+                max[axis] = max[axis].max(v.position[axis]);
+            }
+            radius = radius.max(v.position.iter().map(|c| c * c).sum::<f32>().sqrt());
+        }
+        let extent = (0..3).map(|a| max[a] - min[a]).fold(0f32, f32::max);
+        Some(Self {
+            radius,
+            extent,
+            errors: p.lods.iter().map(|l| l.error).collect(),
+            triangles: std::iter::once(p.indices.len() / 3)
+                .chain(p.lods.iter().map(|l| l.indices.len() / 3))
+                .collect(),
+        })
+    }
+
+    /// The coarsest level whose error projects to at most `pixels` at `per_metre` pixels
+    /// per metre of the instance's scale (0: the finest).
+    fn level(&self, scale: f32, per_metre: f32, pixels: f32) -> u8 {
+        (1..=self.errors.len())
+            .rev()
+            .find(|k| self.errors[k - 1] * self.extent * scale * per_metre <= pixels)
+            .map_or(0, |k| k as u8)
+    }
+}
+
 /// The terrain tiles placed in Renderlab and the frame's foliage as draws.
 #[derive(Default)]
 pub(crate) struct Terrain {
@@ -84,6 +161,28 @@ pub(crate) struct Terrain {
     foliage: Vec<Draw>,
     /// What `foliage` was built from; a new value means every draw may have changed.
     foliage_key: u64,
+    /// Each foliage draw's placement and level-of-detail data, parallel to `foliage`.
+    foliage_info: Vec<Instance>,
+    /// Each foliage draw's cooked level of detail for the camera it was last chosen for
+    /// (`Self::choose_lods`), or `scene::CULLED`; parallel to `foliage`.
+    foliage_lods: Vec<u8>,
+    /// The levels `choose_lods` wants, which `foliage_lods` reaches `LOD_SWAPS_PER_BURST` draws a
+    /// frame at a time, nearest first: a draw that changes level is respawned in Renderlab, and
+    /// thousands of respawns in one frame (a cut re-chooses every level) cost several frames.
+    lod_desired: Vec<u8>,
+    /// Draws whose level differs from `lod_desired`, farthest first (popped from the end).
+    lod_queue: Vec<u32>,
+    /// Frames until the next burst of level changes may be applied.
+    lod_cooldown: u32,
+    /// Changes whenever `foliage_lods` does: the key of what `Scene::sync` places.
+    lod_epoch: u64,
+    /// The view `foliage_lods` was chosen for: eye, vertical field of view, height in pixels
+    /// and the quality's two pixel thresholds; and the foliage key it was chosen over.
+    lod_view: Option<([f32; 3], [u32; 4], u64)>,
+    /// Level-of-detail data of each model part, by model digest and primitive.
+    parts: HashMap<(u64, usize), PartLods>,
+    /// Foliage triangles drawn at most (the non-RT path), nearest instances first.
+    foliage_budget: Option<usize>,
     /// The layer atlas and parameters, and the layers' key they were built for; `None`
     /// inside when the build failed (the tiles then show the layers' factors, and the
     /// build is not retried until the key changes).
@@ -251,10 +350,11 @@ impl Terrain {
                 view,
                 &coords.iter().map(|c| (c.x, c.z)).collect(),
                 cap,
-                triangles,
                 gaps,
             );
         }
+        self.foliage_budget = triangles;
+        self.choose_lods(view);
         Ok((self.tiles.len(), largest))
     }
 
@@ -276,9 +376,154 @@ impl Terrain {
         Ok(())
     }
 
-    /// The foliage draws and the key of what they were built from.
-    pub fn foliage(&self) -> (&[Draw], u64) {
-        (&self.foliage, self.foliage_key)
+    /// The foliage draws for `Scene::sync`.
+    pub fn foliage(&self) -> Foliage<'_> {
+        Foliage {
+            draws: &self.foliage,
+            lods: &self.foliage_lods,
+            key: fnv(self.foliage_key, &self.lod_epoch.to_le_bytes()),
+        }
+    }
+
+    /// Chooses each foliage draw's level of detail for the frame's camera, as Ara's renderer
+    /// does: the coarsest cooked level whose error projects under `view.lod_pixels`, and no
+    /// draw at all once its bound projects under `view.min_pixels`. Chosen again only when the
+    /// eye moves 6 m, the lens or size changes or the foliage is rebuilt; a draw near a
+    /// threshold keeps the level it has (a margin of 15 % either way), so the placed objects do
+    /// not swap while the camera hovers. On the non-RT path the farthest instances beyond the
+    /// triangle budget are left out.
+    fn choose_lods(&mut self, view: &ExternalView<'_>) {
+        let Some(camera) = view.frame.camera else {
+            if !self.foliage_lods.iter().all(|lod| *lod == 0) {
+                self.foliage_lods.iter_mut().for_each(|lod| *lod = 0);
+                self.lod_epoch += 1;
+            }
+            self.lod_queue.clear();
+            self.lod_view = None;
+            return;
+        };
+        let lens = [
+            camera.fov.to_bits(),
+            view.size[1],
+            view.lod_pixels.to_bits(),
+            view.min_pixels.to_bits(),
+        ];
+        let current = (camera.position, lens, self.foliage_key);
+        let unchanged = self.lod_view.is_some_and(|(eye, last, key)| {
+            last == lens
+                && key == self.foliage_key
+                && eye
+                    .iter()
+                    .zip(camera.position)
+                    .map(|(a, b)| (a - b) * (a - b))
+                    .sum::<f32>()
+                    < 36.
+        });
+        if unchanged {
+            self.swap_levels();
+            return;
+        }
+        self.lod_view = Some(current);
+        // Pixels per metre at one metre: the projection's scale at the instance's distance
+        // is this divided by the distance.
+        let one_metre = view.size[1] as f32 * 0.5 / (camera.fov.to_radians() * 0.5).tan();
+        let previous = std::mem::take(&mut self.foliage_lods);
+        let reuse = previous.len() == self.foliage_info.len();
+        let mut chosen = Vec::with_capacity(self.foliage_info.len());
+        let mut distances = Vec::new();
+        let mut away = vec![0f32; self.foliage_info.len()];
+        for (i, instance) in self.foliage_info.iter().enumerate() {
+            let Some(part) = self.parts.get(&instance.part) else {
+                chosen.push(0);
+                continue;
+            };
+            let d = instance
+                .at
+                .iter()
+                .zip(camera.position)
+                .map(|(a, b)| (a - b) * (a - b))
+                .sum::<f32>()
+                .sqrt();
+            away[i] = d;
+            // The nearest point of the instance's bound, not its centre.
+            let near = (d - part.radius * instance.scale).max(0.05);
+            let per_metre = one_metre / near;
+            let bound = part.radius * instance.scale * per_metre;
+            let before = reuse.then(|| previous[i]);
+            let culled = match before {
+                Some(CULLED) => bound < view.min_pixels,
+                _ => bound < view.min_pixels * 0.85,
+            };
+            if culled {
+                chosen.push(CULLED);
+                continue;
+            }
+            let strict = part.level(instance.scale, per_metre, view.lod_pixels * 0.85);
+            let loose = part.level(instance.scale, per_metre, view.lod_pixels * 1.15);
+            chosen.push(match before {
+                Some(level) if level != CULLED => level.clamp(strict, loose),
+                _ => part.level(instance.scale, per_metre, view.lod_pixels),
+            });
+            distances.push((d, i));
+        }
+        if let Some(budget) = self.foliage_budget {
+            distances.sort_by(|a, b| a.0.total_cmp(&b.0));
+            let mut used = 0usize;
+            for (_, i) in distances {
+                let Some(part) = self.parts.get(&self.foliage_info[i].part) else {
+                    continue;
+                };
+                used += part.triangles[usize::from(chosen[i])];
+                if used > budget {
+                    chosen[i] = CULLED;
+                }
+            }
+        }
+        if !reuse {
+            // The first choice (or after a rebuild) places everything: nothing is on screen yet
+            // to respawn.
+            if chosen != previous {
+                self.lod_epoch += 1;
+            }
+            self.foliage_lods = chosen;
+            self.lod_queue.clear();
+            return;
+        }
+        // Later choices are reached in bursts (`swap_levels`), nearest first.
+        let mut queue: Vec<u32> = (0..chosen.len() as u32)
+            .filter(|i| chosen[*i as usize] != previous[*i as usize])
+            .collect();
+        queue.sort_by(|a, b| away[*b as usize].total_cmp(&away[*a as usize]));
+        self.foliage_lods = previous;
+        self.lod_desired = chosen;
+        self.lod_queue = queue;
+        self.swap_levels();
+    }
+
+    /// Moves `foliage_lods` toward `lod_desired` by at most `LOD_SWAPS_PER_BURST` draws, at most
+    /// once every `LOD_BURST_FRAMES` frames.
+    fn swap_levels(&mut self) {
+        self.lod_cooldown = self.lod_cooldown.saturating_sub(1);
+        if self.lod_cooldown > 0 {
+            return;
+        }
+        let mut swapped = 0;
+        while swapped < LOD_SWAPS_PER_BURST
+            && let Some(i) = self.lod_queue.pop()
+        {
+            let i = i as usize;
+            if let (Some(have), Some(want)) =
+                (self.foliage_lods.get_mut(i), self.lod_desired.get(i))
+                && have != want
+            {
+                *have = *want;
+                swapped += 1;
+            }
+        }
+        if swapped > 0 {
+            self.lod_epoch += 1;
+            self.lod_cooldown = LOD_BURST_FRAMES;
+        }
     }
 
     fn clear(&mut self, engine: &mut Engine) -> Result<()> {
@@ -289,6 +534,10 @@ impl Terrain {
         self.applied.clear();
         if !self.foliage.is_empty() || self.foliage_key != 0 {
             self.foliage.clear();
+            self.foliage_info.clear();
+            self.foliage_lods.clear();
+            self.lod_desired.clear();
+            self.lod_queue.clear();
             self.foliage_key = 0;
         }
         Ok(())
@@ -299,17 +548,19 @@ impl Terrain {
         view: &ExternalView<'_>,
         resident: &HashSet<(i32, i32)>,
         cap: usize,
-        budget: Option<usize>,
         gaps: &mut Gaps,
     ) {
         self.foliage.clear();
+        self.foliage_info.clear();
+        self.foliage_lods.clear();
+        self.lod_desired.clear();
+        self.lod_queue.clear();
         let Some(terrain) = view.frame.terrain.as_ref() else {
             return;
         };
         let data = &terrain.data;
         let (origin, width) = (data.header.origin, data.header.tile_width());
         let (mut unresolved, mut over) = (0usize, 0usize);
-        let mut used = 0usize;
         for instance in &data.foliage {
             // The user's foliage density, selected as Ara's renderer selects it.
             let identity = u64::from(instance.identity[0]) | u64::from(instance.identity[1]) << 32;
@@ -339,8 +590,7 @@ impl Terrain {
                 AraVec3::new(x, y, z),
             );
             for (index, part) in parts.iter().enumerate() {
-                let cost = triangles_of(part);
-                if self.foliage.len() == cap || budget.is_some_and(|b| used + cost > b) {
+                if self.foliage.len() == cap {
                     over += 1;
                     continue;
                 }
@@ -350,7 +600,25 @@ impl Terrain {
                     fnv(entity, &rule.to_le_bytes()),
                     &(index as u32).to_le_bytes(),
                 );
-                used += cost;
+                // What `choose_lods` needs of the part, read once per model part.
+                let part_key = match &part.geometry {
+                    ara_runtime::extract::Geometry::Model { model, primitive } => {
+                        (fnv(FNV, &model.digest.0), *primitive)
+                    }
+                    ara_runtime::extract::Geometry::Shape { .. } => (0, usize::MAX),
+                };
+                if part_key.1 != usize::MAX
+                    && let std::collections::hash_map::Entry::Vacant(slot) =
+                        self.parts.entry(part_key)
+                    && let Some(lods) = PartLods::of(part)
+                {
+                    slot.insert(lods);
+                }
+                self.foliage_info.push(Instance {
+                    at: [x, y, z],
+                    scale: scale * part.world.x_axis.length(),
+                    part: part_key,
+                });
                 self.foliage.push(Draw {
                     entity: FOLIAGE_ENTITY | (entity & 0x0000_ffff_ffff_ffff),
                     world: placed * part.world,
@@ -368,8 +636,7 @@ impl Terrain {
             gaps.limit(
                 "foliage draws the bridge keeps",
                 &format!(
-                    "{over} foliage parts are not drawn: at most {cap} parts ({MAX_FOLIAGE_DRAWS} on the RT path; fewer on the non-RT path, whose shadows pack instance and triangle into 32 bits){}",
-                    budget.map_or(String::new(), |b| format!(" and {b} triangles on the non-RT path, whose shadows slow sharply with caster triangles"))
+                    "{over} foliage parts are not drawn: at most {cap} parts ({MAX_FOLIAGE_DRAWS} on the RT path; fewer on the non-RT path, whose shadows pack instance and triangle into 32 bits)"
                 ),
             );
         }
@@ -607,6 +874,25 @@ fn release(engine: &mut Engine, tile: Tile) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+
+    use super::PartLods;
+
+    /// The coarsest level whose projected error fits, the finest when none does.
+    #[test]
+    fn a_part_draws_the_coarsest_level_whose_error_fits_the_pixels() {
+        let part = PartLods {
+            radius: 1.,
+            extent: 2.,
+            errors: vec![0.01, 0.05],
+            triangles: vec![1000, 500, 100],
+        };
+        // 10 pixels a metre: the levels show 0.2 and 1.0 pixels of error.
+        assert_eq!(part.level(1., 10., 1.), 2);
+        assert_eq!(part.level(1., 10., 0.5), 1);
+        assert_eq!(part.level(1., 10., 0.1), 0);
+        // Twice the scale doubles the error: only the first level fits one pixel.
+        assert_eq!(part.level(2., 10., 1.), 1);
+    }
     use super::*;
 
     #[test]
@@ -614,5 +900,48 @@ mod tests {
         // 32,768 triangles, doubled: 17 bits, so 15 bits of instances.
         assert_eq!(packed_instances(32_768), (1 << 15) - 2);
         assert_eq!(packed_instances(1), (1 << 30) - 2);
+    }
+    /// Level changes are applied in the queue's order (nearest first), in bursts of at most
+    /// `LOD_SWAPS_PER_BURST` and not more often than every `LOD_BURST_FRAMES` frames, so a
+    /// moving camera does not respawn foliage draws every frame and a cut not all at once.
+    #[test]
+    fn level_swaps_come_in_bursts_nearest_first() {
+        let count = LOD_SWAPS_PER_BURST * 2 + 5;
+        let mut terrain = Terrain {
+            foliage_lods: vec![0; count],
+            lod_desired: vec![1; count],
+            // Farthest first: index `count - 1` is the nearest.
+            lod_queue: (0..count as u32).collect(),
+            ..Terrain::default()
+        };
+        terrain.swap_levels();
+        let swapped = |t: &Terrain| t.foliage_lods.iter().filter(|l| **l == 1).count();
+        assert_eq!(swapped(&terrain), LOD_SWAPS_PER_BURST);
+        assert!(
+            terrain.foliage_lods[count - LOD_SWAPS_PER_BURST..]
+                .iter()
+                .all(|l| *l == 1)
+        );
+        // Nothing moves until the burst interval has passed.
+        let epoch = terrain.lod_epoch;
+        for _ in 0..LOD_BURST_FRAMES - 1 {
+            terrain.swap_levels();
+        }
+        assert_eq!(
+            (swapped(&terrain), terrain.lod_epoch),
+            (LOD_SWAPS_PER_BURST, epoch)
+        );
+        terrain.swap_levels();
+        assert_eq!(swapped(&terrain), 2 * LOD_SWAPS_PER_BURST);
+        for _ in 0..LOD_BURST_FRAMES {
+            terrain.swap_levels();
+        }
+        assert!(terrain.foliage_lods.iter().all(|l| *l == 1));
+        // Settled: nothing changes, so the placed objects are left alone.
+        let settled = terrain.lod_epoch;
+        for _ in 0..2 * LOD_BURST_FRAMES {
+            terrain.swap_levels();
+        }
+        assert_eq!(terrain.lod_epoch, settled);
     }
 }

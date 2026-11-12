@@ -45,6 +45,13 @@ pub struct ExternalView<'a> {
     /// maps and project from the side on steep slopes, from the user's graphics tier as
     /// Ara's renderer does (`Quality::terrain_detail`; 0: neither, anywhere).
     pub terrain_detail: f32,
+    /// Projected geometric error, in pixels, a model's level of detail may show, from the
+    /// user's view-distance tier (`Quality::lod_pixels`): an instance draws the coarsest
+    /// cooked level of detail (`Primitive::lods`) whose error projects under it.
+    pub lod_pixels: f32,
+    /// Projected bound radius, in pixels, below which an instance is not drawn
+    /// (`Quality::min_pixels`).
+    pub min_pixels: f32,
 }
 
 /// A completed frame from an external renderer.
@@ -170,7 +177,12 @@ impl Presenter {
                 ..Default::default()
             };
         let foliage_percent = self.user_content_budget().1;
-        let terrain_detail = self.user_terrain_detail();
+        let view_quality = self.user_view_quality();
+        let (terrain_detail, lod_pixels, min_pixels) = (
+            view_quality.terrain_detail,
+            view_quality.lod_pixels,
+            view_quality.min_pixels,
+        );
         let gpu = self
             .device
             .as_mut()
@@ -190,6 +202,8 @@ impl Presenter {
                 debug_switches,
                 foliage_percent,
                 terrain_detail,
+                lod_pixels,
+                min_pixels,
             },
         )?;
         let publication_ms =

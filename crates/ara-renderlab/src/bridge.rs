@@ -329,15 +329,9 @@ impl Bridge {
                 nonrt.then_some(known),
                 &mut self.gaps,
             )?;
-            let (foliage, foliage_key) = self.terrain.foliage();
-            self.scene.sync(
-                &mut self.engine,
-                frame,
-                foliage,
-                foliage_key,
-                tiles,
-                &mut self.gaps,
-            )?;
+            let foliage = self.terrain.foliage();
+            self.scene
+                .sync(&mut self.engine, frame, foliage, tiles, &mut self.gaps)?;
             if !nonrt || self.scene.largest_triangles() <= assumed {
                 break;
             }
@@ -598,8 +592,8 @@ impl Bridge {
         let frame = view.frame;
         if frame.terrain.is_some() {
             self.gaps.unsupported(
-                "terrain and foliage levels of detail and foliage wind",
-                "resident tiles draw at full resolution; foliage stands still at its nearest level of detail",
+                "terrain levels of detail and foliage wind",
+                "resident tiles draw at full resolution; foliage stands still",
             );
         }
         if view.look.ev100.is_none() {

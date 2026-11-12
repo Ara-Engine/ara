@@ -688,6 +688,8 @@ fn object_ids_name_each_draw_by_its_index_and_a_click_asks_the_engine() {
         debug_switches: false,
         foliage_percent: 100,
         terrain_detail: 150.,
+        lod_pixels: 1.,
+        min_pixels: 1.5,
     };
     // A few frames, so the id pass has history.
     let mut rendered = renderlab.render(&mut gpu, &view).unwrap();
