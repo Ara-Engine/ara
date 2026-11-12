@@ -6,10 +6,10 @@ mod changes;
 mod material;
 mod textures;
 mod validate;
-pub use validate::{CheckedScene, ValidatedScene};
 pub use changes::{CasterChanges, Changes, FrameWork, transport};
 pub use material::{Material, MaterialExtras, TextureSlot, TextureTransform, Volume};
 pub use textures::{TextureBinding, TextureStats, Textures};
+pub use validate::{CheckedScene, ValidatedScene};
 
 /// Absent native texture or unused material index. Sampling supplies neutral
 /// white/flat-normal texels without allocating default images in the heap.

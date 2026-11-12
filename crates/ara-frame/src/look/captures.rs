@@ -389,4 +389,3 @@ fn cluster(boxes: &[[Vec3; 2]], gap: f32, extent: f32) -> Vec<[Vec3; 2]> {
         groups.remove(j);
     }
 }
-

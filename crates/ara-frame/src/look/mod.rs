@@ -15,7 +15,7 @@ pub use lens::{
     AoTuning, DepthOfField, DepthOfFieldQuality, Lens, MotionBlurQuality, OverPreset, SsrTuning,
 };
 pub use volumetric::{
-    FogVolume, FogVolumeShape, VolumetricFog, VolumetricFogQuality, MAX_FOG_VOLUMES,
+    FogVolume, FogVolumeShape, MAX_FOG_VOLUMES, VolumetricFog, VolumetricFogQuality,
 };
 
 /// Display curve applied after exposure. The values match `ara_render_fidelity::ToneMapper`.
