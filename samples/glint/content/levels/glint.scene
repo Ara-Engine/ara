@@ -58,9 +58,10 @@
       },
       "MeshRenderer": {
         "shape": "sphere",
-        "color": [0.95, 0.95, 0.95, 1],
-        "roughness": 0.04,
-        "metallic": 1
+        "color": [0.97, 0.97, 0.98, 1],
+        "roughness": 0.03,
+        "metallic": 1,
+        "emissive": [180, 175, 170]
       },
       "PlayerControl": {
         "camera": "e_camera"
@@ -72,6 +73,20 @@
       },
       "Transform": {
         "position": [0, 0.6000000238418579, -2]
+      }
+    },
+    "e_ballg": {
+      "name": "Ball glow",
+      "parent": "e_ball",
+      "order": "a0",
+      "Light": {
+        "color": [1, 0.88, 0.7, 1],
+        "intensity": 1500000,
+        "range": 14,
+        "sourceRadius": 0.6
+      },
+      "Transform": {
+        "position": [0, 1.3, 0]
       }
     },
     "e_c1": {
@@ -107,13 +122,12 @@
       "name": "Camera",
       "order": "ae",
       "Camera": {
-        "fov": 60
+        "fov": 56
       },
       "FollowCamera": {
         "target": "e_ball",
-        "distance": 7.5,
-        "height": 2.6,
-        "pitch": 18
+        "distance": 5.5,
+        "height": 1.4
       },
       "Transform": {
         "position": [0, 3.5, -9]

@@ -73,3 +73,12 @@ No engine code was changed. Items marked *from reading* were not confirmed by ru
 12. **The goal fired while the ball was still in the air** over the goal island (my script:
     a position test only). Fixed by requiring a grounded ball, which moved the recorded
     finish from 1929 to 1947 ticks. A useful accident: the replay caught the change.
+13. **No albedo or other debug views on Renderlab.** `ara capture --view albedo` fails with
+    `ARA_VIEW_MODE_UNAVAILABLE ... the renderlab-rt renderer draws the lit image only`, so a
+    surface that renders brighter or darker than its material (the first dusk's orange wash
+    over a 0.035-albedo yard) cannot be split into light and material; the fix was to change
+    the light and look.
+14. **`FollowCamera` framing is undocumented in effect.** `distance`, `height` and `pitch`
+    interact so that the ball sat 75 to 90 percent of the way down the frame for the first
+    three settings tried; (distance 5.5, height 1.4, pitch 20) puts it at about 65 percent.
+    Found by capturing each setting; the schema docs do not say where the ball lands.

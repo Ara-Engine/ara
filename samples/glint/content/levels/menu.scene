@@ -235,12 +235,27 @@
       "order": "aQ",
       "MeshRenderer": {
         "shape": "sphere",
-        "color": [0.95, 0.95, 0.95, 1],
-        "roughness": 0.04,
-        "metallic": 1
+        "color": [0.97, 0.97, 0.98, 1],
+        "roughness": 0.03,
+        "metallic": 1,
+        "emissive": [180, 175, 170]
       },
       "Transform": {
         "position": [0, 0.5, 6]
+      }
+    },
+    "e_menuballg": {
+      "name": "Ball glow",
+      "parent": "e_menuball",
+      "order": "a0",
+      "Light": {
+        "color": [1, 0.88, 0.7, 1],
+        "intensity": 1500000,
+        "range": 14,
+        "sourceRadius": 0.6
+      },
+      "Transform": {
+        "position": [0, 1.3, 0]
       }
     },
     "e_menumover": {

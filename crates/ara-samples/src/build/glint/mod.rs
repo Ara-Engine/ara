@@ -228,10 +228,11 @@ fn game(ctx: &Ctx) -> Result<()> {
         "Camera",
         json!({
             "Transform": {"position": [0, 3.5, -9]},
-            "Camera": {"fov": 60},
-            "FollowCamera": {"target": "e_ball", "distance": 7.5, "height": 2.6, "pitch": 18},
+            "Camera": {"fov": 56},
+            "FollowCamera": {"target": "e_ball", "distance": 5.5, "height": 1.4, "pitch": 20},
         }),
     );
+    s.commands.push(ball_glow("e_ball"));
     // An establishing shot for previews; a higher priority number keeps the follow camera active.
     s.entity(
         "e_camwide",
@@ -245,9 +246,22 @@ fn game(ctx: &Ctx) -> Result<()> {
     ctx.set_main(SCENE.0, SCENE.1)
 }
 
+/// A soft, warm light carried above the ball: it puts a bright highlight on the chrome and a
+/// soft contact shadow under it (a source radius of 0.6 m gives the penumbra).
+fn ball_glow(parent: &str) -> (&'static str, Value) {
+    (
+        "entity.create",
+        json!({"id": format!("{parent}g"), "name": "Ball glow", "parent": parent, "components": {
+            "Transform": {"position": [0, 1.3, 0]},
+            "Light": {"kind": "point", "color": [1.0, 0.88, 0.7, 1], "intensity": 1_500_000, "units": "lumens",
+                "range": 14, "sourceRadius": 0.6},
+        }}),
+    )
+}
+
 /// The chrome ball's renderer fields.
 fn ball_look() -> Value {
-    json!({"shape": "sphere", "size": [1, 1, 1], "color": [0.95, 0.95, 0.95, 1], "roughness": 0.04, "metallic": 1})
+    json!({"shape": "sphere", "size": [1, 1, 1], "color": [0.97, 0.97, 0.98, 1], "roughness": 0.03, "metallic": 1, "emissive": [180, 175, 170]})
 }
 
 /// Checkpoint pads and the goal: lit plates; `play` adds the components the director reads.
@@ -296,6 +310,7 @@ fn menu(ctx: &Ctx) -> Result<()> {
     }
     pads(&mut s, &models, false);
     s.entity("e_menuball", "Ball", json!({"Transform": {"position": [0.0, 0.5, 6.0]}, "MeshRenderer": ball_look()}));
+    s.commands.push(ball_glow("e_menuball"));
     s.entity("e_gamemenueye", "Menu vista camera", json!({"Transform": {"position": [-5.5, 3.4, -7.0]}}));
     s.entity("e_gamemenutarget", "Menu vista focus", json!({"Transform": {"position": [0.0, 0.8, 24.0]}}));
     let calls = std::mem::take(&mut s.commands);
