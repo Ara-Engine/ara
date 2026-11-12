@@ -129,7 +129,8 @@ under a post-process volume that grades every control), `levels/dof.scene` (dept
 field at 3 m, f/0.8). From that folder:
   `ARA_RENDERER=renderlab-rt ara capture --scene levels/effects.scene --ev100 4 --ticks 120`
   (crowd: `--ev100 10`); add `--video 60 --video-move 2,0,0 --video-yaw 20` for a moving
-  camera, `--video 6 --video-yaw 300` for cuts.
+  camera, `--video 6 --video-yaw 300` for cuts (or one hard cut inside a moving clip:
+  `--video 120 --video-move 4,0,-4 --video-yaw 12 --video-cut-at 60 --video-cut-move -20,0,15 --video-cut-yaw 140`).
 - A GPU check renders a real scene: `ara-player --renderer renderlab-rt --headless
   --capture <png> --root <export>` (see the PR that added this crate for the commands).
 
