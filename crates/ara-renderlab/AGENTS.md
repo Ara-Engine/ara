@@ -15,7 +15,7 @@ this crate alone.
 ## API
 
 - `Renderlab::new(&Options)`: Renderlab's engine on its own Vulkan device, or on Apple on the
-  presenter's Metal device (ara-gpu backend, RT only). `ARA_RENDERLAB_UNAVAILABLE` keeps Ara's.
+  presenter's Metal device (ara-gpu backend, RT only). `ARA_RENDERLAB_UNAVAILABLE` is what a failed start reports; `ARA_RENDERLAB_FAIL_START=1` forces it, to test a host's failed-engine state.
 - `PathChoice::{Auto, HardwareRt, NonRt}`: `Auto` prefers hardware RT. The non-RT
   path prints `ARA_RENDERLAB_NONRT_PATENT` (open patent question on its sun-shadow method).
 - `Renderlab::path()`: the path in use.
