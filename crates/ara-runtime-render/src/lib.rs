@@ -9,7 +9,6 @@
 extern crate glam34 as glam;
 
 mod captures;
-mod composite;
 mod device;
 pub use device::PresentationDevice;
 mod emitters;
@@ -22,9 +21,6 @@ mod gi_cpu;
 mod gpu_costs;
 pub mod graphics;
 pub use gpu_costs::GpuFrameCosts;
-pub mod landscape;
-#[cfg(test)]
-mod landscape_tests;
 mod lights;
 mod material;
 mod placeholders;
@@ -44,7 +40,7 @@ pub mod vfx;
 use anyhow::{Context, Result, ensure};
 use ara_frame::{
     capture::{Capture, CaptureRequest, ViewMode},
-    scene::{self, CameraSpec, Scene, Vertex},
+    scene::{self, CameraSpec, Scene},
 };
 use ara_render::Renderer;
 use ara_runtime::{
@@ -117,27 +113,16 @@ pub struct Presenter {
     /// The device `renderer` holds a lease on. External renderers draw on it too.
     device: Option<PresentationDevice>,
     initial_device: Option<ara_gpu::GpuDevice>,
-    effects: vfx::Effects,
-    landscapes: landscape::Landscapes,
-    terrain: terrain_mesh::TerrainMeshes,
-    /// Whether to use terrain mesh fallback instead of the landscape renderer.
-    draw_terrain: bool,
     size: [u32; 2],
     extensions: Vec<CString>,
     cache: PathBuf,
-    /// (entity, geometry key, material key) of the uploaded scene, in order.
-    layout: Vec<(u64, u64, u64)>,
-    next_layout: Vec<(u64, u64, u64)>,
     sources: BTreeMap<u64, Arc<Source>>,
     textures: BTreeMap<(String, usize), Arc<scene::Texture>>,
     /// Last uploaded world matrix per draw entity (skinned draws always update).
     uploaded: BTreeMap<u64, [f32; 16]>,
     lights: Vec<scene::Light>,
     sun: ([f32; 3], [f32; 3]),
-    scratch: Vec<Vertex>,
     stats: PresentStats,
-    composite: Option<composite::Composite>,
-    output: Option<ara_gpu::Image>,
     /// Whether the over-budget texture note was printed.
     warned_budget: bool,
     /// Background probe GI acquisition for raster content (`set_probe_gi`).
@@ -162,8 +147,6 @@ pub struct Presenter {
     /// Hybrid ray queries on High/Epic where the device has them (`set_ray_queries`;
     /// `ARA_RAY_QUERIES=0` at creation starts with them off, for A/B captures).
     ray_queries: bool,
-    /// The colour lookup table the baseline renderer holds (`apply_lut`).
-    lut: Option<std::sync::Arc<ara_components::post::ColorLut>>,
     /// Raster frames return once submitted (`set_frames_in_flight`).
     frames_in_flight: bool,
     /// Submitted raster frames not yet waited, oldest first (at most two).
@@ -208,6 +191,7 @@ fn geometry_key(geometry: &Geometry) -> u64 {
     }
 }
 
+#[cfg(test)]
 fn material_key(draw: &Draw) -> u64 {
     let mut h = FNV;
     for v in draw
@@ -256,24 +240,15 @@ impl Presenter {
             renderer: None,
             device: None,
             initial_device: None,
-            effects: vfx::Effects::default(),
-            landscapes: landscape::Landscapes::default(),
-            terrain: terrain_mesh::TerrainMeshes::default(),
-            draw_terrain: false,
             size,
             extensions,
             cache: cache.into(),
-            layout: Vec::new(),
-            next_layout: Vec::new(),
             sources: BTreeMap::new(),
             textures: BTreeMap::new(),
             uploaded: BTreeMap::new(),
             lights: Vec::new(),
             sun: ([0.0; 3], [0.0; 3]),
-            scratch: Vec::new(),
             stats: PresentStats::default(),
-            composite: None,
-            output: None,
             warned_budget: false,
             probe_gi: true,
             probe_scene: None,
@@ -285,7 +260,6 @@ impl Presenter {
             pixel_budget: false,
             debug: ara_render::RenderDebug::default(),
             ray_queries: std::env::var_os("ARA_RAY_QUERIES").is_none_or(|v| v != "0"),
-            lut: None,
             frames_in_flight: false,
             in_flight: std::collections::VecDeque::new(),
             profile_next: None,
@@ -335,7 +309,6 @@ impl Presenter {
         self.published
             .as_ref()
             .map(|image| image.image)
-            .or(self.output)
             .or_else(|| self.renderer.as_ref().map(Renderer::output))
     }
 
@@ -381,260 +354,6 @@ impl Presenter {
         look
     }
 
-    /// Uploads `frame`'s content (rebuilding only on structural change). A rebuild
-    /// resolves `content` once (its environment map lights and backs the scene)
-    /// and returns it for probe GI acquisition.
-    fn prepare_baseline(
-        &mut self,
-        frame: &RenderFrame,
-        content: impl FnOnce() -> Result<fidelity::native::Content>,
-    ) -> Result<Option<fidelity::native::Content>> {
-        let started = Instant::now();
-        ensure!(!frame.draws.is_empty(), "nothing to draw");
-        self.next_layout.clear();
-        for draw in &frame.draws {
-            self.next_layout.push((
-                draw.entity,
-                geometry_key(&draw.geometry),
-                material_key(draw),
-            ));
-        }
-        let tiles = self.terrain_tiles(frame);
-        for tile in &tiles {
-            self.next_layout.push((tile.entity, tile.key, 0));
-        }
-        let rebuild = self.renderer.is_none() || self.next_layout != self.layout;
-        self.stats = PresentStats {
-            rebuilt: rebuild,
-            ..Default::default()
-        };
-        let mut resolved = None;
-        if rebuild {
-            let content = content()?;
-            self.environment = content
-                .environment
-                .as_ref()
-                .map(|map| fidelity::EnvironmentMap {
-                    size: map.size,
-                    pixels: map.pixels.clone(),
-                });
-            resolved = Some(content);
-            let scene = self.scene(frame, &tiles)?;
-            match &mut self.renderer {
-                Some(renderer) => renderer.replace_scene(scene)?,
-                None => {
-                    self.renderer = Some(Renderer::new(
-                        scene,
-                        self.size,
-                        &self.extensions,
-                        &self.cache,
-                    ).context("ARA_GPU_BACKEND: cannot initialize rendering; run `ara doctor` to check the Vulkan loader and GPU driver")?);
-                }
-            }
-            std::mem::swap(&mut self.layout, &mut self.next_layout);
-        } else {
-            self.update(frame)?;
-        }
-        let environment = self.frame_look(frame);
-        let look = environment.raster();
-        let renderer = self
-            .renderer
-            .as_mut()
-            .context("renderer missing after prepare")?;
-        if *renderer.look() != look {
-            renderer.set_look(look)?;
-        }
-        apply_lut(renderer, frame, &environment, &mut self.lut)?;
-        apply_fog_volumes(renderer, frame)?;
-        self.stats.prepare = started.elapsed();
-        Ok(resolved)
-    }
-
-    /// Renders the scene, landscape/foliage and particles to one GPU window image.
-    fn present_baseline(&mut self, frame: &RenderFrame) -> Result<()> {
-        self.draw_terrain = frame.terrain.is_none();
-        let camera = camera(frame)?;
-        let exposure = self
-            .frame_look(frame)
-            .manual_exposure(frame.environment.exposure);
-        let started = Instant::now();
-        let renderer = self
-            .renderer
-            .as_mut()
-            .context("renderer missing after prepare")?;
-        // Landscape and particles composite into the lit HDR before it is graded.
-        let native = renderer.is_native();
-        let compositing = (!native && frame.terrain.is_some()) || !frame.effects.is_empty();
-        renderer.set_deferred_post(compositing);
-        renderer.render(&camera, exposure)?;
-        let terrain = if native {
-            None
-        } else {
-            self.landscapes.present(renderer, frame, &camera)?
-        };
-        let (image, sampled_index, state) = renderer.feature_color();
-        let mut color = ara_vfx_gpu::SceneColor {
-            image,
-            sampled_index,
-            state,
-        };
-        let (image, sampled_index, state) = renderer.feature_depth();
-        let mut depth = ara_vfx_gpu::SceneDepth {
-            image,
-            sampled_index,
-            state,
-        };
-        if compositing {
-            if self
-                .composite
-                .as_ref()
-                .is_none_or(|c| c.size != renderer.render_size())
-            {
-                if let Some(old) = self.composite.take() {
-                    old.retire(renderer.gpu_mut())?;
-                }
-                let size = renderer.render_size();
-                self.composite = Some(composite::Composite::new(renderer.gpu_mut(), size)?);
-            }
-            let composite = self.composite.as_mut().context("compositor initialized")?;
-            if let Some(terrain) = terrain {
-                let state = Some(renderer.hdr_exposure().state);
-                (color, depth) =
-                    composite.merge(renderer.gpu_mut(), color, depth, terrain, exposure, state)?;
-            }
-            color = self
-                .effects
-                .present(renderer, frame, &camera, color, depth)?;
-            self.output = Some(renderer.finish(color.image, color.sampled_index, color.state)?);
-        } else {
-            self.output = Some(renderer.output());
-        }
-        if native {
-            let textures = renderer
-                .native_texture_stats()
-                .context("native texture statistics")?;
-            let costs = GpuFrameCosts {
-                scene_update_ms: renderer.native_update_gpu_ms().unwrap_or(0.),
-                texture_upload_ms: textures.upload_gpu_ms,
-                texture_uploaded_bytes: textures.uploaded_bytes,
-                texture_pending: textures.pending_textures,
-                texture_resident_bytes: textures.resident_bytes,
-                effects_ms: if frame.effects.is_empty() {
-                    0.
-                } else {
-                    self.effects.gpu_ms()
-                },
-                raster_ms: renderer
-                    .timings()
-                    .iter()
-                    .map(|pass| pass.milliseconds)
-                    .sum(),
-                ..Default::default()
-            };
-            self.stats.gpu_ms = costs.accounted_ms();
-            self.stats.gpu = Some(costs);
-        }
-        self.stats.render = started.elapsed();
-        Ok(())
-    }
-
-    /// A deterministic capture of `frame` at `size` with up to `marks` numbered marks.
-    fn capture_baseline(
-        &mut self,
-        frame: &RenderFrame,
-        size: [u32; 2],
-        mode: ViewMode,
-        marks: Option<usize>,
-        seed: u64,
-    ) -> Result<Capture> {
-        // Terrain comes from the landscape composite below.
-        self.draw_terrain = false;
-        if self.raster.is_none() {
-            self.prepare_baseline(frame, || Ok(fidelity::native::Content::default()))?;
-        }
-        self.wait_probe_gi()?;
-        let request = CaptureRequest {
-            camera: camera(frame)?,
-            size,
-            mode,
-            // Renderer::capture resets the jitter sequence and history itself;
-            // live TAA can remain enabled in a reproducible Low capture.
-            deterministic: false,
-            exposure: self
-                .frame_look(frame)
-                .manual_exposure(frame.environment.exposure),
-            settle_frames: 4,
-            tick: frame.tick,
-            seed,
-            marks,
-        };
-        let renderer = self
-            .renderer
-            .as_mut()
-            .context("renderer missing after prepare")?;
-        let mut capture = renderer.capture(&request)?;
-        let base =
-            (!renderer.is_native() && frame.terrain.is_some()).then(|| capture.image.clone());
-        // GPU particles replay over the captured frame before it is resized away.
-        self.effects
-            .composite(renderer, frame, &request, &mut capture)?;
-        // Terrain and foliage by depth, last: VFX deltas carry onto terrain.
-        if let Some(base) = base {
-            self.landscapes
-                .composite(renderer, frame, &request, &base, &mut capture)?;
-        }
-        // Captures resize to the request; return to the presentation size.
-        renderer.resize(self.size)?;
-        Ok(capture)
-    }
-
-    /// Captures the window presentation path, including landscape/foliage and VFX.
-    fn capture_presented_baseline(
-        &mut self,
-        frame: &RenderFrame,
-        size: [u32; 2],
-        marks: Option<usize>,
-        seed: u64,
-    ) -> Result<Capture> {
-        self.draw_terrain = true;
-        self.prepare(frame)?;
-        self.wait_probe_gi()?;
-        let request = CaptureRequest {
-            camera: camera(frame)?,
-            size,
-            mode: ViewMode::Lit,
-            deterministic: true,
-            exposure: self
-                .frame_look(frame)
-                .manual_exposure(frame.environment.exposure),
-            settle_frames: 4,
-            tick: frame.tick,
-            seed,
-            marks,
-        };
-        let renderer = self
-            .renderer
-            .as_mut()
-            .context("renderer missing after prepare")?;
-        let mut capture = renderer.capture(&request)?;
-        let original_size = self.size;
-        self.size = size;
-        self.present(frame)?;
-        let output = self.output.context("composited output missing")?;
-        let extent = self.renderer.as_ref().context("renderer missing")?.size();
-        readback::replace(
-            self.renderer
-                .as_mut()
-                .context("renderer missing")?
-                .gpu_mut(),
-            output,
-            extent,
-            &mut capture,
-        )?;
-        self.resize(original_size)?;
-        Ok(capture)
-    }
-
     fn source(&mut self, geometry: &Geometry) -> Result<Arc<Source>> {
         let key = geometry_key(geometry);
         if let Some(s) = self.sources.get(&key) {
@@ -673,20 +392,6 @@ impl Presenter {
         let texture = Arc::new(texture);
         self.textures.insert(key, Arc::clone(&texture));
         Ok(texture)
-    }
-
-    /// Meshes of the frame's resident terrain chunks, when this frame draws them.
-    fn terrain_tiles(&mut self, frame: &RenderFrame) -> Vec<Arc<terrain_mesh::TileMesh>> {
-        let Some(view) = frame.terrain.as_ref().filter(|_| self.draw_terrain) else {
-            return Vec::new();
-        };
-        let mut coords = view.tiles.clone();
-        coords.sort();
-        coords.dedup();
-        coords
-            .into_iter()
-            .filter_map(|c| self.terrain.tile(&view.data, c))
-            .collect()
     }
 
     fn scene(
@@ -921,52 +626,8 @@ impl Presenter {
         self.sun = sun(frame);
         Ok(scene)
     }
-
-    fn update(&mut self, frame: &RenderFrame) -> Result<()> {
-        let renderer = self.renderer.as_mut().context("no renderer")?;
-        for draw in &frame.draws {
-            let matrix = draw.world.to_cols_array();
-            let moved = self.uploaded.get(&draw.entity) != Some(&matrix);
-            if !moved && draw.skin.is_none() {
-                continue;
-            }
-            let key = geometry_key(&draw.geometry);
-            let source = self
-                .sources
-                .get(&key)
-                .context("geometry missing from cache")?;
-            let palette = draw.skin.clone().map(|r| &frame.palettes[r]);
-            geometry::transform(&source.vertices, draw.world, palette, &mut self.scratch);
-            renderer.update_mesh(draw.entity, &self.scratch)?;
-            self.uploaded.insert(draw.entity, matrix);
-            self.stats.updated += 1;
-        }
-        let lights = lights(frame);
-        if lights.len() != self.lights.len()
-            || lights
-                .iter()
-                .zip(&self.lights)
-                .any(|(a, b)| bytemuck::bytes_of(a) != bytemuck::bytes_of(b))
-        {
-            renderer.set_lights(&lights)?;
-            self.lights = lights;
-        }
-        let sun = sun(frame);
-        if sun != self.sun {
-            renderer.set_sun(
-                glam30::Vec3::from_array(sun.0),
-                glam30::Vec3::from_array(sun.1),
-            )?;
-            self.sun = sun;
-        }
-        renderer.set_sun_radius(frame.sun_radius)?;
-        let shown = &frame.lights[..frame.lights.len().min(64)];
-        renderer.set_light_tables(&lights::tables(shown).0)?;
-        Ok(())
-    }
 }
 
-/// The frame's sun, or a dim default so the renderer always has a directional light.
 fn sun(frame: &RenderFrame) -> ([f32; 3], [f32; 3]) {
     frame.sun.unwrap_or(([0.3, 1.0, 0.2], [0.0; 3]))
 }

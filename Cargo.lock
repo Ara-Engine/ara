@@ -2100,7 +2100,6 @@ dependencies = [
  "ara-graphics-settings",
  "ara-importers",
  "ara-input",
- "ara-landscape",
  "ara-material",
  "ara-render",
  "ara-render-fidelity",

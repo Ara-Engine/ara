@@ -93,12 +93,8 @@ impl Presenter {
             );
         }
         if self.live.is_none() || !matches!(request.mode, ViewMode::Lit) {
-            return self.capture_baseline(
-                frame,
-                request.size,
-                request.mode,
-                request.marks,
-                request.seed,
+            anyhow::bail!(
+                "the old baseline capture is gone; capture through Renderlab or a raster view"
             );
         }
         if request.deterministic {
@@ -232,7 +228,9 @@ impl Presenter {
     ) -> Result<Capture> {
         self.prepare(frame)?;
         if self.live.is_none() && self.raster.is_none() {
-            return self.capture_presented_baseline(frame, size, marks, seed);
+            anyhow::bail!(
+                "the old baseline capture is gone; capture through Renderlab or a raster view"
+            );
         }
         self.capture(frame, size, ViewMode::Lit, marks, seed)
     }

@@ -767,8 +767,9 @@ impl Presenter {
                     self.stats.gpu = Some(costs);
                     live.view.output()
                 } else {
-                    self.present_baseline(frame)?;
-                    self.output.context("legacy completed output")?
+                    anyhow::bail!(
+                        "the old baseline renderer is gone; attach Renderlab or a raster view before presenting"
+                    );
                 };
                 self.publish(source)?;
                 self.timing_window();
