@@ -1,6 +1,9 @@
 use super::*;
-use ara_frame::{capture::{CaptureRequest, ViewMode}, scene::CameraSpec};
-use ara_render::{Renderer};
+use ara_frame::{
+    capture::{CaptureRequest, ViewMode},
+    scene::CameraSpec,
+};
+use ara_render::Renderer;
 
 #[test]
 fn model_bounds_style_never_marks_authored_shapes_with_the_same_colour() {

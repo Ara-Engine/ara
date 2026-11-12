@@ -1,12 +1,14 @@
 #![allow(clippy::unwrap_used)]
-//! A real headless child: C# settings -> native host -> renderer Quality, with no
-//! gameplay state change, then save and load in a fresh player.
+//! A real headless child: C# settings -> native host -> graphics state and user storage, with
+//! no gameplay state change, then save and load in a fresh player. The renderer is Renderlab,
+//! which does not take the quality plan (shadow resolution and the rest): the setting reaches
+//! the player's graphics state and storage, not the picture (see the bridge's gap table).
 mod support;
 use serde_json::json;
 use support::{Agent, build_dotnet, repo};
 
 #[test]
-fn csharp_shadow_override_reaches_headless_renderer_and_user_storage() {
+fn csharp_shadow_override_reaches_graphics_state_and_user_storage() {
     build_dotnet();
     let nonce = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -102,25 +104,27 @@ public static partial class ShadowMenu {
     );
     let state = agent.play("graphics", json!({"world":world}));
     assert_eq!(state["state"]["applied"]["groups"]["shadows"], "epic");
-    assert_eq!(state["rendererQuality"]["shadowCascades"], 4);
-    assert_eq!(state["rendererQuality"]["shadowResolution"], 2048);
-    assert_eq!(state["rendererQuality"]["shadowDistance"], 250.0);
-    assert_eq!(
-        state["rendererQuality"]["bloom"], false,
-        "the other groups remain Low"
-    );
     assert_eq!(state["state"]["capabilities"]["deviceKnown"], true);
-    agent.play("capture", json!({"world":world,"path":root.join("medium-capture.png"),"width":320,"height":180,"marks":0,"preset":"medium"}));
-    assert_eq!(
-        agent.play("graphics", json!({"world":world}))["rendererQuality"]["bloom"],
-        true,
-        "per-capture preset overrides the view without overwriting user preferences"
-    );
-    agent.play("capture", json!({"world":world,"path":root.join("restored-low.png"),"width":320,"height":180,"marks":0}));
-    assert_eq!(
-        agent.play("graphics", json!({"world":world}))["rendererQuality"]["bloom"],
-        false
-    );
+    // A capture with a per-capture preset, and one back at the user's settings, each give a
+    // picture and a hash, and neither changes the saved preferences.
+    for (name, preset) in [
+        ("medium-capture.png", Some("medium")),
+        ("restored-low.png", None),
+    ] {
+        let mut request =
+            json!({"world":world,"path":root.join(name),"width":320,"height":180,"marks":0});
+        if let Some(preset) = preset {
+            request["preset"] = json!(preset);
+        }
+        let shot = agent.play("capture", request);
+        assert!(shot["hash"].is_string(), "{name} has a hash: {shot}");
+        assert!(root.join(name).is_file(), "{name} has a picture");
+        assert_eq!(
+            agent.play("graphics", json!({"world":world}))["state"]["applied"]["groups"]["shadows"],
+            "epic",
+            "{name} leaves the user's shadow group alone"
+        );
+    }
     let ray_supported = state["state"]["capabilities"]["rayTracingSupported"]
         .as_bool()
         .unwrap();

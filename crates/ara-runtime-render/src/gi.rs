@@ -13,11 +13,11 @@
 use crate::fidelity::native::{self, Content, NativeConfig};
 use crate::gi_cpu::{self, Tracer};
 use anyhow::{Context, Result, ensure};
-use ara_gpu::GpuDevice;
 use ara_frame::instanced::Scene;
 use ara_frame::look::gi::{
     ProbeLattice, ProbeLayout, ProbeSurfaces, ProbeUpdate, STATIC_VECTORS, SURFACE_TEXELS,
 };
+use ara_gpu::GpuDevice;
 use ara_render_fidelity::{FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, Upscaler};
 use ara_runtime::extract::RenderFrame;
 use glam30::Mat4;
@@ -746,7 +746,10 @@ pub(crate) fn emission(prepared: &native::Prepared) -> Vec<crate::gi_cpu::Shadin
 /// [`shading`] (`surface`) or [`emission`]. Each map's mean and each cutout's
 /// coverage is decoded once per call, however many materials share the map.
 fn shade(prepared: &native::Prepared, surface: bool) -> Vec<crate::gi_cpu::Shading> {
-    use ara_frame::{instanced::NO_TEXTURE, scene::{BASE_COLOR_DECODE_SRGB, EMISSIVE_DECODE_SRGB}};
+    use ara_frame::{
+        instanced::NO_TEXTURE,
+        scene::{BASE_COLOR_DECODE_SRGB, EMISSIVE_DECODE_SRGB},
+    };
     use glam30::Vec3;
     let mut missing = 0usize;
     let mut means = HashMap::new();

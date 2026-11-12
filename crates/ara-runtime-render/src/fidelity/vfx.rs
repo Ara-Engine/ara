@@ -5,8 +5,8 @@
 //! Uses the view's `feature_inputs`/`post_process` seam so particles share its
 //! exposure, tone mapper and temporal reconstruction.
 use anyhow::{Context, Result};
-use ara_gpu::GpuDevice;
 use ara_frame::scene::CameraSpec;
+use ara_gpu::GpuDevice;
 use ara_render_fidelity::{FidelityView, FrameInput, ImageInput};
 use ara_runtime::extract::EffectView;
 use ara_vfx_gpu::{GpuSystem, Lighting, Placement, ProbeLighting, SceneColor, SceneDepth, View};
