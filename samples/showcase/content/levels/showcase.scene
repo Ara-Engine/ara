@@ -1,6 +1,9 @@
 {
   "$schema": "ara://schema/scene/1",
   "id": "sc_showcase1",
+  "versions": {
+    "PostProcessVolume": 2
+  },
   "records": {
     "e_ball0": {
       "name": "ball_gold",
@@ -203,8 +206,35 @@
         "ground": [0.25, 0.22, 0.2, 1],
         "exposure": 0.002
       },
-      "PostProcess": {
-        "toneMapping": "neutral"
+      "PostProcessVolume": {
+        "overrides": [
+          {
+            "exposure": "auto",
+            "ev100": 10,
+            "compensation": 0,
+            "minEv100": -2,
+            "maxEv100": 16,
+            "adaptationSpeed": 2
+          },
+          {
+            "module": "toneMapping",
+            "toneMapping": "neutral"
+          },
+          {
+            "module": "bloom",
+            "bloom": 0.03999999910593033
+          },
+          {
+            "module": "colorGrading",
+            "whiteBalance": 6500,
+            "saturation": 1,
+            "contrast": 1
+          },
+          {
+            "module": "vignette",
+            "vignette": 0
+          }
+        ]
       }
     },
     "e_fill": {
