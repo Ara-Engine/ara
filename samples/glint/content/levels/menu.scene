@@ -7,7 +7,7 @@
   "records": {
     "e_b1m": {
       "name": "Spinner bar",
-      "order": "aJ",
+      "order": "aL",
       "MeshRenderer": {
         "model": "@kit/glint_bar.gltf#as_kitglintbar"
       },
@@ -18,7 +18,7 @@
     },
     "e_b2m": {
       "name": "Spinner bar",
-      "order": "aK",
+      "order": "aM",
       "MeshRenderer": {
         "model": "@kit/glint_bar.gltf#as_kitglintbar"
       },
@@ -29,7 +29,7 @@
     },
     "e_c1": {
       "name": "Checkpoint 1",
-      "order": "aL",
+      "order": "aN",
       "MeshRenderer": {
         "model": "@kit/glint_pad.gltf#as_kitglintpad",
         "emissive": [5000, 5000, 5000]
@@ -40,7 +40,7 @@
     },
     "e_c2": {
       "name": "Checkpoint 2",
-      "order": "aM",
+      "order": "aO",
       "MeshRenderer": {
         "model": "@kit/glint_pad.gltf#as_kitglintpad",
         "emissive": [5000, 5000, 5000]
@@ -51,7 +51,7 @@
     },
     "e_course": {
       "name": "Catwalk",
-      "order": "a9",
+      "order": "aB",
       "MeshRenderer": {
         "model": "@kit/glint_course.gltf#as_kitglintcourse"
       },
@@ -61,16 +61,16 @@
       "name": "Dusk sky and fixed exposure",
       "order": "a0",
       "Environment": {
-        "sky": [0.1, 0.2, 0.55, 1],
-        "horizon": [1, 0.6, 0.32, 1],
-        "skyFalloff": 2.5,
-        "glow": [0.9, 0.3, 0.1, 1],
-        "glowFalloff": 8,
-        "ground": [0.1, 0.08, 0.07, 1],
-        "intensity": 6000
+        "sky": [0.03, 0.06, 0.2, 1],
+        "horizon": [0.8, 0.4, 0.2, 1],
+        "skyFalloff": 4.5,
+        "glow": [0.7, 0.2, 0.05, 1],
+        "glowFalloff": 14,
+        "ground": [0.03, 0.025, 0.025, 1],
+        "intensity": 1200
       },
       "HeightFog": {
-        "density": 0.0003,
+        "density": 0.0001,
         "falloff": 30,
         "albedo": [1, 0.72, 0.52, 1],
         "anisotropy": 0.6
@@ -79,7 +79,7 @@
         "overrides": [
           {
             "exposure": "manual",
-            "ev100": 13
+            "ev100": 11
           },
           {
             "module": "toneMapping",
@@ -90,21 +90,21 @@
     },
     "e_gamemenueye": {
       "name": "Menu vista camera",
-      "order": "aP",
+      "order": "aR",
       "Transform": {
         "position": [-5.5, 3.4, -7]
       }
     },
     "e_gamemenutarget": {
       "name": "Menu vista focus",
-      "order": "aQ",
+      "order": "aS",
       "Transform": {
         "position": [0, 0.8, 24]
       }
     },
     "e_goal": {
       "name": "Goal",
-      "order": "aN",
+      "order": "aP",
       "MeshRenderer": {
         "model": "@kit/glint_goal.gltf#as_kitglintgoal",
         "emissive": [6000, 6000, 6000]
@@ -115,38 +115,38 @@
     },
     "e_lcp0": {
       "name": "Checkpoint light",
-      "order": "a6",
+      "order": "a8",
       "Light": {
         "color": [1, 0.6200000047683716, 0.2199999988079071, 1],
-        "intensity": 900,
-        "range": 8,
-        "sourceRadius": 0.11999999731779099
+        "intensity": 150000,
+        "range": 18,
+        "sourceRadius": 0.30000001192092896
       },
       "Transform": {
-        "position": [0, 2.2, 40]
+        "position": [0, 2.4, 40]
       }
     },
     "e_lcp1": {
       "name": "Checkpoint light",
-      "order": "a7",
+      "order": "a9",
       "Light": {
         "color": [1, 0.6200000047683716, 0.2199999988079071, 1],
-        "intensity": 900,
-        "range": 8,
-        "sourceRadius": 0.11999999731779099
+        "intensity": 150000,
+        "range": 18,
+        "sourceRadius": 0.30000001192092896
       },
       "Transform": {
-        "position": [0, 2.2, 66]
+        "position": [0, 2.4, 66]
       }
     },
     "e_lfurn0": {
       "name": "Furnace glow",
-      "order": "a2",
+      "order": "a4",
       "Light": {
         "color": [1, 0.4000000059604645, 0.10000000149011612, 1],
-        "intensity": 60000,
-        "range": 45,
-        "sourceRadius": 0.800000011920929
+        "intensity": 6000000,
+        "range": 90,
+        "sourceRadius": 1.600000023841858
       },
       "Transform": {
         "position": [-52, -21, 26]
@@ -154,12 +154,12 @@
     },
     "e_lfurn1": {
       "name": "Furnace glow",
-      "order": "a3",
+      "order": "a5",
       "Light": {
         "color": [1, 0.4000000059604645, 0.10000000149011612, 1],
-        "intensity": 60000,
-        "range": 45,
-        "sourceRadius": 0.800000011920929
+        "intensity": 6000000,
+        "range": 90,
+        "sourceRadius": 1.600000023841858
       },
       "Transform": {
         "position": [-64, -21, 74]
@@ -167,12 +167,12 @@
     },
     "e_lfurn2": {
       "name": "Furnace glow",
-      "order": "a4",
+      "order": "a6",
       "Light": {
         "color": [1, 0.4000000059604645, 0.10000000149011612, 1],
-        "intensity": 60000,
-        "range": 45,
-        "sourceRadius": 0.800000011920929
+        "intensity": 6000000,
+        "range": 90,
+        "sourceRadius": 1.600000023841858
       },
       "Transform": {
         "position": [56, -21, 46]
@@ -180,12 +180,12 @@
     },
     "e_lfurn3": {
       "name": "Furnace glow",
-      "order": "a5",
+      "order": "a7",
       "Light": {
         "color": [1, 0.4000000059604645, 0.10000000149011612, 1],
-        "intensity": 60000,
-        "range": 45,
-        "sourceRadius": 0.800000011920929
+        "intensity": 6000000,
+        "range": 90,
+        "sourceRadius": 1.600000023841858
       },
       "Transform": {
         "position": [70, -21, 100]
@@ -193,20 +193,46 @@
     },
     "e_lgoal": {
       "name": "Goal light",
-      "order": "a8",
+      "order": "aA",
       "Light": {
         "color": [0.30000001192092896, 0.8500000238418579, 1, 1],
-        "intensity": 1800,
-        "range": 14,
-        "sourceRadius": 0.30000001192092896
+        "intensity": 300000,
+        "range": 30,
+        "sourceRadius": 0.5
       },
       "Transform": {
-        "position": [0, -0.4, 94]
+        "position": [0, 0, 94]
+      }
+    },
+    "e_lmouth0": {
+      "name": "Furnace mouth",
+      "order": "a2",
+      "Light": {
+        "color": [1, 0.44999998807907104, 0.11999999731779099, 1],
+        "intensity": 15000000,
+        "range": 90,
+        "sourceRadius": 2
+      },
+      "Transform": {
+        "position": [26, -20.5, 13]
+      }
+    },
+    "e_lmouth1": {
+      "name": "Furnace mouth",
+      "order": "a3",
+      "Light": {
+        "color": [1, 0.44999998807907104, 0.11999999731779099, 1],
+        "intensity": 15000000,
+        "range": 90,
+        "sourceRadius": 2
+      },
+      "Transform": {
+        "position": [-28, -20.5, 49]
       }
     },
     "e_menuball": {
       "name": "Ball",
-      "order": "aO",
+      "order": "aQ",
       "MeshRenderer": {
         "shape": "sphere",
         "color": [0.95, 0.95, 0.95, 1],
@@ -219,7 +245,7 @@
     },
     "e_menumover": {
       "name": "Moving platform",
-      "order": "aI",
+      "order": "aK",
       "MeshRenderer": {
         "model": "@kit/glint_mover.gltf#as_kitglintmover"
       },
@@ -229,7 +255,7 @@
     },
     "e_smoke0": {
       "name": "Chimney smoke",
-      "order": "aB",
+      "order": "aD",
       "Transform": {
         "position": [-52, 20, 30]
       },
@@ -241,7 +267,7 @@
     },
     "e_smoke1": {
       "name": "Chimney smoke",
-      "order": "aC",
+      "order": "aE",
       "Transform": {
         "position": [-64, 14, 78]
       },
@@ -253,7 +279,7 @@
     },
     "e_smoke2": {
       "name": "Chimney smoke",
-      "order": "aD",
+      "order": "aF",
       "Transform": {
         "position": [56, 24, 50]
       },
@@ -265,7 +291,7 @@
     },
     "e_smoke3": {
       "name": "Chimney smoke",
-      "order": "aE",
+      "order": "aG",
       "Transform": {
         "position": [70, 16, 104]
       },
@@ -277,7 +303,7 @@
     },
     "e_smoke4": {
       "name": "Chimney smoke",
-      "order": "aF",
+      "order": "aH",
       "Transform": {
         "position": [-44, 10, 118]
       },
@@ -289,7 +315,7 @@
     },
     "e_sparks": {
       "name": "Goal sparks",
-      "order": "aG",
+      "order": "aI",
       "Transform": {
         "position": [0, -1.5, 94]
       },
@@ -303,17 +329,17 @@
       "order": "a1",
       "Light": {
         "kind": "directional",
-        "color": [1, 0.76, 0.52, 1],
-        "intensity": 80000
+        "color": [1, 0.7, 0.48, 1],
+        "intensity": 25000
       },
       "Transform": {
         "position": [0, 40, 30],
-        "rotation": [-34.261154, 33.37642, 20.54257]
+        "rotation": [-25.083754, 58.59515, 21.77753]
       }
     },
     "e_swirl": {
       "name": "Goal swirl",
-      "order": "aH",
+      "order": "aJ",
       "Transform": {
         "position": [0, -1.5, 94]
       },
@@ -325,7 +351,7 @@
     },
     "e_yard": {
       "name": "Foundry yard",
-      "order": "aA",
+      "order": "aC",
       "MeshRenderer": {
         "model": "@kit/glint_yard.gltf#as_kitglintyard",
         "emissive": [6000, 6000, 6000]

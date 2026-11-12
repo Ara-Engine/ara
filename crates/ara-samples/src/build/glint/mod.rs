@@ -19,7 +19,7 @@ use super::{
 };
 use anyhow::Result;
 use glam::Vec3;
-use kits::{BAR, CHIMNEYS, MOVER_SIZE, SLAB, SLABS, YARD_FLOOR};
+use kits::{BAR, CHIMNEYS, FURNACES, MOVER_SIZE, SLAB, SLABS, YARD_FLOOR};
 use serde_json::{Value, json};
 
 /// Gameplay scene.
@@ -27,11 +27,12 @@ pub const SCENE: (&str, &str) = ("levels/glint.scene", "sc_glint000001");
 /// The menu backdrop the native shell requires at this path.
 const MENU: (&str, &str) = ("levels/menu.scene", "sc_glint000002");
 /// Fixed exposure (EV100): no auto-exposure anywhere.
-const EV100: f32 = 13.0;
+const EV100: f32 = 11.0;
 /// Where the ball starts.
 const START: Vec3 = Vec3::new(0.0, 0.6, -2.0);
-/// Direction the sun's light travels (about 28 degrees above the horizon).
-const SUN: Vec3 = Vec3::new(-0.55, -0.47, -0.69);
+/// Direction the sun's light travels: about 13 degrees above the horizon, raking across the
+/// course from its right and ahead, so slab edges and bars throw long shadows left and back.
+const SUN: Vec3 = Vec3::new(-0.85, -0.22, -0.47);
 
 /// The moving platform's path: centre, travel, period in ticks.
 const MOVER_ORIGIN: Vec3 = Vec3::new(0.0, 0.8 - SLAB * 0.5, 32.5);
@@ -77,11 +78,11 @@ fn art(s: &mut Scene) {
         "e_env",
         "Dusk sky and fixed exposure",
         json!({
-            "Environment": {"sky": [0.1, 0.2, 0.55, 1], "horizon": [1.0, 0.6, 0.32, 1], "skyFalloff": 2.5,
-                "glow": [0.9, 0.3, 0.1, 1], "glowFalloff": 8, "ground": [0.1, 0.08, 0.07, 1],
-                "intensity": 6000, "skyLight": 1},
+            "Environment": {"sky": [0.03, 0.06, 0.2, 1], "horizon": [0.8, 0.4, 0.2, 1], "skyFalloff": 4.5,
+                "glow": [0.7, 0.2, 0.05, 1], "glowFalloff": 14, "ground": [0.03, 0.025, 0.025, 1],
+                "intensity": 1200, "skyLight": 1},
             // Dusk haze: warm height fog thickens toward the yard far below.
-            "HeightFog": {"density": 0.0003, "falloff": 30, "albedo": [1.0, 0.72, 0.52, 1], "anisotropy": 0.6},
+            "HeightFog": {"density": 0.0001, "falloff": 30, "albedo": [1.0, 0.72, 0.52, 1], "anisotropy": 0.6},
             "PostProcessVolume": {"overrides": [
                 {"exposure": "manual", "ev100": EV100},
                 {"module": "toneMapping", "toneMapping": "neutral"},
@@ -92,25 +93,37 @@ fn art(s: &mut Scene) {
         "e_sun",
         "Sun",
         Vec3::new(0.0, 40.0, 30.0),
-        json!({"kind": "directional", "color": [1.0, 0.76, 0.52, 1], "intensity": 80_000, "sourceAngle": 0.5357}),
+        json!({"kind": "directional", "color": [1.0, 0.7, 0.48, 1], "intensity": 25_000, "sourceAngle": 0.5357}),
         Some(SUN),
     ));
     // Furnace glow at the chimneys' feet, far below; checkpoint and goal lights on the course.
+    // The two big furnaces beside the route, mouths facing the start: the key warm sources.
+    for (i, (x, z)) in FURNACES.iter().enumerate() {
+        s.commands.extend(lamp(
+            &format!("e_lmouth{i}"),
+            "Furnace mouth",
+            Vec3::new(*x, YARD_FLOOR + 3.5, z - 11.0),
+            [1.0, 0.45, 0.12],
+            15_000_000.0,
+            2.0,
+            90.0,
+        ));
+    }
     for (i, (x, z, _, _)) in CHIMNEYS.iter().take(4).enumerate() {
         s.commands.extend(lamp(
             &format!("e_lfurn{i}"),
             "Furnace glow",
             Vec3::new(*x, YARD_FLOOR + 3.0, z - 4.0),
             [1.0, 0.4, 0.1],
-            60_000.0,
-            0.8,
-            45.0,
+            6_000_000.0,
+            1.6,
+            90.0,
         ));
     }
     for (i, z) in [40.0f32, 66.0].into_iter().enumerate() {
-        s.commands.extend(lamp(&format!("e_lcp{i}"), "Checkpoint light", Vec3::new(0.0, 2.2, z), [1.0, 0.62, 0.22], 900.0, 0.12, 8.0));
+        s.commands.extend(lamp(&format!("e_lcp{i}"), "Checkpoint light", Vec3::new(0.0, 2.4, z), [1.0, 0.62, 0.22], 150_000.0, 0.3, 18.0));
     }
-    s.commands.extend(lamp("e_lgoal", "Goal light", Vec3::new(0.0, -0.4, 94.0), [0.3, 0.85, 1.0], 1800.0, 0.3, 14.0));
+    s.commands.extend(lamp("e_lgoal", "Goal light", Vec3::new(0.0, 0.0, 94.0), [0.3, 0.85, 1.0], 300_000.0, 0.5, 30.0));
     s.prop(Prop::new("e_course", "Catwalk", "glint_course", Vec3::ZERO, 0.0).at_origin().decor());
     s.prop(
         Prop::new("e_yard", "Foundry yard", "glint_yard", Vec3::ZERO, 0.0)
@@ -211,6 +224,13 @@ fn game(ctx: &Ctx) -> Result<()> {
             "FollowCamera": {"target": "e_ball", "distance": 7.5, "height": 2.6, "pitch": 18},
         }),
     );
+    // An establishing shot for previews; a higher priority number keeps the follow camera active.
+    s.entity(
+        "e_camwide",
+        "Establishing camera",
+        json!({"Transform": {"position": [-26.0, 12.0, -24.0]}, "Camera": {"fov": 52, "priority": 10}}),
+    );
+    s.commands.push(("transform.lookAt", json!({"entity": "e_camwide", "point": [2.0, -7.0, 52.0]})));
     s.entity("e_run", "Run", json!({"GlintRun": {"checkpointCount": 2, "start": START.to_array()}}));
     let calls = std::mem::take(&mut s.commands);
     ctx.apply(SCENE.0, "Glint: Foundry Steps, ball, course and run director", calls)?;

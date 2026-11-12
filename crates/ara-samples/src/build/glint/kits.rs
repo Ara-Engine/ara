@@ -78,6 +78,9 @@ pub const CHIMNEYS: [(f32, f32, f32, f32); 5] = [
     (-44.0, 118.0, 2.2, 34.0),
 ];
 
+/// The two big furnaces beside the route: centre X, Z of the building (mouth faces -Z).
+pub const FURNACES: [(f32, f32); 2] = [(26.0, 24.0), (-28.0, 60.0)];
+
 /// The moving platform's size (X, Z).
 pub const MOVER_SIZE: (f32, f32) = (3.2, 3.2);
 /// The spinner bar's length, thickness.
@@ -201,6 +204,8 @@ pub fn pad(root: &Path, lock: &Lock) -> Result<String> {
     // A flag post at the back left: a pole and a lit pennant.
     k.cylinder(0, 0.05, 2.4, 12, Mat4::from_translation(v(-1.9, 0.05, 1.9)), Vec2::ONE);
     slab_box(&mut k, 1, v(-1.9, 1.7, 1.86), v(-1.9 + 0.8, 2.3, 1.9 + 0.0), Vec2::ONE);
+    // A lit pillar over the pad, so a checkpoint reads from the far end of the course.
+    k.cylinder(1, 0.09, 16.0, 12, Mat4::from_translation(v(0.0, 0.07, 0.0)), Vec2::ONE);
     k.write(root, lock, "glint_pad")
 }
 
@@ -220,6 +225,8 @@ pub fn goal(root: &Path, lock: &Lock) -> Result<String> {
         k.cylinder(0, 0.14, 3.6, 12, Mat4::from_translation(p), Vec2::ONE);
         k.sphere(1, p + v(0.0, 3.7, 0.0), 0.2, 16, Vec2::ONE);
     }
+    // The beacon: a tall lit pillar, visible from the start.
+    k.cylinder(1, 0.24, 48.0, 16, Mat4::from_translation(v(0.0, 0.08, 0.0)), Vec2::ONE);
     // A glass cylinder of light over the plate.
     k.cylinder(2, 2.4, 3.4, 48, Mat4::from_translation(v(0.0, 0.08, 0.0)), Vec2::ONE);
     k.write(root, lock, "glint_goal")
@@ -236,11 +243,11 @@ pub fn yard(root: &Path, lock: &Lock) -> Result<String> {
     const GLASS: usize = 5;
     const WINDOW: usize = 6;
     let mut k = Kit::new(vec![
-        Material::flat("yard ground", [0.07, 0.065, 0.06], 0.95, 0.0),
+        Material::flat("yard ground", [0.06, 0.055, 0.05], 0.95, 0.0),
         Material::flat("sooty brick", [0.15, 0.12, 0.105], 0.92, 0.0),
         Material::flat("tank steel", [0.22, 0.23, 0.25], 0.62, 0.4),
         Material::emitter("slag", [1.0, 0.38, 0.08]),
-        Material::flat("shed cladding", [0.16, 0.17, 0.18], 0.6, 0.6),
+        Material::flat("shed cladding", [0.07, 0.075, 0.08], 0.6, 0.6),
         Material::glass("control glass", [0.6, 0.8, 0.9], 0.3),
         Material::emitter("window light", [1.0, 0.82, 0.55]),
     ]);
@@ -258,7 +265,14 @@ pub fn yard(root: &Path, lock: &Lock) -> Result<String> {
     for (x, z, r, h) in CHIMNEYS {
         k.cylinder(BRICK, r, h, 32, Mat4::from_translation(v(x, floor, z)), Vec2::ONE);
         k.cylinder(SLAG, r * 0.8, 0.3, 24, Mat4::from_translation(v(x, floor + h - 0.2, z)), Vec2::ONE);
-        slab_box(&mut k, SLAG, v(x - 1.0, floor, z - r - 0.1), v(x + 1.0, floor + 2.2, z - r), Vec2::ONE);
+        slab_box(&mut k, SLAG, v(x - 2.2, floor, z - r - 0.1), v(x + 2.2, floor + 3.6, z - r), Vec2::ONE);
+    }
+    // Furnaces: a dark block, a wide glowing mouth, a hood and a short stack.
+    for (x, z) in FURNACES {
+        slab_box(&mut k, SHED, v(x - 9.0, floor, z - 6.0), v(x + 9.0, floor + 11.0, z + 6.0), Vec2::ONE);
+        slab_box(&mut k, SLAG, v(x - 5.0, floor + 1.2, z - 6.05), v(x + 5.0, floor + 6.0, z - 6.0), Vec2::ONE);
+        slab_box(&mut k, SHED, v(x - 6.0, floor + 6.0, z - 7.2), v(x + 6.0, floor + 7.2, z - 5.8), Vec2::ONE);
+        k.cylinder(BRICK, 1.6, 16.0, 24, Mat4::from_translation(v(x + 5.0, floor + 11.0, z + 2.0)), Vec2::ONE);
     }
     // Tanks and sheds.
     for (x, z, r, h) in [(-34.0, 60.0, 6.0, 12.0), (34.0, 20.0, 5.0, 10.0), (38.0, 96.0, 7.0, 14.0), (-30.0, 8.0, 4.5, 9.0)] {
