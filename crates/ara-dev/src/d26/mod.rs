@@ -4,7 +4,7 @@
 //! It reuses the existing tools rather than measuring anything itself:
 //! - `perf` builds and runs the player on frozen exported packs (Outpost, Hangar,
 //!   Showcase) per preset at 2560×1440, validation off, hidden window;
-//! - `ara-samples capture --reference` (the visual sweep) supplies ꟻLIP and RMSE;
+//! - ꟻLIP and RMSE against a path-traced reference are not measured: `ara-pathtrace` is gone;
 //! - the editor's responsiveness rows (startup, Scene CPU, Play, input latency) read
 //!   "not measured": that probe went with the legacy editor window.
 //!
@@ -34,7 +34,7 @@ use crate::binaries::Binaries;
 pub(crate) enum Section {
     /// Player GPU/CPU windows and player startup.
     Player,
-    /// ꟻLIP/RMSE captures against the path-traced reference.
+    /// ꟻLIP/RMSE against the path-traced reference. Not measured: that reference is gone.
     Flip,
     /// Editor startup, Scene CPU, Play and responsiveness.
     Editor,
@@ -57,13 +57,6 @@ pub(crate) struct Options {
     /// Reuse the previous d26 build of this profile.
     #[arg(long)]
     no_build: bool,
-    /// Read ꟻLIP/RMSE from an existing `ara-samples capture` output folder instead of
-    /// capturing (`<dir>/<project>/<look>/evidence/<look>-timings.json`).
-    #[arg(long)]
-    flip_from: Option<PathBuf>,
-    /// Path-traced reference samples per pixel for ꟻLIP/RMSE.
-    #[arg(long, default_value_t = 256)]
-    reference: u32,
     /// Leave a section out; its rows read "not measured".
     #[arg(long, value_enum)]
     skip: Vec<Section>,
@@ -102,7 +95,6 @@ struct Run {
     frames: u32,
     warmup: u32,
     ready_timeout: u64,
-    reference_spp: u32,
     build_seconds: f64,
 }
 
@@ -142,7 +134,6 @@ pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
         frames: options.frames,
         warmup: options.warmup,
         ready_timeout: options.ready_timeout,
-        reference_spp: options.reference,
         build_seconds,
     };
     let context = measure::Context {
@@ -523,7 +514,6 @@ mod tests {
             frames: 10,
             warmup: 1,
             ready_timeout: 10,
-            reference_spp: 1,
             build_seconds: 0.,
         };
         let results = measure::Results {

@@ -9,12 +9,25 @@ float roundedDistance(float2 p,float2 size,float radius) {
     radius=clamp(radius,0,min(size.x,size.y)*0.5);float2 q=abs(p-size*0.5)-size*0.5+radius;
     return length(max(q,0))+min(max(q.x,q.y),0)-radius;
 }
+// A hit with no selectable id (ids::NO_ID_HIT): it occludes the grid and never outlines.
+static const uint NO_ID_HIT=0xFFFFFFFFu;
+// The entity id at `pixel` of id image `slot`. Direct (ara-render): an R32F texel holding
+// the compact index + 1 as a float. Packed (Renderlab): an RGBA8 UNORM texel holding the
+// 32-bit id little-endian, R lowest; Load is exact, and a byte b arrives as b/255.
+uint readId(uint slot,int2 pixel,bool packed){
+    float4 t=TEX(slot).Load(int3(pixel,0));
+    if(!packed)return uint(t.r);
+    uint4 b=uint4(round(t*255));
+    return b.r|(b.g<<8)|(b.b<<16)|(b.a<<24);
+}
 // What an outline or hover compares for entity-ID channel `id`: the channel itself, or
 // with a group table (slot + 1, NativeUi::outline_groups) its hover group (red + green
 // × 256) or outline colour group (blue's low 7 bits); bit 8 of the result marks ground
-// (blue's bit 7: terrain). Texel: id % 4096, id / 4096.
+// (blue's bit 7: terrain). Texel: id % 4096, id / 4096. An id-less hit keys to bit 17
+// with a table (equal to no group, and past the 16-bit hover groups and the ground bit).
 uint outlineKey(uint table,uint id,bool hover){
     if(table==0||id==0)return id;
+    if(id==NO_ID_HIT)return 1u<<17;
     uint4 g=uint4(round(TEX(table-1).Load(int3(id%4096,id/4096,0))*255));
     return (hover?g.r|(g.g<<8):g.b&127)|((g.b&128)<<9);
 }
@@ -91,8 +104,16 @@ float4 fragmentMain(Varying input):SV_Target {
         if(zAxis>0){color=axes.uv;color.a*=zAxis;}
         uint width,height;TEX(pc.textureIndex).GetDimensions(width,height);
         int2 pixel=clamp(int2(screen*float2(width,height)),int2(0,0),int2(width-1,height-1));
-        bool covered=TEX(pc.textureIndex).Load(int3(pixel,0)).r>0;
+        // Anything drawn there hides the grid, selectable or not. The axes record's
+        // parameters.x says the id image is packed.
+        bool covered=axes.parameters.x>0.5?readId(pc.textureIndex,pixel,true)!=0:TEX(pc.textureIndex).Load(int3(pixel,0)).r>0;
         color.a*=distance>0&&!covered?exp(-distance/max(i.parameters.w,0.01))*smoothstep(0.01,0.1,abs(ray.y)):0;
+    }else if(pc.mode==12){
+        // Debug id repack (IdSource::Repacked): rewrites an R32F id texture as the packed
+        // RGBA8 form, one texel per output pixel (the draw covers the whole target, and
+        // blends over its zero clear, so the bytes land unchanged).
+        uint id=uint(TEX(pc.textureIndex).Load(int3(int2(input.position.xy),0)).r);
+        return float4(float(id&255u),float((id>>8)&255u),float((id>>16)&255u),float((id>>24)&255u))/255.0;
     }else if(pc.mode==10){
         // Box shadow. Outer: rect is the shadow box grown by blur*1.5+1, uv the casting
         // box (excluded). Inset: rect is the box, uv the hole. parameters: box radius,
@@ -129,16 +150,22 @@ float4 fragmentMain(Varying input):SV_Target {
         color=fillColor(i,input.local,shape);color.a*=shape;
     }else if(pc.mode==5){
         // Outline (z: the channel or colour group) or hover (bit 0 of w: the group under
-        // xy). w's other bits: the outline group table's slot + 1 (NativeUi::outline_groups).
+        // xy). w's bit 1: the id image is packed; the rest, the outline group table's
+        // slot + 1 (NativeUi::outline_groups).
         uint width,height;TEX(pc.textureIndex).GetDimensions(width,height);
         int2 pixel=clamp(int2(input.uv*float2(width,height)),int2(0,0),int2(width-1,height-1));
-        uint flags=uint(i.parameters.w+0.5);bool hover=(flags&1)!=0;uint table=flags>>1;
+        uint flags=uint(i.parameters.w+0.5);bool hover=(flags&1)!=0;bool packed=(flags&2)!=0;uint table=flags>>2;
         uint wanted=uint(i.parameters.z);
-        if(hover){int2 at=clamp(int2(i.parameters.xy*float2(width,height)),int2(0,0),int2(width-1,height-1));wanted=outlineKey(table,uint(TEX(pc.textureIndex).Load(int3(at,0)).r),true);}
+        if(hover){
+            int2 at=clamp(int2(i.parameters.xy*float2(width,height)),int2(0,0),int2(width-1,height-1));
+            uint under=readId(pc.textureIndex,at,packed);
+            // An id-less hit under the pointer is not selectable: nothing to outline.
+            wanted=under==NO_ID_HIT?0:outlineKey(table,under,true);
+        }
         // The ground bit only exists with a table; raw channel IDs use every bit.
         uint GROUND=table!=0?(1u<<16):0;
         wanted&=~GROUND;
-        uint centreId=uint(TEX(pc.textureIndex).Load(int3(pixel,0)).r);
+        uint centreId=readId(pc.textureIndex,pixel,packed);
         uint centre=outlineKey(table,centreId,hover);
         bool inside=(centre&~GROUND)==wanted;
         // Antialiased band one logical pixel each side of the shape's edge: coverage falls
@@ -149,7 +176,7 @@ float4 fragmentMain(Varying input):SV_Target {
         for(int y=-reach;y<=reach;y++)for(int x=-reach;x<=reach;x++){
             float d=length(float2(x,y));if((x==0&&y==0)||d>=limit||d>=nearest)continue;
             int2 other=clamp(pixel+int2(x,y),int2(0,0),int2(width-1,height-1));
-            uint otherId=uint(TEX(pc.textureIndex).Load(int3(other,0)).r);
+            uint otherId=readId(pc.textureIndex,other,packed);
             uint neighbor=outlineKey(table,otherId,hover);
             if(inside==((neighbor&~GROUND)==wanted))continue;
             // Ground (terrain) outlines against the sky, the void and other ground only:

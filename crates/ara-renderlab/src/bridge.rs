@@ -45,6 +45,8 @@ struct Target {
     fresh: bool,
     /// The shared ring, when this size's frames cross without a CPU copy.
     shared: Option<SharedHandoff>,
+    /// Packed ids retained on the presenter, beside `image`.
+    id: Option<crate::shared::PresentedId>,
 }
 
 /// Lighting last applied to the engine, so unchanged frames set nothing.
@@ -299,6 +301,11 @@ impl Bridge {
         let target = self.target.as_mut().context("target ensured above")?;
         // Shared: the copy into the shared slot queues behind the frame right away.
         if let Some(shared) = &mut target.shared {
+            if crate::shared::scene_ids_pattern() {
+                shared.stage_pattern(&self.engine)?;
+            }
+            // When Renderlab's id texture exists, this is the replacement:
+            // shared.set_id(id_texture);
             shared.publish(&self.engine, view_id)?;
         }
 
@@ -356,6 +363,9 @@ impl Bridge {
         let image = if let Some(shared) = &mut target.shared {
             settle(gpu, target.image, &mut target.fresh)?;
             shared.deliver(gpu, target.image)?;
+            if shared.id_pending() {
+                crate::shared::PresentedId::copy_from(&mut target.id, shared, gpu, target.size)?;
+            }
             target.image
         } else {
             let read = self.engine.capture_view(view_id)?;
@@ -365,6 +375,7 @@ impl Bridge {
 
         Ok(ExternalFrame {
             image,
+            id: target.id.as_ref().map(crate::shared::PresentedId::output),
             gpu_ms: self.gpu_ms,
             passes: self.passes,
             handoff_ms,
@@ -409,6 +420,7 @@ impl Bridge {
             staging: None,
             fresh: true,
             shared,
+            id: None,
         });
         Ok(())
     }
@@ -446,6 +458,9 @@ impl Bridge {
         if let Some(target) = self.target.take() {
             // The import hands its slots back on this device before the image goes.
             drop(target.shared);
+            if let Some(id) = target.id {
+                id.destroy(gpu)?;
+            }
             gpu.retire(Resource::Image(target.image))?;
             if let Some(staging) = target.staging {
                 gpu.retire(Resource::Buffer(staging))?;

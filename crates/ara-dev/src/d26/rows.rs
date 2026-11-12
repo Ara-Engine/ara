@@ -59,7 +59,7 @@ pub(super) const DEFINITIONS: &[(&str, &str)] = &[
     ),
     (
         "ꟻLIP / RMSE",
-        "`ara-samples capture --reference` (the visual sweep): LDR ꟻLIP and sRGB RMSE of each preset's frame against the path-traced reference, at 1280×720 evidence size; reported beside the timings, with no threshold.",
+        "Not measured. The path-traced reference left with ara-pathtrace; captures are the player's Renderlab image.",
     ),
 ];
 

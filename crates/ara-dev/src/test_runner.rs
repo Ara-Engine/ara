@@ -77,7 +77,6 @@ fn rule<'a>(rules: &'a Tiers, package: &str, target: &str) -> Option<&'a Rule> {
             && (!r.gpu_packages_only
                 || package.contains("gpu")
                 || package.contains("render")
-                || package == "ara-pathtrace"
                 || package == "ara-samples")
     })
 }
