@@ -70,7 +70,6 @@ pub(crate) fn inventory(player: &Path, engine: &Path) -> Result<Inventory> {
     }
     let packages: &[&str] = if metal {
         &[
-            "ara-render",
             "ara-render-fidelity",
             "ara-runtime-render",
             "ara-render2d",
@@ -80,7 +79,6 @@ pub(crate) fn inventory(player: &Path, engine: &Path) -> Result<Inventory> {
         ]
     } else {
         &[
-            "ara-render",
             "ara-render-fidelity",
             "ara-runtime-render",
             "ara-render2d",
@@ -305,7 +303,6 @@ mod tests {
         let key = "a".repeat(64);
         let stale = "b".repeat(64);
         for package in [
-            "ara-render",
             "ara-render-fidelity",
             "ara-runtime-render",
             "ara-render2d",
@@ -345,12 +342,12 @@ mod tests {
         let mut archive = zip::ZipArchive::new(std::fs::File::open(&first).unwrap()).unwrap();
         assert!(
             archive
-                .by_name(&format!("resources/ara-render/{key}/main.spv"))
+                .by_name(&format!("resources/ara-render-fidelity/{key}/main.spv"))
                 .is_ok()
         );
         assert!(
             archive
-                .by_name(&format!("resources/ara-render/{stale}/main.spv"))
+                .by_name(&format!("resources/ara-render-fidelity/{stale}/main.spv"))
                 .is_err()
         );
         assert!(
@@ -366,7 +363,7 @@ mod tests {
         ] {
             assert!(
                 archive
-                    .by_name(&format!("resources/ara-render/{file}"))
+                    .by_name(&format!("resources/ara-render-fidelity/{file}"))
                     .is_err(),
                 "offline {file} must stay outside the runtime payload"
             );
@@ -384,7 +381,6 @@ mod tests {
         std::fs::write(&player, [0xcf, 0xfa, 0xed, 0xfe, 1, 2, 3, 4]).unwrap();
         let key = "a".repeat(64);
         for package in [
-            "ara-render",
             "ara-render-fidelity",
             "ara-runtime-render",
             "ara-render2d",
@@ -425,7 +421,7 @@ mod tests {
         }
         assert!(
             archive
-                .by_name(&format!("resources/ara-render/{key}/main.spv"))
+                .by_name(&format!("resources/ara-render-fidelity/{key}/main.spv"))
                 .is_err()
         );
         let unpacked = scratch.path().join("game");

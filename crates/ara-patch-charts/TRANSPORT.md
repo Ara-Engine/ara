@@ -132,21 +132,3 @@ layout, with no fallback or quality reduction to hide a failure.
 512 MB total-array lines. Add retained chart coverage, build scratch, old/new
 publication overlap, GPU copies, channels and all other transport residency for
 the real peak-memory gate. No complete G3 pass is claimed from array accounting.
-
-## Reproducible benchmark
-
-After the shared quiet-window check, with `CARGO_BUILD_JOBS=4`:
-
-```
-cargo run -p ara-patch-charts --example transport_data -- --synthetic 48
-cargo run -p ara-patch-charts --example transport_data -- --synthetic 48 --witness-stress
-cargo run -p ara-patch-charts --example transport_data -- PATH_TO_SCENE.glb 48
-```
-
-The example directly compiles the owned renderer data modules and A1's actual
-CPU identity model, ensuring the measured layout is the implementation. It parses default-scene transforms,
-builds/caches per-mesh metric variants, reports edge/area distributions and times,
-then uses a declared synthetic visibility model with 48 links/patch. It does not
-claim physically selected link counts or real visibility/lighting quality. Source
-buffers are released before constructing links. Run logs and measured values are
-recorded in the A2 report under `D:/AraBuild/render-v3/measure/`.

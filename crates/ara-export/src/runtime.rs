@@ -120,7 +120,6 @@ pub(crate) fn unpack_template(
         std::io::copy(&mut entry, &mut File::create(output)?)?;
     }
     for package in [
-        "ara-render",
         "ara-render-fidelity",
         "ara-runtime-render",
         "ara-render2d",

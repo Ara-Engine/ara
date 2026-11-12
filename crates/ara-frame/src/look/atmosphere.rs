@@ -11,7 +11,7 @@ use glam::Vec3;
 /// The shared shader source (`shaders/atmosphere-model.slangh`). Renderers with their
 /// own shader root keep a copy and verify it equals this string.
 pub fn shader_source() -> &'static str {
-    include_str!("../../../../shaders/atmosphere-model.slangh")
+    include_str!("../../shaders/atmosphere-model.slangh")
 }
 
 /// Unreal's SkyAtmosphere (an Earth-like default), in SI units.

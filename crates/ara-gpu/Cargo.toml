@@ -10,7 +10,6 @@ workspace = true
 
 [features]
 default = []
-fidelity-lab = []
 tracy = ["dep:tracy-client"]
 
 [dependencies]

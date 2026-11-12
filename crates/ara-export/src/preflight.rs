@@ -126,7 +126,6 @@ mod tests {
         std::fs::write(&player, b"\x7fELF fixture")?;
         let key = "a".repeat(64);
         for package in [
-            "ara-render",
             "ara-render-fidelity",
             "ara-runtime-render",
             "ara-render2d",
@@ -144,7 +143,7 @@ mod tests {
         assert!(runtime(&player, root.path(), None)?.resource_files > 0);
         let artifact = root
             .path()
-            .join("resources/ara-render")
+            .join("resources/ara-render-fidelity")
             .join(&key)
             .join("main.spv");
         std::fs::write(&artifact, b"corrupt shader")?;

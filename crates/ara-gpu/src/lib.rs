@@ -19,8 +19,6 @@ pub mod shared;
 pub mod sync;
 pub mod texture;
 mod transfers;
-#[cfg(feature = "fidelity-lab")]
-pub mod tunables;
 pub mod vulkan;
 
 pub use ash::vk;

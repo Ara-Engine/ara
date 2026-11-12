@@ -141,7 +141,7 @@ Fixes:
 - Fix the failing code and reproduce the original scenario with a new build; uploading a report requires separate, explicit player consent.
 
 ## ARA3301 RENDER_NO_RENDERER: Nothing to draw
-owner: ara-render
+owner: ara-why
 
 The entity has no renderer component (`MeshRenderer`), so it has nothing to draw. Its children may still draw.
 
@@ -154,7 +154,7 @@ Fixes:
 - Make the entity an instance of the prefab that carries the renderer.
 
 ## ARA3302 RENDER_DISABLED: Disabled or hidden
-owner: ara-render
+owner: ara-why
 
 The entity, one of its ancestors, or its renderer is disabled or hidden (`enabled: false`, `visible: false`, `hidden: true`), so it is skipped.
 
@@ -166,7 +166,7 @@ Fixes:
 - Set the flag back with `property.set` on the entity or ancestor that has it.
 
 ## ARA3303 RENDER_DEGENERATE_TRANSFORM: Zero scale
-owner: ara-render
+owner: ara-why
 
 The entity's world scale is zero on at least one axis, from its own `Transform.scale` or an ancestor's. A mesh flattened to zero thickness covers no pixels.
 
@@ -179,7 +179,7 @@ Fixes:
 - Hide groups with a disabled flag instead of a zero scale.
 
 ## ARA3304 RENDER_NON_FINITE_TRANSFORM: NaN or infinite transform
-owner: ara-render
+owner: ara-why
 
 A position, rotation or scale of the entity or an ancestor is not a finite number (NaN or infinity), so the whole subtree has no valid world position and is not drawn. In documents it shows as `null` in a vector.
 
@@ -192,7 +192,7 @@ Fixes:
 - Find the system that wrote it: `ara logs --code ARA3304` shows when it first happened, with the tick.
 
 ## ARA3305 RENDER_NO_MESH: No mesh to draw
-owner: ara-render
+owner: ara-why
 
 The renderer names no mesh, or its mesh reference does not resolve to an asset, or the asset's source file is missing, or its import failed. There is no geometry to draw.
 
@@ -206,7 +206,7 @@ Fixes:
 - Restore the source file or fix the import (see the linked diagnostic).
 
 ## ARA3306 RENDER_MATERIAL: Material unusable
-owner: ara-render, ara-material
+owner: ara-why, ara-material
 
 The renderer's material does not resolve to an asset, its file is missing, or it does not compile (ARA3200–ARA3299 diagnostics carry the line and column). Without a compiled material there is no shader to draw the mesh with.
 
@@ -220,7 +220,7 @@ Fixes:
 - Point the renderer at a working material with `property.set`.
 
 ## ARA3307 RENDER_TRANSPARENT: Fully transparent
-owner: ara-render, ara-material
+owner: ara-why, ara-material
 
 The material's opacity is zero, or the renderer's tint alpha is zero, so every pixel the mesh covers is blended away.
 
@@ -233,7 +233,7 @@ Fixes:
 - Give the material a non-zero opacity, or make it opaque.
 
 ## ARA3308 RENDER_LAYER_CULLED: Culled by camera mask
-owner: ara-render
+owner: ara-why
 
 The entity's render layer is not in the culling mask of any camera that renders the scene, so every camera skips it.
 
@@ -246,7 +246,7 @@ Fixes:
 - Add the layer to the camera's `cullingMask`.
 
 ## ARA3309 RENDER_DISTANCE_CULLED: Beyond draw distance
-owner: ara-render
+owner: ara-why
 
 The entity is farther from every camera than the camera's far plane, or than its own draw distance (a renderer `maxDistance` or LOD cull distance), so it is culled.
 
@@ -259,7 +259,7 @@ Fixes:
 - Raise the camera's `far` or the renderer's draw distance.
 
 ## ARA3310 RENDER_NO_CAMERA: No camera
-owner: ara-render
+owner: ara-why
 
 The scene has no enabled camera, so nothing in it is drawn at runtime (the editor viewport has its own camera, so things may still show there).
 
@@ -272,7 +272,7 @@ Fixes:
 - Enable the existing camera.
 
 ## ARA3311 RENDER_PASS_EXCLUDED: Excluded from every pass
-owner: ara-render
+owner: ara-why
 
 The renderer left the entity out of every render pass it ran (reported by the running renderer with the passes as subjects).
 
@@ -285,7 +285,7 @@ Fixes:
 - Check the pass filters named in the diagnostic.
 
 ## ARA3312 RENDER_OUT_OF_VIEW: Behind every camera
-owner: ara-render
+owner: ara-why
 
 The entity is behind every camera (outside the view frustum), so no camera sees it from where it stands now.
 

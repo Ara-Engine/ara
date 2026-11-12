@@ -195,12 +195,7 @@ impl Bodies<'_> {
         // work ends. Their iterator/memoization closures are fresh frame locals;
         // none is the persisted function environment passed through HotFn.
         let scoped = (sig.ident == "record_frame"
-            && [
-                "crates/ara-render/src/renderer/passes.rs",
-                "crates/ara-render-fidelity/src/render.rs",
-            ]
-            .iter()
-            .any(|path| self.source.ends_with(*path)))
+            && self.source.ends_with("crates/ara-render-fidelity/src/render.rs"))
             || (sig.ident == "record_post_process"
                 && self
                     .source
