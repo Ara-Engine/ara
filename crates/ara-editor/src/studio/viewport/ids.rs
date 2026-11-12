@@ -25,12 +25,26 @@ use std::{collections::HashMap, mem::Discriminant, time::Duration};
 /// Nearest depth in metres a triangle is drawn at: Renderlab's near plane.
 const NEAR: f32 = 0.05;
 
-/// The frame's channels: draw `n` is channel `n + 1`, as `Renderer::entities()` listed them.
+/// The frame's channels: draw `n` is channel `n + 1`, as `Renderer::entities()` listed them,
+/// then each resident terrain tile (sorted by coordinate: the bridge numbers them alike), so a
+/// click or hover on the ground names its tile and the channel map names its Terrain.
 pub(super) fn entities(frame: &RenderFrame) -> Vec<(u64, String)> {
+    let mut tiles = frame
+        .terrain
+        .as_ref()
+        .map_or_else(Vec::new, |terrain| terrain.tiles.clone());
+    tiles.sort();
+    tiles.dedup();
     frame
         .draws
         .iter()
         .map(|draw| (draw.entity, draw.label.clone()))
+        .chain(tiles.iter().map(|tile| {
+            (
+                ara_runtime::terrain::tile_render_id(tile.x, tile.z),
+                format!("terrain tile {},{}", tile.x, tile.z),
+            )
+        }))
         .collect()
 }
 

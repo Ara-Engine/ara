@@ -268,6 +268,9 @@ impl Bridge {
                 break;
             }
         }
+        // Terrain tiles follow the frame's draws in the editor's id numbering.
+        self.terrain
+            .tag(&mut self.engine, frame.draws.len() as u32 + 1)?;
         self.decals.sync(&mut self.engine, frame, &mut self.gaps)?;
         self.effects.sync(&mut self.engine, frame, &mut self.gaps)?;
 
