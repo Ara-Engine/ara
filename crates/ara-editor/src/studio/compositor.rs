@@ -243,6 +243,16 @@ impl Compositor {
         Ok(super::present::landed(present))
     }
 
+    /// Writes the last composed Scene frame (the renderer's image with the grid, outlines,
+    /// gizmos and icons over it) as a PNG: what `--screenshot` saves beside the window
+    /// capture, which never includes the overlays.
+    pub fn save_frame(&mut self, path: &std::path::Path) -> Result<()> {
+        self.ui
+            .pixels()?
+            .save(path)
+            .map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))
+    }
+
     /// Releases the layer presentation; call before the window closes.
     pub fn retire(&mut self, renderer: &super::device::SceneDevice) {
         let _ = self.ui.wait_idle(ui_device(renderer.gpu()));

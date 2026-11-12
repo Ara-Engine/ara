@@ -55,7 +55,7 @@ outlines or hovers). Ids are the compact index + 1. The shader decodes both in
 group table slot is `flags >> 2`). Overlays read only ids: gizmos and icons are not
 occluded and nothing reads scene depth. `Direct` (an R32F float image) and `Repacked` (debug, Metal only) are left from the removed
 raster renderer: nothing delivers a float id image, and they go with the shaders' float path at
-the next re-cook (needs dxc and the Metal converter). `tests/packed_ids.rs` feeds chosen packed bytes (any backend). Packed images must be
+the next re-cook (needs dxc and the Metal converter). `tests/packed_ids.rs` feeds chosen packed bytes (any backend); `tests/packed_ids_goldens.rs` checks overlays over a packed image it builds itself against `tests/goldens/packed-ids/`. Packed images must be
 UNORM, never sRGB views, and are only ever fetched, never sampled or blended.
 The grid uses derivatives for antialiasing and distance fade, with theme axis tints.
 Outlines and hover (mode 5) group channels through an optional table
