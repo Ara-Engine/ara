@@ -1641,16 +1641,9 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             s.local.game_captured = id == "game.capture";
             Ok(())
         }
-        // The effect preview has no renderer to run on yet.
-        "vfx.emitter.collapse" | "vfx.emitter.hide" | "vfx.emitter.isolate" => match target {
+        "vfx.emitter.collapse" => match target {
             Target::Text(name) => {
-                use super::vfx::Emitter;
-                let toggle = match id {
-                    "vfx.emitter.collapse" => Emitter::Collapse,
-                    "vfx.emitter.hide" => Emitter::Hide,
-                    _ => Emitter::Isolate,
-                };
-                s.vfx.emitter(name, toggle);
+                s.vfx.collapse(name);
                 Ok(())
             }
             _ => Err("Choose an emitter".into()),

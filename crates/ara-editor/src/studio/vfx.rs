@@ -1,11 +1,9 @@
-//! The VFX tool, laid out as Niagara's: the preview with its timeline (restart,
-//! play/pause, step, rate) on the left, a placeholder with disabled controls until the renderer
-//! can draw effects; the System Overview in the
-//! middle, one card per emitter with its stages (spawn, initialize, update, render) in their
-//! colours; the picked module's Selection on the right, where its values are typed and its
-//! tools move, duplicate or remove it. A module's checkbox keeps it but skips it. Hide and
-//! Isolate change only the preview (and are kept for when it returns). Every edit is one undo
-//! step of the document's commands.
+//! The VFX tool, laid out as Niagara's: the System Overview on the left, one card per emitter
+//! with its stages (spawn, initialize, update, render) in their colours; the picked module's
+//! Selection on the right, where its values are typed and its tools move, duplicate or remove
+//! it. A module's checkbox keeps it but skips it. Every edit is one undo step of the
+//! document's commands. There is no preview: Renderlab cannot draw effects in the editor yet
+//! (gap table, `crates/ara-renderlab/AGENTS.md`), so the page has no preview controls.
 use std::collections::BTreeSet;
 
 use ara_kit::icons;
@@ -21,36 +19,14 @@ const CARD: f32 = 300.0;
 /// The VFX page's view state (what to show, never the effect itself).
 #[derive(Default)]
 pub struct Page {
-    hidden: BTreeSet<String>,
-    isolated: Option<String>,
     collapsed: BTreeSet<String>,
 }
 
-/// What a preview toggle does to one emitter (the effect itself is unchanged).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Emitter {
-    /// Fold or unfold its stack.
-    Collapse,
-    /// Leave it out of the preview, or bring it back.
-    Hide,
-    /// Preview only it, or every emitter again.
-    Isolate,
-}
-
 impl Page {
-    /// Flips one of emitter `name`'s preview toggles.
-    pub(super) fn emitter(&mut self, name: &str, toggle: Emitter) {
-        let flip = |set: &mut BTreeSet<String>| {
-            if !set.remove(name) {
-                set.insert(name.to_owned());
-            }
-        };
-        match toggle {
-            Emitter::Collapse => flip(&mut self.collapsed),
-            Emitter::Hide => flip(&mut self.hidden),
-            Emitter::Isolate => {
-                self.isolated = (self.isolated.as_deref() != Some(name)).then(|| name.to_owned())
-            }
+    /// Folds or unfolds emitter `name`'s stack.
+    pub(super) fn collapse(&mut self, name: &str) {
+        if !self.collapsed.remove(name) {
+            self.collapsed.insert(name.to_owned());
         }
     }
 }
@@ -113,17 +89,6 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         ));
     };
     let fx = effect(s, &doc);
-    // The preview fills its column (as the last layout measured it), square.
-    let size = s
-        .local
-        .rects
-        .get("vfx/preview")
-        .map_or(360.0, |r| (r.width() - 20.0).clamp(160.0, 720.0));
-    let preview = col().size(size).child(super::unavailable::tile(
-        l,
-        "vfx/preview-unavailable",
-        "Effect preview is not available yet.",
-    ));
     let status = match &fx {
         Ok(_) => row()
             .gap(6.0)
@@ -138,26 +103,6 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                 .grow(1.0),
         ),
     };
-    let left = col()
-        .key("vfx/preview")
-        .w(380.0)
-        .min_w(300.0)
-        .fill(t.panel)
-        .child(heading(l, icons::EYE, "Preview", None))
-        .child(
-            col()
-                .pad(10.0)
-                .align(Align::Center)
-                .fill(c.background.0)
-                .child(preview),
-        )
-        .child(
-            row()
-                .min_h(28.0)
-                .pad_x(10.0)
-                .align(Align::Center)
-                .child(status),
-        );
     let overview = match &fx {
         Ok(effect) => {
             // Cards wrap into as many columns as fit (the last layout's width).
@@ -211,7 +156,15 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                     })
             }),
         )
-        .child(overview);
+        .child(overview)
+        .child(
+            row()
+                .min_h(28.0)
+                .pad_x(10.0)
+                .align(Align::Center)
+                .fill(t.panel)
+                .child(status),
+        );
     let right = match &fx {
         Ok(effect) => selection(s, &doc, effect),
         Err(_) => col(),
@@ -222,12 +175,7 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
     .fill(t.panel)
     .scroll(Axis::Vertical);
     // Bounded, so the overview and Selection scroll inside the page.
-    row()
-        .grow(1.0)
-        .min_h(0.0)
-        .child(left)
-        .child(middle)
-        .child(right)
+    row().grow(1.0).min_h(0.0).child(middle).child(right)
 }
 
 /// An emitter's ⋯ menu: Duplicate and Delete (one undo step each).
@@ -307,16 +255,14 @@ fn stage_color(c: &ara_kit::look::Colors, stage: ara_vfx::Stage) -> stillkit::Rg
     }
 }
 
-/// An emitter as Niagara's System Overview shows it: a card with its name, the preview-only
-/// Hide and Isolate, and (unless collapsed) its four stages.
+/// An emitter as Niagara's System Overview shows it: a card with its name and ⋯ menu, and
+/// (unless collapsed) its four stages.
 fn emitter_card(s: &Studio, doc: &str, emitter: &ara_vfx::Emitter) -> El<Studio> {
     let l = &s.look;
     let c = &l.c;
     let name = emitter.name.clone();
     let collapsed = s.vfx.collapsed.contains(&name);
-    let hidden = s.vfx.hidden.contains(&name);
-    let isolated = s.vfx.isolated.as_deref() == Some(name.as_str());
-    let (n1, n2, n3) = (name.clone(), name.clone(), name.clone());
+    let n1 = name.clone();
     let accent = c.warning_foreground.0;
     let card = mix(c.background.0, c.card.0, 0.4);
     let header = row()
@@ -341,7 +287,7 @@ fn emitter_card(s: &Studio, doc: &str, emitter: &ara_vfx::Emitter) -> El<Studio>
                 if collapsed { "Expand" } else { "Collapse" },
             )
             .size(20.0)
-            .on_press(move |s: &mut Studio| s.vfx.emitter(&n1, Emitter::Collapse)),
+            .on_press(move |s: &mut Studio| s.vfx.collapse(&n1)),
         )
         .child(icon(icons::SPARKLE).size(14.0).color(accent))
         .child(
@@ -350,28 +296,6 @@ fn emitter_card(s: &Studio, doc: &str, emitter: &ara_vfx::Emitter) -> El<Studio>
                 .weight(600)
                 .color(c.foreground.0)
                 .grow(1.0),
-        )
-        .child(
-            toggle_button(
-                l,
-                Size::Sm,
-                if hidden { icons::EYE_OFF } else { icons::EYE },
-                "Hide in the preview",
-                hidden,
-            )
-            .size(22.0)
-            .on_press(move |s: &mut Studio| s.vfx.emitter(&n2, Emitter::Hide)),
-        )
-        .child(
-            toggle_button(
-                l,
-                Size::Sm,
-                icons::FOCUS,
-                "Isolate in the preview",
-                isolated,
-            )
-            .size(22.0)
-            .on_press(move |s: &mut Studio| s.vfx.emitter(&n3, Emitter::Isolate)),
         )
         .child(emitter_menu(s, doc, &emitter.name));
     let mut out = col()
@@ -383,9 +307,6 @@ fn emitter_card(s: &Studio, doc: &str, emitter: &ara_vfx::Emitter) -> El<Studio>
         .child(header);
     if !collapsed {
         out = out.child(col().pad(4.0).gap(2.0).children(stack(s, doc, emitter)));
-    }
-    if hidden {
-        out = out.opacity(0.55);
     }
     out
 }
