@@ -109,6 +109,8 @@ public sealed partial class GlintRun : Behaviour
     [Property, Replicate] public partial bool ShowKeys { get; set; }
     /// <summary>Ticks since the last input.</summary>
     [Property] public partial int IdleTicks { get; set; }
+    /// <summary>The player has started a run this session: the key hints stay away at the next start line.</summary>
+    [Property, Replicate] public partial bool Rolled { get; set; }
 
     static void Parts(int ticks, out int minutes, out int seconds, out int hundredths)
     {
@@ -148,14 +150,16 @@ public sealed partial class GlintRun : Behaviour
         var active = Input.Axis2(player, "Move") != Vector2.Zero || Input.Button(player, "Jump");
         IdleTicks = active ? 0 : IdleTicks + 1;
         ShowHud = State != 2;
-        ShowKeys = State == 0 || (State == 1 && IdleTicks > 420);
+        // The key hints show until the first input of the session, and again only when a
+        // running player has been idle for seven seconds.
+        ShowKeys = (State == 0 && !Rolled) || (State == 1 && IdleTicks > 420);
         Target = Ticks <= GoldTicks ? 3 : Ticks <= SilverTicks ? 2 : Ticks <= BronzeTicks ? 1 : 0;
         var interact = Input.Button(player, "Interact");
         var pressed = interact && !control.RestartHeld;
         control.RestartHeld = interact;
         if (State == 0)
         {
-            if (active) State = 1;
+            if (active) { State = 1; Rolled = true; }
             else { Digits(); return; }
         }
         if (State == 2)

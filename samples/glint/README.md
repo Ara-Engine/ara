@@ -88,6 +88,14 @@ Physical units, one fixed exposure, no auto-exposure. The same numbers are in
 | Goal light | point, 160,000 lm, radius 0.8 m, range 40 m |
 | Emissive | chevrons 45,000 cd/m2, rings, arches, cannon and platforms 50,000, goal 70,000, orbs 90,000 (a sunlit deck is about 7,000) |
 
+Deck design: every deck has a darker running lane (0.25, 0.29, 0.38) between coral pinstripes
+and panel seams every 4 m; the fast sections (descent, run-up, kicker) wear coral kerbs and
+the kicker's lip is banded; the climbs are stepped with a dark band every 2 m; each spinner
+bar's sweep is a dark disc in a coral ring; the launch deck has a chequered start line. What
+holds the course up and the far islands are slate (0.2, 0.235, 0.3), the second material
+family against the pale cloud; a lit ring 56 m across stands behind the goal as the thing to
+aim at from the start. Before and after: `preview/r7/`.
+
 Surfaces: stone (0.68, 0.67, 0.64) at roughness 0.75 and white paint at 0.5 are matte; the
 polish is deliberate and limited to the navy inlay down each deck (roughness 0.06), a disc on
 each pad and the goal's floor; chrome on posts, the ball, the cannon's barrel and the goal portal's casing; the rails and
