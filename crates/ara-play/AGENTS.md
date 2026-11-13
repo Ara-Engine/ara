@@ -9,7 +9,8 @@ The play-mode wire contract between the edit-world owner (`ara` daemon, editor) 
   `method::*` names (`play.start/stop/pause/resume/step/until/timescale/input/inspect/
   read/patch/capture/watch/record/recording/replay/diff/assets/debug.crash`).
 - Params/results: `Hello`, `Start` (+ `SnapshotRef::{Shm, Inline}`, `Role`), `Started`,
-  `Input`, `Step`, `Until` + `Compare`, `Stepped` + `Sample`, `Inputs`, `Inspect`, `Read`,
+  `Input`, `Step`, `Until` + `Compare`, `Stepped` + `Sample` (`faults`: the error
+  diagnostics raised while stepping; `faults(&[Event])` picks them), `Inputs`, `Inspect`, `Read`,
   `Patch` + `Set`, `Patched`, `CaptureParams` (`presented`: the windowed path), `Captured` + `Mark`, `WatchParams`,
   `SaveReplay`, `Crash`, `Status`, `CrashReport`. All camelCase JSON.
 - `PlayScene`: documents (`DocumentData`), project types, seed, tick rate, asset pins
