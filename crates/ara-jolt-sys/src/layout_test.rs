@@ -56,6 +56,8 @@ fn c_and_rust_layouts_match() {
         core::mem::offset_of!(AraBodyDesc, friction) as u32,
         core::mem::offset_of!(AraBodyDesc, restitution) as u32,
         core::mem::offset_of!(AraBodyDesc, mass) as u32,
+        core::mem::offset_of!(AraBodyDesc, linear_damping) as u32,
+        core::mem::offset_of!(AraBodyDesc, angular_damping) as u32,
         core::mem::offset_of!(AraBodyDesc, user_data) as u32,
         size_of::<AraBodyState>() as u32,
         align_of::<AraBodyState>() as u32,
