@@ -6,8 +6,40 @@ use renderlab::asset::{Mip, Texture, TextureRole};
 
 /// Decodes `ktx2` and builds the complete chain for `role`.
 pub(crate) fn prepare(ktx2: &[u8], role: TextureRole) -> Result<Texture> {
+    if own_mips() {
+        return own_chain(ktx2, role);
+    }
     let decoded = ara_runtime_render::decode_texture(ktx2)?;
     Ok(chain(decoded.size, decoded.rgba, role))
+}
+
+/// Comparison switch, off by default: with `ARA_RENDERLAB_KTX2_MIPS=1` a texture's levels
+/// are the cooked KTX2's own (each decoded on the CPU), not this module's halvings of the
+/// decoded top level. It shows the picture the asset's shipped mip chain gives before the
+/// blocks themselves are handed to the GPU.
+fn own_mips() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("ARA_RENDERLAB_KTX2_MIPS").is_some_and(|v| v == "1"))
+}
+
+/// The cooked texture's own levels as the chain; where the file stops above 1x1 the rest
+/// is halved from its last level, as before.
+fn own_chain(ktx2: &[u8], role: TextureRole) -> Result<Texture> {
+    let mut mips: Vec<Mip> = ara_runtime_render::decode_texture_levels(ktx2)?
+        .into_iter()
+        .map(|level| Mip {
+            width: level.size[0],
+            height: level.size[1],
+            rgba8: level.rgba,
+        })
+        .collect();
+    while let Some(last) = mips.last()
+        && (last.width > 1 || last.height > 1)
+    {
+        let next = halve(last, role, &[]);
+        mips.push(next);
+    }
+    Ok(Texture { role, mips })
 }
 
 /// The full mip chain, down to 1x1, of tightly packed RGBA8 `top`.

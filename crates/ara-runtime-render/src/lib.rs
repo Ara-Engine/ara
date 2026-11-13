@@ -410,8 +410,44 @@ pub fn decode_texture(ktx2: &[u8]) -> Result<scene::Texture> {
         ara_asset_format::Texture::read(ktx2).map_err(|e| anyhow::anyhow!(e.to_string()))?;
     let [w, h] = texture.dimensions();
     let level = texture.levels().next().context("texture has no levels")?;
-    let mut pixels = vec![0u32; (w * h) as usize];
     let format = texture.format();
+    Ok(scene::Texture {
+        size: [w, h],
+        rgba: decode_level(format, level, w, h)?,
+        srgb: format == ara_asset_format::TextureFormat::Bc7Srgb,
+    })
+}
+
+/// Decodes every level the cooked KTX2 texture carries, finest first, as
+/// [`decode_texture`] decodes the finest: the importer's own mip chain, each level
+/// filtered from the source image and compressed on its own.
+pub fn decode_texture_levels(ktx2: &[u8]) -> Result<Vec<scene::Texture>> {
+    let texture =
+        ara_asset_format::Texture::read(ktx2).map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    let [mut w, mut h] = texture.dimensions();
+    let format = texture.format();
+    let srgb = format == ara_asset_format::TextureFormat::Bc7Srgb;
+    let mut levels = Vec::new();
+    for level in texture.levels() {
+        levels.push(scene::Texture {
+            size: [w, h],
+            rgba: decode_level(format, level, w, h)?,
+            srgb,
+        });
+        (w, h) = ((w / 2).max(1), (h / 2).max(1));
+    }
+    anyhow::ensure!(!levels.is_empty(), "texture has no levels");
+    Ok(levels)
+}
+
+/// One `w` x `h` level of a cooked texture as tightly packed RGBA8.
+fn decode_level(
+    format: ara_asset_format::TextureFormat,
+    level: &[u8],
+    w: u32,
+    h: u32,
+) -> Result<Vec<u8>> {
+    let mut pixels = vec![0u32; (w * h) as usize];
     match format {
         ara_asset_format::TextureFormat::Bc7 | ara_asset_format::TextureFormat::Bc7Srgb => {
             texture2ddecoder::decode_bc7(level, w as usize, h as usize, &mut pixels)
@@ -424,7 +460,7 @@ pub fn decode_texture(ktx2: &[u8]) -> Result<scene::Texture> {
         format => anyhow::bail!("runtime textures must be BC7 or BC5 normals, got {format:?}"),
     }
     let normal = format == ara_asset_format::TextureFormat::Bc5;
-    let rgba = pixels
+    Ok(pixels
         .iter()
         .flat_map(|p| {
             let [b, g, r, a] = p.to_le_bytes();
@@ -438,10 +474,5 @@ pub fn decode_texture(ktx2: &[u8]) -> Result<scene::Texture> {
                 [r, g, b, a]
             }
         })
-        .collect();
-    Ok(scene::Texture {
-        size: [w, h],
-        rgba,
-        srgb: format == ara_asset_format::TextureFormat::Bc7Srgb,
-    })
+        .collect())
 }
