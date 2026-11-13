@@ -27,7 +27,6 @@ public sealed partial class BallController : Behaviour
     {
         ref var ball = ref Get<Ball>();
         ball.Player = Input.Player(Entity);
-        if (!World.Has<Velocity>(Entity) || !World.Has<PhysicsPose>(Entity)) return;
         var position = World.Read<PhysicsPose>(Entity).Position;
         ref var body = ref World.Get<Velocity>(Entity);
         if (ball.Held)

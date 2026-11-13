@@ -34,6 +34,7 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
    camera simply never moved. *Workaround:* `World.Has<Velocity>` guards. *Smallest change:*
    add the physics components when the body is authored (zeroed), or retry a faulted behaviour
    next tick for this exception, and print behaviour faults in `ara_play step`'s result.
+   **Engine PRs: #153 (a resting `Velocity` from tick zero), #154 (`faults` in a step's result).**
 2. **Scripts have no contact events, ray casts or sweeps.** *Wanted:* "is the ball on
    something, and what is its normal". *Happened:* nothing to ask. *Workaround:* every
    walkable box carries a `Surface` component with the same half extents as its collider and
@@ -50,18 +51,21 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
    horizontal speed a second and landed 10 m short of a 97 m shot; `RigidBody` has no damping
    field. *Workaround:* the cannon sets the velocity from the time since firing each tick.
    *Smallest change:* `RigidBody.linearDamping` and `angularDamping`, defaulting to what the
-   physics engine uses now.
-5. **`castShadows: false` did not stop a mesh shading the scene on the traced path.**
+   physics engine uses now. **Engine PR: #155.**
+5. **`castShadows: false` does not stop a mesh shading the scene on the traced path.**
    *Wanted:* a sun disc (the sky draws none): a lit sphere far along the sun's direction.
    *Happened:* the 52 m sphere put a 300 m long ellipse of the course in shadow, with
-   `castShadows` off. *Workaround:* the disc sits 2.6 degrees high so its shadow passes over
-   the course. *Smallest change:* honour the flag in the traced sun visibility, and give
-   `Environment` a sun disc. (Seen on a binary older than today's pins; to be checked on head.)
-6. **`ara capture` cannot show a UI screen, and nothing can click through the shell.**
-   *Wanted:* stills of the title and the start page. *Happened:* a capture always draws the
-   in-game HUD (on the menu scene it draws the results panel over the backdrop). *Workaround:*
-   none: there is no title still in `preview/`. *Smallest change:* `ara capture --screen
-   <main-menu|lobby|pause|hud>`.
+   `castShadows` off. Retested on a build of main `5ea43c0db` (Renderlab 191462db): still so;
+   [`preview/defects/castshadows_false_still_shades.jpg`](preview/defects/castshadows_false_still_shades.jpg)
+   shows the right-hand pad and slider in the disc's shadow. *Workaround:* the disc sits 2.6
+   degrees high so its shadow passes over the course. *Smallest change:* honour the flag in the
+   traced sun visibility, and give `Environment` a sun disc.
+6. **`ara capture` could not show a UI screen, and nothing can click through the shell.**
+   *Wanted:* stills of the title and the course page. *Happened:* a capture always drew the
+   in-game HUD, so for five rounds the title was never seen; when it finally was, it had four
+   hard shade bands across it and a heading that overflowed its panel. *Smallest change:*
+   `ara capture --screen <main-menu|lobby|loading|settings|pause|hud>`. **Engine PR: #156**;
+   the title, course page and pause stills in `preview/` were taken with it.
 
 ## P1: visibly wrong, or slow to work around
 
@@ -120,8 +124,10 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
     named `e_gamemenueye` and `e_gamemenutarget`; the loading label and window title say
     Outpost; a solo game passes through a co-op lobby page that needs a Ready click (restyled
     here as the course page); the UI actions and the input actions are fixed lists (restart is
-    `Interact`). *Smallest change:* read the title and the menu scene from the project, and
-    let a project skip the lobby.
+    `Interact`); and the title's dark left-to-right scrim is painted by the player in Outpost's
+    colour (`game_ui/decoration.rs`), whatever the project's stylesheet says. *Smallest change:*
+    read the title and the menu scene from the project, let a project skip the lobby, and make
+    the scrim a style.
 20. **The menu click must be an Ogg file** (`MediaDecoder::open(.., "ogg")`); a synthesised WAV
     cannot be used and the tooling has no encoder, so Glint's menus are silent.
 21. **`clean` in the sample builder does not know mixers**, so a second build failed with
@@ -145,7 +151,7 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
 - **The UI markup** is generated text written to disk, not `ara do` commands.
 - **The autopilot** is a Python script speaking MCP over stdio: `ara` has no command that runs
   a plan of timed inputs and writes a replay (`ara-samples glint-replay` is this sample's own).
-- **The title screen** was never seen (item 6).
+- **The title screen** was first seen only once the engine could capture it (item 6).
 
 ## Renderer notes for the threads using this level
 

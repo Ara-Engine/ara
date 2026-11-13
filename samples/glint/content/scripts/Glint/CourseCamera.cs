@@ -28,7 +28,7 @@ public sealed partial class CourseCamera : Behaviour
     protected override void OnTick(in Tick tick)
     {
         var ball = World.Find("Ball");
-        if (ball.IsNull || !World.Has<PhysicsPose>(ball) || !World.Has<Velocity>(ball)) return;
+        if (ball.IsNull) return;
         var position = World.Read<PhysicsPose>(ball).Position;
         var velocity = World.Read<Velocity>(ball).Linear;
         var speed = new Vector2(velocity.X, velocity.Z).Length();

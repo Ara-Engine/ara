@@ -18,8 +18,7 @@ public sealed partial class BallFx : Behaviour
     protected override void OnTick(in Tick tick)
     {
         var ball = World.Find("Ball");
-        // The physics body's components appear after the first tick.
-        if (ball.IsNull || !World.Has<Velocity>(ball)) return;
+        if (ball.IsNull) return;
         ref readonly var control = ref World.Read<Ball>(ball);
         var velocity = World.Read<Velocity>(ball).Linear;
         var speed = velocity.Length();

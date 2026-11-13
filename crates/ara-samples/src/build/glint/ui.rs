@@ -161,9 +161,7 @@ fn markup(medals: [u32; 3]) -> String {
             key("again", "E", false),
         ),
         r#"</panel>"#.to_owned(),
-        format!(
-            r#"<panel id="main-menu" class="screen"><panel id="menu-content"><text id="eyebrow" text="A ROLLING COURSE ABOVE THE CLOUDS"/><panel id="logo-box"><text id="logo-shadow" class="logo" text="GLINT"/><text id="logo" class="logo" text="GLINT"/></panel><panel id="title-rule" class="row"><panel id="rule-a"/><panel id="rule-b"/><panel id="rule-c"/></panel><panel id="menu-buttons"><button id="solo" action="solo" text="ROLL"/><button id="quit" action="quit" text="QUIT"/></panel></panel></panel>"#
-        ),
+        r#"<panel id="main-menu" class="screen"><panel id="menu-content"><text id="eyebrow" text="A ROLLING COURSE ABOVE THE CLOUDS"/><panel id="logo-box"><text id="logo-shadow" class="logo" text="GLINT"/><text id="logo" class="logo" text="GLINT"/></panel><panel id="title-rule" class="row"><panel id="rule-a"/><panel id="rule-b"/><panel id="rule-c"/></panel><panel id="menu-buttons"><button id="solo" action="solo" text="ROLL"/><button id="quit" action="quit" text="QUIT"/></panel></panel></panel>"#.to_owned(),
         format!(
             r#"<panel id="lobby" class="screen"><panel id="lobby-side" class="side"/><panel id="lobby-content"><text id="lobby-eyebrow" text="COURSE 01"/><text id="lobby-title" text="SKYWARD"/><panel id="medals">{}{}{}</panel><panel id="lobby-buttons"><button id="ready" action="ready" text="START"/><button id="lobby-leave" action="leave" text="BACK"/></panel></panel></panel>"#,
             medal("gold", "GOLD", medals[0]),

@@ -35,7 +35,7 @@ Esc pauses. The camera follows the route by itself, so forward on the stick alwa
 ara-samples build glint                                 # re-author everything from the course table
 ara-samples glint-replay                                # replay the recorded run, check the result
 ara-samples glint-replay --captures target/glint-shots  # also write the stills listed in the replay
-python3 samples/glint/replay/autopilot.py --ara <ara>   # play the course again and rewrite the replay
+python3 samples/glint/replay/autopilot.py --ara <ara>   # play the course again and rewrite the replay (`python` on Windows)
 ```
 
 ## How it is made
@@ -89,7 +89,8 @@ closed-loop in a headless world through `ara mcp` (`ara_play` start, step, read)
 the inputs, so replaying never reads the world.
 
 `ara-samples glint-replay` starts a headless world (seed 7, paused), steps it with the file's
-inputs and compares three things with the file's `expect`: the run clock at the goal
+inputs and compares three things with the file's `expect` (the hash only on the platform it was
+recorded on, `macos-aarch64`; elsewhere the finish tick and the falls must still match): the run clock at the goal
 (**2996 ticks, 49.93 s**), the falls (0) and the world state hash after the last tick. Every
 run on one machine gives the same numbers; `--record` rewrites `expect`. Changing decoration
 changes the hash but not the finish time, which is how each look pass was checked against the
@@ -119,16 +120,17 @@ What could break it:
 
 ## Cost (M5 Pro, 1280 x 720, Renderlab traced path; the Mac loaded by other work)
 
-These are from this branch's captures with an `ara` binary built before today's Renderlab
-pins, so treat them as relative; the Mac GPU thread measures the branch head separately.
+From this branch's captures with binaries built from Ara main `5ea43c0db` (Renderlab 191462db)
+plus the capture change of #156, on a Mac busy with other work, so treat them as relative; the
+Mac GPU thread measures the branch head separately.
 
 | View | GPU ms | Shading | Indirect cache |
 |---|---|---|---|
-| Start (follow camera) | 32.2 | 23.6 | 1.6 |
-| Overview | 19.3 | 13.4 | 1.6 |
-| Turn | 27.6 | 20.9 | 1.7 |
-| Sliders | 28.0 | 20.7 | 1.7 |
-| Cannon | 20.3 | 14.4 | 1.4 |
+| Start (follow camera) | 32.2 | 23.5 | 1.6 |
+| Overview | 19.4 | 13.4 | 1.6 |
+| Turn | 27.7 | 20.9 | 1.7 |
+| Sliders | 28.1 | 20.8 | 1.7 |
+| Cannon | 20.4 | 14.5 | 1.4 |
 | Goal | 25.0 | 18.4 | 1.5 |
 
 What moved it, round by round (same views, same binary):
@@ -152,6 +154,7 @@ The simulation with scripts is about 0.5 ms a tick.
   backdrop), `scripts/Glint`, `ui/`, `audio/`, `kit/` (generated geometry).
 - `replay/` `skyward.json` (the replay), `route.json` (the autopilot's plan), `autopilot.py`.
 - `compare/` numbers and camera path for the three-engine comparison, and export notes.
-- `preview/` stills (1280 x 720 JPEG).
+- `preview/` stills (1280 x 720 JPEG): eleven taken mid-run by the replay, five review views,
+  the title, the course page and pause; `preview/defects/` holds renderer evidence.
 - `repro/alpha-black/` the minimal alpha-blend reproducer (Renderlab #65).
 - [`FINDINGS.md`](FINDINGS.md) what building this through Ara's own interfaces showed.

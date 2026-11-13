@@ -38,6 +38,15 @@ struct Expect {
     falls: u64,
     /// The world state hash after the last tick.
     hash: String,
+    /// Where `hash` was recorded (`os-arch`). The hash is only compared there: floating
+    /// point in the physics solver and in `MathF` differs between platforms and compilers.
+    #[serde(default)]
+    platform: String,
+}
+
+/// This machine as the replay names it.
+fn platform() -> String {
+    format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH)
 }
 
 /// The replay file.
@@ -114,6 +123,7 @@ pub fn run(request: &Request<'_>) -> Result<()> {
         finish_ticks,
         falls,
         hash: run.hash.clone(),
+        platform: platform(),
     };
     let seconds = finish_ticks as f64 / 60.0;
     run.mcp.play("stop", json!({"world": run.world}))?;
@@ -134,7 +144,20 @@ pub fn run(request: &Request<'_>) -> Result<()> {
         Some(expect) if expect == got => {
             println!("replay matches: identical finish time and state hash")
         }
-        Some(expect) => bail!("replay diverged: expected {expect:?}, got {got:?}"),
+        // On another platform the same inputs must still finish at the same tick with the
+        // same falls; only the state hash is this machine's own.
+        Some(expect)
+            if expect.platform != got.platform
+                && (expect.finish_ticks, expect.falls) == (got.finish_ticks, got.falls) =>
+        {
+            println!(
+                "replay matches: identical finish time and falls (the state hash was recorded on {}, this is {}; run --record here to pin this machine's hash)",
+                expect.platform, got.platform
+            )
+        }
+        Some(expect) => bail!(
+            "replay diverged: expected {expect:?}, got {got:?}. If this is another platform than the recording's, the same inputs no longer reach the goal the same way: record again with `samples/glint/replay/autopilot.py`, which plays closed-loop."
+        ),
         None => bail!("the replay has no `expect`; run once with --record"),
     }
     Ok(())

@@ -1,7 +1,7 @@
 //! Glint's sounds, synthesised here (no third-party audio): the roll loop, the jump, the
 //! landing, the orb chime, the checkpoint, the cannon's wind-up and shot, the fall, the finish
 //! and two looping music stems. Written as 48 kHz mono 16-bit WAV into `content/audio/`. The
-//! same code gives the same bytes on every machine: the only noise source is a fixed-seed LCG.
+//! only noise source is a fixed-seed LCG, so a machine always writes the same files.
 use anyhow::Result;
 use std::{f32::consts::TAU, path::Path};
 
