@@ -383,15 +383,22 @@ fn pylon(k: &mut Kit, top: Vec3, radius: f32) {
     const PAINT: usize = 0;
     const CORAL: usize = 1;
     const BAND: usize = 2;
+    // The taper is all in the stretch seen above the cloud; below it the shaft is straight.
+    // Slim ones flare the most: a 1 m shaft is a hair from across the course.
+    const FLARE: f32 = 50.0;
+    let wide = (radius * 2.2).max(radius + 3.4);
+    let flare = Mat4::from_translation(top - Vec3::Y * FLARE);
+    k.frustum(PAINT, wide, radius, FLARE, 28, flare);
     let base = Mat4::from_translation(top - Vec3::Y * DEPTH);
-    k.frustum(PAINT, radius * 2.2, radius, DEPTH, 28, base);
+    k.frustum(PAINT, wide, wide, DEPTH - FLARE, 28, base);
     column(k, CORAL, top - Vec3::Y * 4.4, radius * 1.12, 0.7, 28);
     column(k, BAND, top - Vec3::Y * 4.8, radius * 1.14, 0.16, 28);
 }
 
 /// What holds the course up, all of it running down into the cloud: a pylon with a flared
 /// head under every pad, one pier with a bracket under each long deck and two under the banked
-/// turn, and a mast under every ring (the beam rests in its two rings on cradles).
+/// turn, and a mast under each of the beam's two rings (the beam rests in them on cradles).
+/// The other rings on the route hang from their deck.
 pub fn supports(root: &Path, lock: &Lock, c: &Course) -> Result<String> {
     const PAINT: usize = 0;
     const NAVY: usize = 3;
@@ -438,7 +445,9 @@ pub fn supports(root: &Path, lock: &Lock, c: &Course) -> Result<String> {
                     continue;
                 }
                 let top = p.center + p.rot * v(0.0, -h.y - 0.75, 0.0);
-                // A bracket across the deck's underside, then the head and the shaft.
+                // A bracket across the deck's underside, then the head and the shaft: as
+                // thick as the deck allows, so it still reads as a column from far off.
+                let r = (h.x * 0.4).clamp(0.9, 1.6);
                 oriented(
                     &mut k,
                     NAVY,
@@ -448,43 +457,29 @@ pub fn supports(root: &Path, lock: &Lock, c: &Course) -> Result<String> {
                 );
                 k.frustum(
                     PAINT,
-                    0.9,
-                    1.7,
+                    r,
+                    (r * 1.8).min(h.x * 0.95),
                     0.9,
                     28,
                     Mat4::from_translation(top - v(0.0, 0.9, 0.0)),
                 );
-                pylon(&mut k, top - v(0.0, 0.9, 0.0), 0.9);
+                pylon(&mut k, top - v(0.0, 0.9, 0.0), r);
             }
         }
     }
     for r in &c.rings {
-        // Rings over the route stand on masts; the two on the cannon's arc float free.
-        if !c
-            .pieces
-            .iter()
-            .any(|p| (p.center - r.at).length() < p.half.z + 8.0)
-        {
-            continue;
-        }
-        // The mast meets the ring at its lowest point; where the ring's bottom is under a
-        // piece (the beam), a cradle joins the two.
+        // A ring round a deck hangs from that deck on a cradle; the beam's two rings stand
+        // on masts and carry the beam; the two on the cannon's arc float free.
         let foot = r.at - Vec3::Y * (r.radius * 1.03);
-        k.frustum(
-            NAVY,
-            0.8,
-            1.4,
-            0.8,
-            24,
-            Mat4::from_translation(foot - v(0.0, 0.8, 0.0)),
-        );
-        pylon(&mut k, foot - v(0.0, 0.8, 0.0), 0.8);
-        if let Some(beam) = c
+        let Some(under) = c
             .pieces
             .iter()
-            .find(|p| p.kind == Kind::Beam && (p.center - r.at).length() < p.half.z)
-        {
-            let gap = (beam.center.y - beam.half.y) - (r.at.y - r.radius);
+            .find(|p| (p.center - r.at).length() < p.half.z)
+        else {
+            continue;
+        };
+        let gap = (under.center.y - under.half.y) - (r.at.y - r.radius);
+        if gap > 0.0 {
             oriented(
                 &mut k,
                 PAINT,
@@ -492,6 +487,17 @@ pub fn supports(root: &Path, lock: &Lock, c: &Course) -> Result<String> {
                 v(0.3, gap * 0.5, 0.5),
                 r.rot,
             );
+        }
+        if under.kind == Kind::Beam {
+            k.frustum(
+                NAVY,
+                1.2,
+                1.9,
+                0.8,
+                24,
+                Mat4::from_translation(foot - v(0.0, 0.8, 0.0)),
+            );
+            pylon(&mut k, foot - v(0.0, 0.8, 0.0), 1.2);
         }
     }
     k.write(root, lock, "glint_supports")
