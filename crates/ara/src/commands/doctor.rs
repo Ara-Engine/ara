@@ -27,13 +27,19 @@ pub fn doctor(as_json: bool) -> bool {
         .arg("--version")
         .output()
         .is_ok_and(|o| o.status.success());
+    // Ara's own C# host and compile server: shipped with an installed engine, built by
+    // `dotnet build` in a source checkout. Without them no project with scripts can play.
+    let csharp = std::env::current_dir()
+        .ok()
+        .and_then(|here| ara_play_host::ScriptPaths::locate(&here));
     let checks = json!([
         {"name":".NET 10 SDK", "ok":sdk, "fix":"Install the x64 .NET 10 SDK: https://dotnet.microsoft.com/en-us/download/dotnet/10.0"},
         {"name":".NET 10 runtime", "ok":runtime, "fix":"The x64 .NET 10 SDK includes this runtime: https://dotnet.microsoft.com/en-us/download/dotnet/10.0"},
+        {"name":"Ara C# tools", "ok":csharp.is_some(), "path":csharp.as_ref().map(|tools| &tools.host_dir), "fix":"From a source checkout, run `dotnet build dotnet/Ara.slnx -c Release` at the repository root (or set ARA_DOTNET_ARTIFACTS to its artifacts/bin). For an installed engine, repair the installation."},
         {"name":"Slang shader compiler", "ok":slang, "path":tools.slangc, "fix":"Reinstall Ara's tools, or install the Vulkan SDK and set VULKAN_SDK. Missing msvcp140/vcruntime140 DLLs: install Microsoft VC++ v14 x64 from https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist"},
         {"name":"SPIR-V validator", "ok":validator, "path":tools.spirv_val, "fix":"Reinstall Ara's tools, or install the Vulkan SDK and set VULKAN_SDK. Missing msvcp140/vcruntime140 DLLs: install Microsoft VC++ v14 x64 from https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist"}
     ]);
-    let ok = sdk && runtime && slang && validator;
+    let ok = sdk && runtime && csharp.is_some() && slang && validator;
     if as_json {
         println!(
             "{}",
