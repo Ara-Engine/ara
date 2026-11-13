@@ -89,9 +89,11 @@ Physical units, one fixed exposure, no auto-exposure. The same numbers are in
 | Emissive | chevrons 45,000 cd/m2, rings, arches, cannon and platforms 50,000, goal 70,000, orbs 90,000 (a sunlit deck is about 7,000) |
 
 Deck design: every deck has a darker running lane (0.25, 0.29, 0.38) between coral pinstripes
-and panel seams every 4 m; the fast sections (descent, run-up, kicker) wear coral kerbs and
-the kicker's lip is banded; the climbs are stepped with a dark band every 2 m; each spinner
-bar's sweep is a dark disc in a coral ring; the launch deck has a chequered start line. What
+and panel seams every 4 m, and every straight deck opens with a navy band from kerb to kerb.
+Each section has its own block: the fast ones (descent, run-up, kicker) wear coral kerbs and
+the kicker's lip is banded; the climbs are stepped with a dark band every 2 m; the spinner
+deck is dark from kerb to kerb with each bar's sweep painted as a disc in a coral ring; the
+sliders are navy; the launch deck has a chequered start line. What
 holds the course up and the far islands are slate (0.2, 0.235, 0.3), the second material
 family against the pale cloud; a lit ring 56 m across stands behind the goal as the thing to
 aim at from the start. Before and after: `preview/r7/`.

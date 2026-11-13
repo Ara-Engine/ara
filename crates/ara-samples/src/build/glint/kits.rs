@@ -266,9 +266,11 @@ pub fn course(root: &Path, lock: &Lock, c: &Course) -> Result<String> {
             v(h.x, h.y - 0.05, h.z),
             Quat::IDENTITY,
         );
+        // The spinner deck is dark from kerb to kerb: its own colour block in a wide shot.
+        let dark = p.name == "Spinner deck";
         local(
             &mut k,
-            STONE,
+            if dark { LANE } else { STONE },
             p,
             v(0.0, h.y - 0.05, 0.0),
             v(h.x - kerb * 2.0, 0.05, h.z),
@@ -340,7 +342,7 @@ pub fn course(root: &Path, lock: &Lock, c: &Course) -> Result<String> {
             }
         } else if p.kind != Kind::Beam {
             // A darker running lane between two coral pinstripes, pale shoulders outside it.
-            let lane = (h.x * 0.45).max(1.0);
+            let lane = (h.x * 0.6).max(1.0);
             local(
                 &mut k,
                 LANE,
@@ -349,6 +351,18 @@ pub fn course(root: &Path, lock: &Lock, c: &Course) -> Result<String> {
                 v(lane, 0.002, h.z),
                 Quat::IDENTITY,
             );
+            // Every straight deck opens with a navy band from kerb to kerb: a section's
+            // entry reads from across the course.
+            if p.kind == Kind::Deck {
+                local(
+                    &mut k,
+                    NAVY,
+                    p,
+                    v(0.0, h.y + 0.0052, -h.z + 1.3),
+                    v(h.x - kerb * 2.0, 0.0022, 1.3),
+                    Quat::IDENTITY,
+                );
+            }
             for side in [-1.0f32, 1.0] {
                 local(
                     &mut k,
@@ -370,7 +384,7 @@ pub fn course(root: &Path, lock: &Lock, c: &Course) -> Result<String> {
                     SEAM,
                     p,
                     v(0.0, h.y + 0.005, z),
-                    v(h.x - kerb * 2.0, 0.0015, if climb { 0.22 } else { 0.05 }),
+                    v(h.x - kerb * 2.0, 0.0015, if climb { 0.45 } else { 0.05 }),
                     Quat::IDENTITY,
                 );
             }
@@ -623,9 +637,10 @@ pub fn mover(root: &Path, lock: &Lock, half: Vec3) -> Result<String> {
     const GLOW: usize = 3;
     const CHEVRON: usize = 4;
     const CHROME: usize = 5;
+    // A navy top: the sliders are their own colour block between the pale pads.
     let mut k = Kit::new(vec![
         paint(),
-        stone(),
+        navy(),
         coral(),
         cool("underglow"),
         lit("platform chevron"),
@@ -1155,8 +1170,9 @@ pub fn gantry(root: &Path, lock: &Lock) -> Result<String> {
     const CORAL: usize = 1;
     const NAVY: usize = 3;
     const LIT: usize = 4;
+    // A slate frame with coral and lit trim, like everything else that holds the course up.
     let mut k = Kit::new(vec![
-        paint(),
+        slate(),
         coral(),
         cool("pylon band"),
         navy(),
