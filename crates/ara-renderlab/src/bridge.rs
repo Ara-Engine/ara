@@ -87,6 +87,13 @@ fn log_line(line: impl FnOnce() -> String) {
     }
 }
 
+/// What a frame's queue work needs, kept until it runs.
+struct Handoff {
+    frame: renderlab::engine::FrameId,
+    view: ViewId,
+    size: [u32; 2],
+}
+
 /// A frame begun and not yet taken.
 struct Pending {
     frame: renderlab::engine::FrameId,
@@ -154,6 +161,9 @@ pub(crate) struct Bridge {
     in_flight_limit: usize,
     /// The frames begun and not yet taken, oldest first (`Bridge::begin`, `Bridge::finish`).
     pending: std::collections::VecDeque<Pending>,
+    /// The newest frame's handoff copy, queued when the next frame
+    /// begins or the frame is taken (`Self::flush_handoff`).
+    handoff: Option<Handoff>,
     /// The last frame's eye and view direction, to notice a view that jumps.
     last_view: Option<([f32; 3], [f32; 3])>,
 }
@@ -288,6 +298,7 @@ impl Bridge {
                 .unwrap_or(options.frames_in_flight)
                 .clamp(1, MAX_IN_FLIGHT),
             pending: std::collections::VecDeque::new(),
+            handoff: None,
             last_view: None,
         })
     }
@@ -371,6 +382,10 @@ impl Bridge {
     /// before one is taken.
     pub fn begin(&mut self, gpu: &mut GpuDevice, view: &ExternalView<'_>) -> Result<()> {
         let begin_started = Instant::now();
+        // The last frame's queue work goes first, before this frame is recorded over its image.
+        // With Renderlab's submit thread that frame's submit is done by now (a game update has
+        // run), so queue use does not wait for it.
+        self.flush_handoff()?;
         anyhow::ensure!(
             self.pending.len() < self.in_flight_limit,
             "{} frames are in flight: finish one before beginning another",
@@ -501,39 +516,10 @@ impl Bridge {
                 ids.write(&mut self.engine, view_id)?;
             }
         }
-        let mut published = false;
-        let mut readback = None;
-        if let Some(shared) = &mut target.shared {
-            match &target.ids {
-                Some(ids) => shared.set_id(ids.texture().clone()),
-                None if crate::shared::scene_ids_pattern() => {
-                    shared.stage_pattern(&self.engine)?;
-                }
-                None => {}
-            }
-            // The copy into the shared slot queues behind the frame right away, unless the slot
-            // still holds the frame before: that one's delivery publishes this one
-            // (`Self::finish`), before any later frame is recorded over the output.
-            if shared.idle() {
-                shared.publish(&self.engine, view_id)?;
-                published = true;
-            }
-        } else if let Some(output) = self.engine.view_output(view_id) {
-            // The CPU copy: the frame's texels are copied into buffers now, behind it, so a frame
-            // recorded after it cannot change what this one's `finish` reads.
-            let colour = crate::id_target::Readback::queue(
-                self.engine.device(),
-                self.engine.queue(),
-                output,
-                view.size,
-            );
-            let ids = target.ids.as_ref().map(|ids| ids.queue_read(&self.engine));
-            readback = Some((colour, ids));
-        }
-
         // The meter: queue this frame's histogram pass when the meter asks (every frame while
         // it snaps, then every 16th). It does not wait; a refused pass is asked for again
-        // next frame.
+        // next frame. It stays here, not in `flush_handoff`: the reading's arrival fixes how
+        // many frames the exposure lags, and that must not move with the handoff.
         if let Some(meter) = metered
             && self.metering.due()
         {
@@ -551,6 +537,11 @@ impl Bridge {
                 self.metering.retry();
             }
         }
+        self.handoff = Some(Handoff {
+            frame: rendered,
+            view: view_id,
+            size: view.size,
+        });
 
         self.pending.push_back(Pending {
             frame: rendered,
@@ -559,9 +550,63 @@ impl Bridge {
             begin_ms: begin_started.elapsed().as_secs_f64() * 1000.,
             done: false,
             done_after_ms: None,
-            published,
-            readback,
+            published: false,
+            readback: None,
         });
+        Ok(())
+    }
+
+    /// Queues the newest frame's handoff copy behind it, and records what its `finish` takes. Runs when the next frame begins or this one is taken, not in `begin`: with
+    /// Renderlab's submit thread a queue use right after `render_view` waits for that frame's
+    /// submit, so the work moves to where the submit is done.
+    fn flush_handoff(&mut self) -> Result<()> {
+        let Some(h) = self.handoff.take() else {
+            return Ok(());
+        };
+        // `finish` may already have published this frame when it delivered the one before.
+        let already = self
+            .pending
+            .iter()
+            .find(|p| p.frame == h.frame)
+            .is_none_or(|p| p.published);
+        let Some(target) = self.target.as_mut() else {
+            return Ok(());
+        };
+        let (view_id, size) = (h.view, h.size);
+        let mut published = false;
+        let mut readback = None;
+        if let Some(shared) = &mut target.shared {
+            match &target.ids {
+                Some(ids) => shared.set_id(ids.texture().clone()),
+                None if crate::shared::scene_ids_pattern() => {
+                    shared.stage_pattern(&self.engine)?;
+                }
+                None => {}
+            }
+            // The copy into the shared slot queues behind the frame right away, unless the slot
+            // still holds the frame before: that one's delivery publishes this one
+            // (`Self::finish`), before any later frame is recorded over the output.
+            if shared.idle() && !already {
+                shared.publish(&self.engine, view_id)?;
+                published = true;
+            }
+        } else if let Some(output) = self.engine.view_output(view_id) {
+            // The CPU copy: the frame's texels are copied into buffers now, behind it, so a frame
+            // recorded after it cannot change what this one's `finish` reads.
+            let colour = crate::id_target::Readback::queue(
+                self.engine.device(),
+                self.engine.queue(),
+                output,
+                size,
+            );
+            let ids = target.ids.as_ref().map(|ids| ids.queue_read(&self.engine));
+            readback = Some((colour, ids));
+        }
+
+        if let Some(pending) = self.pending.iter_mut().find(|p| p.frame == h.frame) {
+            pending.published |= published;
+            pending.readback = readback;
+        }
         Ok(())
     }
 
@@ -602,6 +647,16 @@ impl Bridge {
     pub fn finish(&mut self, gpu: &mut GpuDevice) -> Result<Option<ExternalFrame>> {
         if self.pending.is_empty() {
             return Ok(None);
+        }
+        // The oldest frame's queue work must be queued before it is taken. A newer frame's waits
+        // for the next `begin`: right after its `render_view` is the window the submit thread
+        // is still submitting in.
+        if self
+            .handoff
+            .as_ref()
+            .is_some_and(|h| self.pending.front().is_some_and(|p| p.frame == h.frame))
+        {
+            self.flush_handoff()?;
         }
         self.pump()?;
         let Some(oldest) = self.pending.front() else {
@@ -748,6 +803,7 @@ impl Bridge {
     pub fn release(&mut self, gpu: &mut GpuDevice) -> Result<()> {
         // Frames in flight draw into the target and queue their copy into its shared slots: wait
         // for Renderlab's queue to go idle before they go with it (a resize, Play, shutdown).
+        self.handoff = None;
         if !self.pending.is_empty() {
             self.pending.clear();
             let idle = wgpu::PollType::Wait {
