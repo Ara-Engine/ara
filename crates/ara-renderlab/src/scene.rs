@@ -1337,20 +1337,11 @@ impl Scene {
             Ok(data) => data,
             Err(reason) => return decode(reason),
         };
-        // Renderlab's ara-gpu backend (Apple) has no compressed upload yet.
-        #[cfg(target_vendor = "apple")]
-        {
-            let _ = (engine, data);
-            decode("this backend has no compressed upload")
+        if !engine.compressed_textures() {
+            return decode("the device does not sample BC textures");
         }
-        #[cfg(not(target_vendor = "apple"))]
-        {
-            if !engine.compressed_textures() {
-                return decode("the device does not sample BC textures");
-            }
-            self.compressed += 1;
-            Ok(Some(engine.create_compressed_texture(data)?))
-        }
+        self.compressed += 1;
+        Ok(Some(engine.create_compressed_texture(data)?))
     }
 
     /// With `ARA_RENDERLAB_TEXTURE_LOG=1`, prints `texture_report` to stderr whenever the
