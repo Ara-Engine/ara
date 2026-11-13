@@ -77,6 +77,20 @@ impl Readback {
         texture: &wgpu::Texture,
         size: [u32; 2],
     ) -> Self {
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        let readback = Self::record(device, &mut encoder, texture, size);
+        queue.submit([encoder.finish()]);
+        readback
+    }
+
+    /// Records the copy of `texture` (of `size`) into a new buffer on `encoder`, and the buffer's
+    /// map for when `encoder`'s commands are submitted. The caller submits `encoder`.
+    pub fn record(
+        device: &wgpu::Device,
+        encoder: &mut wgpu::CommandEncoder,
+        texture: &wgpu::Texture,
+        size: [u32; 2],
+    ) -> Self {
         let [width, height] = size;
         let row = width as usize * 4;
         let stride = row.next_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize);
@@ -86,7 +100,6 @@ impl Readback {
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
         encoder.copy_texture_to_buffer(
             texture.as_image_copy(),
             wgpu::TexelCopyBufferInfo {
@@ -103,14 +116,11 @@ impl Readback {
                 depth_or_array_layers: 1,
             },
         );
-        queue.submit([encoder.finish()]);
         let (sender, mapped) = std::sync::mpsc::channel();
-        buffer
-            .slice(..)
-            .map_async(wgpu::MapMode::Read, move |result| {
-                // The receiver lives as long as the readback.
-                let _ = sender.send(result);
-            });
+        encoder.map_buffer_on_submit(&buffer, wgpu::MapMode::Read, .., move |result| {
+            // The receiver lives as long as the readback.
+            let _ = sender.send(result);
+        });
         Self {
             buffer,
             size,
