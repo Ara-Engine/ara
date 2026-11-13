@@ -105,7 +105,8 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
 12. **The importer fails on a large flat mesh.** A 500 m slab failed with `patch charts:
     FragmentLimit` (250 m imported). *Workaround:* small kits scaled by the entity.
     *Smallest change:* a diagnostic that names the limit and the mesh, and a way to skip chart
-    generation for a mesh that needs none.
+    generation for a mesh that needs none. **Engine PR: #161** (the message; the budget is
+    16,000,000 fragments of 0.25 m patches, about 500,000 m2 of flat surface).
 13. **Emissive transmission glass does not assemble.** A glass material with an emissive
     factor failed with `ARA7300: a transparent material's program with Parameters is not
     assembled`. Not needed in the end.
