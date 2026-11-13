@@ -163,7 +163,7 @@ impl App {
                     )?);
                 }
                 if self.window.is_some()
-                    && let Ok(device) = ara_audio::device::SdlBackend::open(48_000)
+                    && let Some(device) = crate::open_audio("play")
                 {
                     self.audio = Some((world.audio_presenter()?, device));
                 }
