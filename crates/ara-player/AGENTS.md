@@ -146,3 +146,4 @@ Valley fixtures come from `ara-runtime-world`'s `valley` test.
 `cargo test -p ara-player --test embed hub_outpost -- --ignored` checks a fresh Hub Outpost template's native HUD for 30 seconds, then missing/corrupt reticles and path diagnostics.
 Use isolated Vulkan layers, `SDL_AUDIODRIVER=dummy`, and fresh `ARA_CONFIG_DIR`/`ARA_CRASH_DIR` under `target/`.
 `tests/prerequisites.rs` probes missing Vulkan/.NET startup diagnostics and doctor hints. Missing model sources stay playable with ARA7310 placeholders (`tests/pins.rs`).
+- Renderlab presents one frame behind by default (`ARA_RENDERLAB_PIPELINE=0` turns it off): `live_image` is the frame before the latest tick; `ara capture` draws its still's own frame blocking.

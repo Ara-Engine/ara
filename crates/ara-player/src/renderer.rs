@@ -39,9 +39,10 @@ pub(crate) fn install(presenter: &mut Presenter, cache: &Path) -> Result<()> {
     if presenter.external_renderer().is_some() {
         return Ok(());
     }
-    // `ARA_RENDERLAB_PIPELINE=1`: present one frame behind, so the CPU records the next frame
-    // while the GPU draws the last (a frame of latency; off by default until measured).
-    let pipeline = std::env::var("ARA_RENDERLAB_PIPELINE").is_ok_and(|value| value == "1");
+    // Pipelined present, on by default: the CPU records the next frame while the GPU draws the
+    // last, so the shown frame is one behind the tick (a frame of latency). `ARA_RENDERLAB_PIPELINE=0`
+    // presents each frame as it is drawn.
+    let pipeline = std::env::var("ARA_RENDERLAB_PIPELINE").map_or(true, |value| value != "0");
     let options = Options {
         path,
         frames_in_flight: if pipeline { 2 } else { 1 },
