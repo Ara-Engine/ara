@@ -261,6 +261,9 @@ pub fn write(dir: &Path, orbs: usize, gates: usize, medals: [u32; 3]) -> Result<
             sound("RunFeedback", "finishTick", "finish", 0.9),
         ],
         "music": [{"entity": "e_run", "component": "GlintRun", "field": "intensity", "target": "e_music"}],
+        // The menu's click (Kenney Interface Sounds, CC0): with it the shell opens its audio
+        // device at the title. It must be Ogg, so it is not one of the synthesised clips.
+        "click": "third_party/outpost_interface/Audio/click_001.ogg",
         "fonts": ["third_party/outpost_ui/Font/Kenney Future.ttf"],
         "images": {
             "orb": "ui/icons/orb.png", "flag": "ui/icons/flag.png", "fall": "ui/icons/fall.png",

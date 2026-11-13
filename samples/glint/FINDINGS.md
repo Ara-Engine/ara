@@ -143,7 +143,10 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
     read the title and the menu scene from the project, let a project skip the lobby, and make
     the scrim a style.
 20. **The menu click must be an Ogg file** (`MediaDecoder::open(.., "ogg")`); a synthesised WAV
-    cannot be used and the tooling has no encoder, so Glint's menus are silent.
+    cannot be used and the tooling has no encoder. Glint's menus were silent for that reason;
+    they now use the click from Kenney's Interface Sounds (CC0, already pinned for Outpost),
+    which also makes the shell open its audio device at the title. *Smallest change:* decode
+    the click by its file's extension.
 21. **`clean` in the sample builder does not know mixers**, so a second build failed with
     `ARA1602` until the mixer was created once and updated after.
 22. **Gravity is not readable from a script** (*from reading*: nothing named gravity in
@@ -282,3 +285,29 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
   A live run with them frozen is not one switch today (the sliders and bars stop with
   `periodTicks` 0 and `degreesPerSecond` 0 in the scene, but the orbs' bob is a constant in
   the script).
+- **Roughness 0.5 is a cliff, and the look pass fell off it.** The look pass put navy paint
+  (roughness 0.45) on entry bands and the sliders' tops and coral lacquer (0.25) on pinstripes
+  and kerbs the length of every deck. On the RTX the course median went from 8.8 to 10.4 ms
+  traced and from 15.0 to 20.1 untraced, all of it in shading. One change at a time on the M5
+  (traced path, 720p, 60 held frames, GPU / shading ms, same binary):
+
+  | | Descent | Sliders | Spinner deck | Start |
+  |---|---|---|---|---|
+  | Before the look pass | 20.5 / 12.8 | 19.8 / 12.5 | 19.4 / 11.9 | 24.6 / 15.7 |
+  | After it (navy 0.45, coral 0.25) | 22.9 / 14.8 | 22.0 / 14.5 | 20.3 / 12.7 | 26.0 / 16.9 |
+  | Navy at 0.75 | 21.3 / 13.2 | 20.5 / 13.0 | 19.5 / 11.8 | 24.3 / 15.2 |
+  | Coral at 0.75 | 21.8 / 13.7 | 21.3 / 13.8 | 19.4 / 11.7 | 25.1 / 16.0 |
+  | Both at 0.75 | 20.0 / 11.9 | 19.7 / 12.2 | 18.5 / 10.9 | 23.6 / 14.5 |
+  | Both at 0.60 | 20.0 / 11.9 | 19.6 / 12.2 | 18.6 / 11.0 | 23.6 / 14.5 |
+  | Both at 0.50 | 20.0 / 11.9 | 19.7 / 12.2 | 18.6 / 10.9 | 23.6 / 14.5 |
+  | Great ring unlit, thin beacon | 22.8 / 14.6 | 21.7 / 14.2 | 20.2 / 12.5 | 25.4 / 16.5 |
+
+  So the cost is what the surfaces are: a surface under roughness 0.5 gets a traced glossy
+  reflection wherever it is on screen, however faint the result; at 0.5 it gets none and
+  costs the same as at 0.75. The lit ring is nearly free away from the goal. Glint's navy and
+  coral are now satin at 0.5, like its white paint: the decks cost less than before the look
+  pass (navy kerbs were already under the cliff) and the stills cannot be told apart
+  (`preview/r8/`). The deliberate mirrors stay: the inlay, the pad discs, chrome, the goal's
+  floor. *For the renderer:* a hard step in cost at one roughness, with no visible step in
+  the picture, is easy to fall off without knowing; the untraced path pays more for the same
+  surfaces (not measurable on the Mac).
