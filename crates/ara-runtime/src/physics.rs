@@ -5,7 +5,7 @@
 use crate::{Result, RuntimeError, math::Pose};
 use ara_physics::{
     CharacterController, CookedCollider, EcsPhysicsSnapshot, PhysicsCommands, PhysicsConfig,
-    PhysicsPose, PhysicsStatus, RigidBody, Vehicle,
+    PhysicsPose, PhysicsStatus, RigidBody, Vehicle, Velocity,
 };
 use ara_physics_jolt::{JoltBackend, JoltSnapshot};
 use ara_sim::{SimError, StateProvider, TrustedState};
@@ -19,21 +19,35 @@ mod model;
 mod tests;
 
 /// Installs the Jolt world and gives every body without a `PhysicsPose` one from its
-/// world transform, then builds native bodies without advancing time.
+/// world transform and a resting `Velocity`, then builds native bodies without advancing
+/// time. Both mirrors therefore exist from tick zero: gameplay that reads a body's
+/// velocity on its first tick sees zero, not a missing component.
 pub fn install(world: &mut World, config: &PhysicsConfig, poses: &[(Entity, Pose)]) -> Result<()> {
     for &(entity, pose) in poses {
         let simulated = world.get::<RigidBody>(entity).is_some()
             || world.get::<CharacterController>(entity).is_some()
             || world.get::<Vehicle>(entity).is_some();
-        if simulated && world.get::<PhysicsPose>(entity).is_none() {
+        if !simulated {
+            continue;
+        }
+        if world.get::<PhysicsPose>(entity).is_none() {
             world.entity_mut(entity).insert(pose.to_physics());
         }
+        rest(world, entity);
     }
     build(world, config)
 }
 
+/// Gives a simulated body the `Velocity` mirror at rest if it has none. A missing
+/// mirror and a zero one build the same native body.
+fn rest(world: &mut World, entity: Entity) {
+    if world.get::<Velocity>(entity).is_none() {
+        world.entity_mut(entity).insert(Velocity::default());
+    }
+}
+
 /// Poses simulated bodies spawned after build (streamed world cells) at their
-/// transform before the next physics push, as `install` does at build.
+/// transform, at rest, before the next physics push, as `install` does at build.
 pub fn adopt(world: &mut World) {
     let mut new = Vec::new();
     let mut query = world.query_filtered::<(Entity, &ara_components::Transform), (
@@ -50,6 +64,7 @@ pub fn adopt(world: &mut World) {
                 .get(&entity)
                 .map_or(pose, |matrix| Pose::from_matrix(*matrix));
             world.entity_mut(entity).insert(pose.to_physics());
+            rest(world, entity);
         }
     }
     if let Err(error) = identity::assign_ids(world).and_then(|()| model::cook(world)) {
