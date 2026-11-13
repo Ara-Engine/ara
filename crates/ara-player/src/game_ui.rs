@@ -335,14 +335,16 @@ impl crate::device::Windowed {
 }
 
 /// The same native markup/layout/text/render contract over the offscreen reference backend.
+/// `screen` picks the shell screen drawn (absent: the in-game HUD).
 pub(crate) fn capture(
     source: &GameUi,
     runtime: &Runtime,
     player: u64,
+    screen: Option<ara_play::UiScreen>,
     image: &mut image::RgbaImage,
 ) -> Result<()> {
     let size = [image.width(), image.height()];
-    let overlay = snapshot(source, runtime, player, size)?;
+    let overlay = snapshot(source, runtime, player, screen, size)?;
     composite(image, &overlay);
     Ok(())
 }
@@ -352,10 +354,16 @@ pub(crate) fn snapshot(
     source: &GameUi,
     runtime: &Runtime,
     player: u64,
+    screen: Option<ara_play::UiScreen>,
     size: [u32; 2],
 ) -> Result<image::RgbaImage> {
     let mut surface = Surface::new(source, runtime, size, 1.)?;
+    if let Some(screen) = screen {
+        surface.screen(screen.into())?;
+    }
     surface.update(runtime, player, size, 1.)?;
+    // The shell's own paint for this screen (the title's scrim), as a live frame has it.
+    decoration::apply(&mut surface.ui, surface.screen);
     let mut cpu = ara_ui_render::CpuGpu::default();
     surface
         .renderer

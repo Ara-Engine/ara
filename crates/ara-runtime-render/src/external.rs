@@ -91,9 +91,10 @@ pub trait ExternalRenderer: Send {
     /// Releases what it created on `gpu`, before that device is destroyed.
     fn release(&mut self, gpu: &mut GpuDevice) -> Result<()>;
     /// Starts drawing `view` and returns without waiting for the GPU, for a host that must not
-    /// block on a frame: `Ok(true)` when it did (take the result with [`Self::finish`]; one frame
-    /// is in flight at a time, see [`Self::in_flight`]), `Ok(false)` when the renderer cannot
-    /// split a frame and the host calls [`Self::render`] instead.
+    /// block on a frame: `Ok(true)` when it did (take the oldest result with [`Self::finish`]; up
+    /// to [`Self::max_frames_in_flight`] frames are in flight, see [`Self::frames_in_flight`]),
+    /// `Ok(false)` when the renderer cannot split a frame and the host calls [`Self::render`]
+    /// instead.
     fn begin(&mut self, _gpu: &mut GpuDevice, _view: &ExternalView<'_>) -> Result<bool> {
         Ok(false)
     }
@@ -101,8 +102,17 @@ pub trait ExternalRenderer: Send {
     fn in_flight(&self) -> bool {
         false
     }
-    /// Takes the frame [`Self::begin`] started once the GPU has finished it; `None` while it is
-    /// still drawing. Never waits for the GPU.
+    /// How many frames were begun and not yet taken.
+    fn frames_in_flight(&self) -> usize {
+        usize::from(self.in_flight())
+    }
+    /// How many frames [`Self::begin`] accepts before one is taken: more than one lets the host
+    /// record the next frame while the GPU draws the last.
+    fn max_frames_in_flight(&self) -> usize {
+        1
+    }
+    /// Takes the oldest frame [`Self::begin`] started once the GPU has finished it; `None` while
+    /// it is still drawing. Never waits for the GPU.
     fn finish(&mut self, _gpu: &mut GpuDevice) -> Result<Option<ExternalFrame>> {
         Ok(None)
     }
@@ -129,6 +139,15 @@ impl Presenter {
         }
         self.external = external;
         Ok(())
+    }
+
+    /// Whether presents show the external renderer's frame one behind (default off): the CPU
+    /// records frame N while the GPU draws frame N-1, so a present costs the longer of the two
+    /// instead of their sum, at the price of a frame of latency. It only takes effect with a
+    /// renderer that allows more than one frame in flight (`max_frames_in_flight`), and captures
+    /// always draw and read the frame they ask for.
+    pub fn set_external_pipelined(&mut self, on: bool) {
+        self.external_pipelined = on;
     }
 
     /// Name of the installed external renderer, if any.
@@ -178,20 +197,22 @@ impl Presenter {
             .gpu_mut();
         let render_started = Instant::now();
         let external = self.external.as_mut().context("external renderer")?;
-        let rendered = external.render(
-            gpu,
-            &ExternalView {
-                frame,
-                size,
-                look: &look,
-                environment: self.environment.as_ref(),
-                foliage_parts: &self.external_foliage,
-                terrain_materials: &self.external_terrain_materials,
-                debug_switches,
-                foliage_percent,
-                terrain_detail,
-            },
-        )?;
+        let view = ExternalView {
+            frame,
+            size,
+            look: &look,
+            environment: self.environment.as_ref(),
+            foliage_parts: &self.external_foliage,
+            terrain_materials: &self.external_terrain_materials,
+            debug_switches,
+            foliage_percent,
+            terrain_detail,
+        };
+        let rendered = if self.external_pipelined && external.max_frames_in_flight() > 1 {
+            render_one_behind(external.as_mut(), gpu, &view)?
+        } else {
+            external.render(gpu, &view)?
+        };
         let publication_ms =
             PresentationImage::publish(&mut self.published, gpu, rendered.image, size)?;
         let costs = GpuFrameCosts {
@@ -237,6 +258,21 @@ impl Presenter {
             "ARA_VIEW_MODE_UNAVAILABLE: the path-traced reference is unavailable: the {} renderer draws its own real-time image only",
             external.name()
         );
+        // A still shows the frame it asks for: frames in flight from pipelined presents go first.
+        while external.in_flight() {
+            let _ = external.finish(
+                self.device
+                    .as_mut()
+                    .context("presentation device")?
+                    .gpu_mut(),
+            )?;
+            std::thread::yield_now();
+        }
+        // The settle frames present one behind when pipelining is on (so a capture times the
+        // same loop the player runs); the last one is drawn and waited for, so the still is the
+        // frame asked for.
+        let pipelined = self.external_pipelined;
+        let external = self.external.as_mut().context("external renderer")?;
         external.cut();
         let frames = external.settle_frames().max(request.settle_frames);
         let name = external.name().to_owned();
@@ -245,14 +281,31 @@ impl Presenter {
         let mut walls = Vec::new();
         for index in 0..=frames {
             let started = Instant::now();
+            if index == frames && pipelined {
+                // Frames in flight go first, then the still's own frame is drawn blocking.
+                while self.external.as_ref().is_some_and(|e| e.in_flight()) {
+                    let gpu = self
+                        .device
+                        .as_mut()
+                        .context("presentation device")?
+                        .gpu_mut();
+                    if let Some(external) = self.external.as_mut() {
+                        let _ = external.finish(gpu)?;
+                    }
+                    std::thread::yield_now();
+                }
+                self.external_pipelined = false;
+            }
             self.present_external(frame, || match resolve.take() {
                 Some(resolve) => resolve(),
                 None => Ok(Content::default()),
             })?;
-            if index > frames / 2 {
+            // The still's own blocking frame is not a pipelined frame time.
+            if index > frames / 2 && !(pipelined && index == frames) {
                 walls.push(started.elapsed().as_secs_f64() * 1000.);
             }
         }
+        self.external_pipelined = pipelined;
         walls.sort_by(f64::total_cmp);
         // The capture's timings name what the external path measured: its own GPU
         // span for a settled frame, then wall medians (not device timestamps).
@@ -342,6 +395,34 @@ impl Presenter {
 
 /// The frame's GPU timings as pass records: the renderer's whole frame, then its named
 /// passes (entries with an empty name are unused).
+/// Begins `view` and takes the oldest frame, blocking for it: the frame begun on the previous
+/// call stays in flight (and so does this one), so the CPU records the next while the GPU draws
+/// the last. The first call begins a second frame of the same view to fill the pipeline.
+fn render_one_behind(
+    external: &mut dyn ExternalRenderer,
+    gpu: &mut GpuDevice,
+    view: &ExternalView<'_>,
+) -> Result<ExternalFrame> {
+    while external.frames_in_flight() >= external.max_frames_in_flight() {
+        if let Some(frame) = external.finish(gpu)? {
+            drop(frame);
+        }
+        std::thread::yield_now();
+    }
+    if !external.begin(gpu, view)? {
+        return external.render(gpu, view);
+    }
+    if external.frames_in_flight() < 2 {
+        external.begin(gpu, view)?;
+    }
+    loop {
+        if let Some(frame) = external.finish(gpu)? {
+            return Ok(frame);
+        }
+        std::thread::yield_now();
+    }
+}
+
 fn timings(frame_ms: f64, passes: &[(&'static str, f64); EXTERNAL_PASSES]) -> Vec<PassTiming> {
     let timing = |pass: &str, milliseconds: f64| PassTiming {
         pass: pass.into(),

@@ -475,6 +475,12 @@ impl SharedHandoff {
         self.copy_frame(engine.device(), engine.queue(), output)
     }
 
+    /// Whether the ring holds no published frame: nothing is in flight and every copy-out is
+    /// done, so [`Self::publish`] may run.
+    pub fn idle(&self) -> bool {
+        !self.in_flight && !self.colour_owed && !self.id_owed
+    }
+
     /// Whether this frame's id image is still owed to [`Self::deliver_id`].
     #[allow(dead_code)]
     pub fn id_pending(&self) -> bool {

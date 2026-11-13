@@ -54,8 +54,9 @@ pub(super) struct RenderlabScene {
     /// The engine's own packed ids (`ExternalFrame::id`), when it delivers them: a copy the
     /// compositor can sample while the next frame renders.
     published_ids: Option<PresentationImage>,
-    /// The frame submitted and not yet taken (`start`, `poll`).
-    flight: Option<Flight>,
+    /// The frames submitted and not yet taken, oldest first (`start`, `poll`): the engine records
+    /// the next while the GPU draws the last.
+    flights: std::collections::VecDeque<Flight>,
     /// The frame whose image is on screen.
     shown: Option<Shown>,
 }
@@ -76,14 +77,15 @@ impl RenderlabScene {
             published: None,
             ids: Ids::default(),
             published_ids: None,
-            flight: None,
+            flights: std::collections::VecDeque::new(),
             shown: None,
         })
     }
 
     /// Draws `frame` seen by `camera` at `size` and publishes the image once it is done. With an
     /// engine that splits a frame (everywhere but Apple) this only submits it: it returns at
-    /// once, and [`Self::poll`] takes the result; one frame is in flight at a time. `revision`
+    /// once, and [`Self::poll`] takes the result; the engine allows more than one frame in flight (see
+    /// [`Self::has_room`]). `revision`
     /// identifies the Scene's content: `resolve` (the environment map, foliage parts and terrain
     /// layer materials) runs only when it changes.
     #[allow(clippy::too_many_arguments)]
@@ -97,7 +99,10 @@ impl RenderlabScene {
         camera: crate::state::Camera,
         resolve: impl FnOnce() -> Result<Content>,
     ) -> Result<()> {
-        anyhow::ensure!(self.flight.is_none(), "a Scene frame is already in flight");
+        anyhow::ensure!(
+            self.has_room(size),
+            "no room for another Scene frame in flight"
+        );
         if self
             .content
             .as_ref()
@@ -124,7 +129,7 @@ impl RenderlabScene {
             entities: super::ids::entities(frame),
         };
         if self.engine.begin(gpu, &view)? {
-            self.flight = Some(flight);
+            self.flights.push_back(flight);
             return Ok(());
         }
         let rendered = self.engine.render(gpu, &view)?;
@@ -134,20 +139,30 @@ impl RenderlabScene {
     /// Takes the frame [`Self::start`] submitted once the GPU has finished it, and publishes its
     /// image and ids; whether one arrived. Never waits for the GPU.
     pub(super) fn poll(&mut self, gpu: &mut GpuDevice, size: [u32; 2]) -> Result<bool> {
-        if self.flight.is_none() {
-            return Ok(false);
+        let mut adopted = false;
+        while !self.flights.is_empty() {
+            let Some(rendered) = self.engine.finish(gpu)? else {
+                break;
+            };
+            let flight = self
+                .flights
+                .pop_front()
+                .context("a flight was checked above")?;
+            // A frame of the old size (the view was resized while it drew) is never shown: its
+            // image and ids belong to the old rectangle. The next frame carries the new size.
+            if flight.is_current(size) {
+                self.adopt(gpu, rendered, flight)?;
+                adopted = true;
+            }
         }
-        let Some(rendered) = self.engine.finish(gpu)? else {
-            return Ok(false);
-        };
-        let flight = self.flight.take().context("a flight was checked above")?;
-        // A frame of the old size (the view was resized while it drew) is never shown: its image
-        // and ids belong to the old rectangle. The next frame carries the new size.
-        if !flight.is_current(size) {
-            return Ok(false);
-        }
-        self.adopt(gpu, rendered, flight)?;
-        Ok(true)
+        Ok(adopted)
+    }
+
+    /// Whether [`Self::start`] may submit another frame at `size`: fewer than the engine allows
+    /// are in flight, all of them at this size (a resize waits for the old frames to be taken).
+    pub(super) fn has_room(&self, size: [u32; 2]) -> bool {
+        self.flights.len() < self.engine.max_frames_in_flight().max(1)
+            && self.flights.iter().all(|flight| flight.is_current(size))
     }
 
     /// The size of the frame on screen.
@@ -157,7 +172,7 @@ impl RenderlabScene {
 
     /// Whether a frame was submitted and not yet taken.
     pub(super) fn in_flight(&self) -> bool {
-        self.flight.is_some()
+        !self.flights.is_empty()
     }
 
     /// The camera the image on screen was drawn from: the overlays draw from it, so the grid,
