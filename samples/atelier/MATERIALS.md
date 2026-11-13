@@ -1,0 +1,62 @@
+# Atelier: what it asks the renderer to trace
+
+Every surface in `levels/atelier.scene` whose roughness is under 0.5, the value at which
+Renderlab stops tracing a glossy reflection (under 0.05 a one-ray mirror; between the two a
+lobe that, from Renderlab 99f5d395, fades out between 0.35 and 0.5). Read from the kit glTF the
+builder writes and from the third-party models as fetched, on Ara main `9a6541060`.
+
+## Set by a number
+
+| Surface | Roughness | Metalness | Rule |
+|---|---|---|---|
+| Chrome sphere on the plinth (0.33 m radius) | 0.03 | 1 | one-ray mirror |
+| Window glass (5.6 x 3.2 m pane) | 0.04 | 0 | alpha blend at 0.14 opacity, not transmission |
+| Clear glass (the objects on the table) | 0.04 | 0 | alpha blend at 0.16 opacity, not transmission |
+| Brushed brass (bowl, table lamp, small objects) | 0.28 | 1 | glossy lobe |
+| Walnut (table top, console) | 0.40 | 0 | glossy lobe, in the fade |
+| Blackened steel (table legs, picture frames, console legs) | 0.40 | 1 | glossy lobe, in the fade |
+| Black stone plinth | 0.40 | 0 | glossy lobe, in the fade |
+| Black steel (window frame and mullions, bench legs, lantern frame) | 0.42 | 1 | glossy lobe, in the fade |
+| Graphite leather (armchair) | 0.45 | 0 | glossy lobe, near the end of the fade |
+
+Not traced, at or above the cut-off: **the concrete floor (0.70)**, dark oak (0.50), teak
+(0.60), the warm bulbs and the lantern's glass (emitters, 0.60), plaster and render (0.88 to
+0.90), the rug, books and canvases (0.70 to 1.0), gravel, soil, weathered steel, and the
+mannequin's clay suit (a material graph: roughness 1, metalness 0).
+
+## Set by a texture
+
+Per texel from a metallic-roughness texture (factors 1.0), sampled at 256 x 256.
+
+| Surface | Mean | Lowest | Under 0.5 | Under 0.05 | Metal (mean) |
+|---|---|---|---|---|---|
+| Antique camera body | 0.18 | 0.00 | 99% | 18% | 0.18 |
+| Flight helmet lenses (transmission) | 0.24 | 0.10 | 100% | 0% | 0.00 |
+| Potted plant 02 leaves (alpha mask) | 0.39 | 0.30 | 98% | 0% | 0.00 |
+| Antique camera tripod | 0.40 | 0.00 | 93% | 1% | 0.40 |
+| Lantern brass, and its panes (alpha blend) | 0.36 | 0.07 | 85% | 0% | 0.63 |
+| Flight helmet glass and plastic | 0.43 | 0.05 | 67% | 0% | 0.00 |
+| Flight helmet leather | 0.49 | 0.24 | 64% | 0% | 0.00 |
+| Shrub 04 (alpha mask) | 0.46 | 0.28 | 62% | 0% | 0.00 |
+| Flight helmet hose, rubber and wood | 0.49 | 0.22 | 52% | 0% | 0.06 |
+| Radio transceiver (two materials) | 0.50 | 0.14 | 48 to 51% | 0% | 0.06 to 0.25 |
+| Flight helmet metal parts | 0.53 | 0.17 | 37% | 0% | 0.66 |
+| Potted plant 02 pot | 0.54 | 0.24 | 30% | 0% | 0.00 |
+| Potted plant 01 pot | 0.57 | 0.31 | 18% | 0% | 0.00 |
+| Courtyard stone (14 x 8.6 m paving) | 0.52 | 0.49 | 14% | 0% | 0.00 |
+| Potted plant 01 leaves (alpha mask) | 0.55 | 0.39 | 5% | 0% | 0.00 |
+| Fern 02 (alpha mask) | 0.94 | 0.44 | 0% | 0% | 0.00 |
+
+## What this means for a reflection test
+
+- **The floor is not a reflector.** It was polished concrete at roughness 0.36 until the look
+  pass of 13 November; at that value it washed out to near-white in shade whatever its colour
+  (FINDINGS 14), so it was authored honed at 0.70, which the renderer does not trace. The
+  room's largest surface therefore asks for no reflection. If Atelier is to be a reflection
+  test, the floor is the surface to bring back under 0.5 once that wash-out is understood;
+  at 0.36 it was a full glossy lobe on about a third of the still.
+- **The glass is a blended film.** The window pane and the glass on the table are alpha-blended
+  at roughness 0.04, not transmission glass with an index of refraction.
+- **What does reflect** is small on screen: the chrome sphere (a one-ray mirror), brass, the
+  steel frames and legs, the walnut table top and console, the plinth and the armchair, most
+  of them inside the fade.
