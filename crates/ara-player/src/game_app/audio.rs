@@ -14,6 +14,10 @@ pub(super) struct UiAudio {
 impl UiAudio {
     pub(super) fn open(bytes: &[u8]) -> Result<Option<Self>> {
         if bytes.is_empty() {
+            // Said once, so a log without an audio line is not mistaken for a missing device.
+            eprintln!(
+                "ara-player: audio (menu): not opened, the project has no UI click sound; the play device opens when a run starts"
+            );
             return Ok(None);
         }
         let Some(device) = crate::open_audio("menu") else {
