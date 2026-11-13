@@ -58,13 +58,42 @@ struct Target {
 /// would only add latency.
 const MAX_IN_FLIGHT: usize = 2;
 
+/// `RENDERLAB_SUBMIT_LOG` (the one Renderlab reads for its submit timings): `1` prints a line to
+/// stderr, any other value is a file lines are appended to. The bridge adds one line per frame
+/// taken: how long `begin` took, when the GPU's completion was first seen, the time in flight
+/// and the handoff's.
+fn log_line(line: impl FnOnce() -> String) {
+    static TARGET: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    let Some(target) = TARGET
+        .get_or_init(|| std::env::var("RENDERLAB_SUBMIT_LOG").ok().filter(|v| !v.is_empty()))
+        .as_deref()
+    else {
+        return;
+    };
+    let line = line();
+    if target == "1" {
+        eprintln!("{line}");
+    } else if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(target)
+    {
+        use std::io::Write;
+        let _ = writeln!(file, "{line}");
+    }
+}
+
 /// A frame begun and not yet taken.
 struct Pending {
     frame: renderlab::engine::FrameId,
     view: ViewId,
     since: Instant,
+    /// How long `begin` took to record and submit it.
+    begin_ms: f64,
     /// The engine reported it complete.
     done: bool,
+    /// Milliseconds from `since` to the poll that first saw it complete.
+    done_after_ms: Option<f64>,
     /// Shared handoff: the frame's copy into the shared slot is queued. The slot holds one frame
     /// at a time, so a frame begun while the last one is still undelivered is published once
     /// that one is delivered (`Bridge::finish`), before any later frame is recorded.
@@ -337,6 +366,7 @@ impl Bridge {
     /// CPU records the next while the GPU draws the last); it is an error to begin another
     /// before one is taken.
     pub fn begin(&mut self, gpu: &mut GpuDevice, view: &ExternalView<'_>) -> Result<()> {
+        let begin_started = Instant::now();
         anyhow::ensure!(
             self.pending.len() < self.in_flight_limit,
             "{} frames are in flight: finish one before beginning another",
@@ -522,7 +552,9 @@ impl Bridge {
             frame: rendered,
             view: view_id,
             since: Instant::now(),
+            begin_ms: begin_started.elapsed().as_secs_f64() * 1000.,
             done: false,
+            done_after_ms: None,
             published,
             readback,
         });
@@ -554,6 +586,7 @@ impl Bridge {
                 .any(|c| c.frame == Some(pending.frame))
             {
                 pending.done = true;
+                pending.done_after_ms = Some(pending.since.elapsed().as_secs_f64() * 1000.);
             }
         }
         Ok(events)
@@ -611,6 +644,16 @@ impl Bridge {
             upload(gpu, target, &rgba8)?
         };
         let handoff_ms = started.elapsed().as_secs_f64() * 1000.;
+        log_line(|| {
+            format!(
+                "bridge_log frame={} begin={:.2} done_after={} in_flight={:.2} handoff={handoff_ms:.2} still_pending={}",
+                taken.frame.0,
+                taken.begin_ms,
+                taken.done_after_ms.map_or("none".into(), |ms| format!("{ms:.2}")),
+                taken.since.elapsed().as_secs_f64() * 1000.,
+                self.pending.len(),
+            )
+        });
 
         Ok(Some(ExternalFrame {
             image,
