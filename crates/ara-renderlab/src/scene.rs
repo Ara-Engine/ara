@@ -132,6 +132,15 @@ pub(crate) struct Scene {
     meshes: HashMap<u64, (Shared<MeshId>, bool)>,
     materials: HashMap<u64, Shared<MaterialId>>,
     textures: HashMap<(u64, u8), TextureId>,
+    /// Textures uploaded as shipped (block-compressed), and those decoded to RGBA8 by the
+    /// reason the file could not go through as it is (`texture_report`).
+    compressed: u32,
+    decoded: std::collections::BTreeMap<texture::Fallback, u32>,
+    /// Time `texture` has spent turning cooked textures into uploads, on either path
+    /// (decode and mip chain, or passing the blocks through). Glow hosts are not timed.
+    upload_time: std::time::Duration,
+    /// The texture count `log_textures` last printed.
+    logged: u32,
     objects: HashMap<u64, Object>,
     /// Static batches by material key (`batch`).
     batches: HashMap<u64, Batch>,
@@ -691,6 +700,7 @@ impl Scene {
             self.remove(engine, entity)?;
         }
         self.sync_batches(engine, merged, gaps)?;
+        self.log_textures();
         self.tag(engine, frame)
     }
 
@@ -1259,6 +1269,11 @@ impl Scene {
                     let glow = (decoded.size, decoded.rgba.as_slice());
                     let packed = texture::with_glow(host, glow, role, channels)?;
                     slot.insert(engine.create_texture(packed)?);
+                    // A glow host is rewritten here, so it cannot go through as shipped.
+                    *self
+                        .decoded
+                        .entry("an emissive map is packed into its spare channels")
+                        .or_default() += 1;
                 }
             }
         }
@@ -1290,9 +1305,78 @@ impl Scene {
         if let Some(id) = self.textures.get(&key) {
             return Ok(*id);
         }
-        let id = engine.create_texture(texture::prepare(&texture.ktx2, role)?)?;
+        let started = std::time::Instant::now();
+        let id = match self.as_shipped(engine, texture, role)? {
+            Some(id) => id,
+            None => engine.create_texture(texture::prepare(&texture.ktx2, role)?)?,
+        };
+        self.upload_time += started.elapsed();
         self.textures.insert(key, id);
         Ok(id)
+    }
+
+    /// Uploads the cooked texture's own blocks and levels, with no CPU decode and no mip
+    /// regeneration, where that is possible; `None` sends the caller down the RGBA8 path
+    /// and counts the reason.
+    fn as_shipped(
+        &mut self,
+        engine: &mut Engine,
+        texture: &ModelTexture,
+        role: TextureRole,
+    ) -> Result<Option<TextureId>> {
+        let mut decode = |reason: texture::Fallback| {
+            *self.decoded.entry(reason).or_default() += 1;
+            Ok(None)
+        };
+        if texture::rgba8_only() {
+            return decode("ARA_RENDERLAB_RGBA8_TEXTURES is set");
+        }
+        // A BC5 normal map goes through like the rest: Renderlab rebuilds z in the shader
+        // and builds the variance its specular filter reads from the blocks itself.
+        let data = match texture::compressed(&texture.ktx2, role)? {
+            Ok(data) => data,
+            Err(reason) => return decode(reason),
+        };
+        if !engine.compressed_textures() {
+            return decode("the device does not sample BC textures");
+        }
+        self.compressed += 1;
+        Ok(Some(engine.create_compressed_texture(data)?))
+    }
+
+    /// With `ARA_RENDERLAB_TEXTURE_LOG=1`, prints `texture_report` to stderr whenever the
+    /// counts changed since it last did: one line once a scene has loaded.
+    fn log_textures(&mut self) {
+        static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        let on = *ON.get_or_init(|| {
+            std::env::var_os("ARA_RENDERLAB_TEXTURE_LOG").is_some_and(|v| v == "1")
+        });
+        let total = self.compressed + self.decoded.values().sum::<u32>();
+        if on && total != self.logged {
+            self.logged = total;
+            eprintln!("Ara presentation: {}", self.texture_report());
+        }
+    }
+
+    /// How this scene's textures were uploaded so far: the count as shipped, each reason
+    /// a texture was decoded to RGBA8 with its count, and the time both took.
+    fn texture_report(&self) -> String {
+        let decoded: Vec<String> = self
+            .decoded
+            .iter()
+            .map(|(reason, count)| format!("{count} decoded ({reason})"))
+            .collect();
+        format!(
+            "{} textures uploaded as shipped (BC blocks, the file's own mips); {}; {:.2} s \
+             preparing and uploading them on the render thread",
+            self.compressed,
+            if decoded.is_empty() {
+                "none decoded".to_owned()
+            } else {
+                decoded.join(", ")
+            },
+            self.upload_time.as_secs_f64()
+        )
     }
 }
 
