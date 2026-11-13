@@ -142,7 +142,15 @@ impl SceneView {
         if self.renderlab_error.is_some() {
             return Ok(());
         }
-        self.render_scene_frame(device, editor, view)
+        self.prepare_scene_frame(device, editor, view)
+    }
+    /// The Scene pass's second half, after the studio composited what the first left on screen
+    /// (`scene_frame`).
+    pub fn start(&mut self, device: &mut SceneDevice, editor: &Editor) -> ara_ui::Result<()> {
+        if self.renderlab_error.is_some() {
+            return Ok(());
+        }
+        self.start_scene_frame(device, editor)
     }
     /// Whether the next pass has work: a frame being extracted, or Renderlab still settling.
     pub fn needs_frame(&self) -> bool {

@@ -49,22 +49,46 @@ impl IdTarget {
             .context("Renderlab could not write the id image")
     }
 
-    /// The texture's texels, rows top first with no padding, after the frame's work:
-    /// waits for the copy.
-    pub fn read(&self, engine: &Engine) -> Result<Vec<u8>> {
-        let (device, queue) = (engine.device(), engine.queue());
-        let [width, height] = self.size;
+    /// Queues the copy of the texture's texels (behind the frame just rendered) for
+    /// [`Readback::take`].
+    pub fn queue_read(&self, engine: &Engine) -> Readback {
+        Readback::queue(engine.device(), engine.queue(), &self.texture, self.size)
+    }
+}
+
+/// A 4-byte-per-texel texture copied into a mappable buffer at the time it was queued, so the
+/// texels are those of the frame the copy followed even when later frames have been recorded
+/// since. [`Self::take`] waits only for the copy, which rode behind a frame already finished.
+pub(crate) struct Readback {
+    buffer: wgpu::Buffer,
+    size: [u32; 2],
+    stride: usize,
+    mapped: std::sync::mpsc::Receiver<std::result::Result<(), wgpu::BufferAsyncError>>,
+}
+
+/// Longest a readback is polled for before it is reported lost.
+const READBACK_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+
+impl Readback {
+    /// Records the copy of `texture` (of `size`) into a new buffer and submits it.
+    pub fn queue(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        texture: &wgpu::Texture,
+        size: [u32; 2],
+    ) -> Self {
+        let [width, height] = size;
         let row = width as usize * 4;
         let stride = row.next_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize);
         let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Scene id readback"),
+            label: Some("Scene readback"),
             size: (stride * height as usize) as u64,
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
         encoder.copy_texture_to_buffer(
-            self.texture.as_image_copy(),
+            texture.as_image_copy(),
             wgpu::TexelCopyBufferInfo {
                 buffer: &buffer,
                 layout: wgpu::TexelCopyBufferLayout {
@@ -80,30 +104,53 @@ impl IdTarget {
             },
         );
         queue.submit([encoder.finish()]);
-        let (sender, receiver) = std::sync::mpsc::channel();
+        let (sender, mapped) = std::sync::mpsc::channel();
         buffer
             .slice(..)
             .map_async(wgpu::MapMode::Read, move |result| {
-                // The receiver outlives the wait below.
+                // The receiver lives as long as the readback.
                 let _ = sender.send(result);
             });
-        device
-            .poll(wgpu::PollType::wait_indefinitely())
-            .map_err(|error| anyhow::anyhow!("waiting for the id readback: {error:?}"))?;
-        receiver
-            .recv()
-            .context("the id readback never reported")?
-            .context("mapping the id readback")?;
-        let mapped = buffer
+        Self {
+            buffer,
+            size,
+            stride,
+            mapped,
+        }
+    }
+
+    /// The texels, rows top first with no padding, once the copy is done (waiting for it).
+    pub fn take(self, device: &wgpu::Device) -> Result<Vec<u8>> {
+        // The common case: the frame finished, so the copy behind it has too. Otherwise poll
+        // without waiting: a wait on the device would also wait for the frame recorded after
+        // this one (and hold wgpu's device lock the render thread's submit needs).
+        let started = std::time::Instant::now();
+        let reported = loop {
+            device
+                .poll(wgpu::PollType::Poll)
+                .map_err(|error| anyhow::anyhow!("polling the readback: {error:?}"))?;
+            match self.mapped.try_recv() {
+                Ok(reported) => break reported,
+                Err(_) if started.elapsed() > READBACK_WAIT => {
+                    anyhow::bail!("the readback never reported")
+                }
+                Err(_) => std::thread::yield_now(),
+            }
+        };
+        reported.context("mapping the readback")?;
+        let [_, height] = self.size;
+        let row = self.size[0] as usize * 4;
+        let mapped = self
+            .buffer
             .slice(..)
             .get_mapped_range()
-            .context("reading the id readback")?;
+            .context("reading the readback")?;
         let mut texels = Vec::with_capacity(row * height as usize);
-        for padded in mapped.chunks_exact(stride) {
+        for padded in mapped.chunks_exact(self.stride) {
             texels.extend_from_slice(&padded[..row]);
         }
         drop(mapped);
-        buffer.unmap();
+        self.buffer.unmap();
         Ok(texels)
     }
 }

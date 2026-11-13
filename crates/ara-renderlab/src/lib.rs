@@ -81,6 +81,13 @@ pub struct Options {
     /// Roughness at which Renderlab stops tracing reflections; `None` keeps its own
     /// default (0.5); 0.05 traces mirrors only (an A/B switch for the glossy band's cost).
     pub max_reflection_roughness: Option<f32>,
+    /// Frames the host lets Renderlab keep in flight (1, the default, or 2): with two, the CPU
+    /// records the next frame while the GPU draws the last, so a frame costs the longer of the two
+    /// instead of their sum, at the price of a frame of latency; the handoff of each frame is
+    /// queued when it is recorded. Only a host that begins frames without waiting (the editor's
+    /// Scene view) uses more than one. The environment variable `ARA_RENDERLAB_FRAMES_IN_FLIGHT`
+    /// overrides it.
+    pub frames_in_flight: usize,
     /// Hand frames to the presenter by CPU copy even where the two devices could
     /// share images (A/B measurements; the automatic fallback needs no flag).
     pub cpu_copy_handoff: bool,
@@ -166,6 +173,16 @@ impl ExternalRenderer for Renderlab {
     #[cfg(not(target_vendor = "apple"))]
     fn in_flight(&self) -> bool {
         self.bridge.in_flight()
+    }
+
+    #[cfg(not(target_vendor = "apple"))]
+    fn frames_in_flight(&self) -> usize {
+        self.bridge.frames_in_flight()
+    }
+
+    #[cfg(not(target_vendor = "apple"))]
+    fn max_frames_in_flight(&self) -> usize {
+        self.bridge.max_frames_in_flight()
     }
 
     #[cfg(not(target_vendor = "apple"))]
