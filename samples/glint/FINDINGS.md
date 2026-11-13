@@ -177,6 +177,14 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
     identity`, which names the fix. *Engine:* Ara #164 returns the project's error alone and
     adds an `Ara C# tools` check to `ara doctor`.
 
+28. **The player says nothing about audio.** *Wanted:* to confirm sound on Windows from a log.
+    *Happened:* on success the player printed nothing, and the `--game` shell printed nothing
+    on failure either, so a run with sound and a run without looked the same. **Engine PR:
+    #166** (one start-up line naming the device, driver and format, or the reason there is
+    none). The mixer can be checked without a device: `ara-samples glint-replay --audio <wav>`
+    renders three seconds at the end of the run and fails on silence (master bus peak
+    -13.1 dBFS on the Mac). The one-shot sounds are still unverified (item 10).
+
 ## Where the engine was bypassed
 
 - **Geometry** is written as glTF by the sample builder's `Kit` (boxes, cylinders, spheres),

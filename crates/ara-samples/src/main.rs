@@ -152,6 +152,10 @@ enum Command {
         /// Write the file's stills (the `captures` it lists, by tick) into this directory.
         #[arg(long)]
         captures: Option<PathBuf>,
+        /// Render three seconds of the world's sound at the end of the run into this WAV and
+        /// fail if the master bus is silent (the mixer's check; it opens no audio device).
+        #[arg(long)]
+        audio: Option<PathBuf>,
     },
     /// Open a scene in `ara-editor`, frame it over the Engine Protocol and capture.
     Editor {
@@ -323,6 +327,7 @@ fn main() -> Result<()> {
             file,
             record,
             captures,
+            audio,
         } => {
             let root = samples.join("glint");
             let file = file.unwrap_or_else(|| root.join("replay/skyward.json"));
@@ -331,6 +336,7 @@ fn main() -> Result<()> {
                 file: &file,
                 record,
                 captures,
+                audio,
             })?;
         }
         Command::Play {

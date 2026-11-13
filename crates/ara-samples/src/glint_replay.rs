@@ -90,6 +90,37 @@ pub struct Request<'a> {
     pub record: bool,
     /// Where stills go (the file's `captures`), if anywhere.
     pub captures: Option<PathBuf>,
+    /// A WAV to render the end of the run's sound into, checked for a signal.
+    pub audio: Option<PathBuf>,
+}
+
+/// Renders three seconds of the world's sound offline (no device) into `path` and returns the
+/// master bus's peak and RMS in dBFS, or an error if the mixer produced silence.
+fn sound(mcp: &mut Mcp, world: &Value, path: &Path) -> Result<(f64, f64)> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    mcp.play(
+        "captureAudio",
+        json!({"world": world, "path": path.to_string_lossy(), "seconds": 3.0}),
+    )?;
+    // The analysis is written beside the WAV as `<name>.audio.json`.
+    let analysis = path.with_extension("audio.json");
+    let report: Value = serde_json::from_str(
+        &std::fs::read_to_string(&analysis)
+            .with_context(|| format!("reading {}", analysis.display()))?,
+    )?;
+    let master = report["buses"]
+        .as_array()
+        .and_then(|buses| buses.iter().find(|bus| bus["name"] == "master"))
+        .context("the audio analysis has no master bus")?;
+    match (master["peakDbfs"].as_f64(), master["rmsDbfs"].as_f64()) {
+        (Some(peak), Some(rms)) => Ok((peak, rms)),
+        _ => bail!(
+            "the mixer rendered silence: the master bus has no signal in {}",
+            path.display()
+        ),
+    }
 }
 
 /// Runs the replay, prints the finish time and either checks or records `expect`.
@@ -133,6 +164,13 @@ pub fn run(request: &Request<'_>) -> Result<()> {
     run.advance(replay.end_tick)?;
     let outcome = run.finish.context("the replay never reached the goal")?;
     let (hash, here) = (run.hash.clone(), platform());
+    if let Some(path) = &request.audio {
+        let (peak, rms) = sound(run.mcp, &run.world, path)?;
+        println!(
+            "sound: 3 s rendered to {}, master bus peak {peak:.1} dBFS, rms {rms:.1} dBFS",
+            path.display()
+        );
+    }
     let seconds = outcome.finish_ticks as f64 / 60.0;
     run.mcp.play("stop", json!({"world": run.world}))?;
     println!(
