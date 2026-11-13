@@ -167,6 +167,22 @@ fn default_gpu_cache() -> PathBuf {
 /// a DSP quantum with headroom for a slow frame.
 const AUDIO_WATERMARK: usize = 2048;
 
+/// Opens the default audio output for `what` ("play", "menu") and says so on stderr: the
+/// device, its driver and format on success, the reason on failure. A player without a
+/// device runs silent, so the line is the only way to tell the two apart from a log.
+fn open_audio(what: &str) -> Option<ara_audio::device::SdlBackend> {
+    match ara_audio::device::SdlBackend::open(48_000) {
+        Ok(device) => {
+            eprintln!("ara-player: audio ({what}): {}", device.summary());
+            Some(device)
+        }
+        Err(error) => {
+            eprintln!("ara-player: no audio ({what}): {error}");
+            None
+        }
+    }
+}
+
 /// JSON-RPC error codes used by the player.
 const ENGINE_ERROR: i64 = -32000;
 const INVALID_PARAMS: i64 = -32602;
@@ -1208,12 +1224,11 @@ impl Player {
         if presenting {
             // Live sound for windowed and embedded play; a missing device leaves play
             // silent.
-            let device = ara_audio::device::SdlBackend::open(48_000)
-                .map_err(anyhow::Error::from)
-                .and_then(|device| Ok((world.audio_presenter()?, device)));
-            match device {
-                Ok(audio) => self.audio = Some(audio),
-                Err(error) => eprintln!("ara-player: no audio: {error:#}"),
+            if let Some(device) = open_audio("play") {
+                match world.audio_presenter() {
+                    Ok(presenter) => self.audio = Some((presenter, device)),
+                    Err(error) => eprintln!("ara-player: no audio (play): {error:#}"),
+                }
             }
         }
         world.sync_graphics(self.presenter.as_mut(), self.window.as_mut())?;
