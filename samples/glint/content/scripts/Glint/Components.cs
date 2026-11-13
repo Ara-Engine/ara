@@ -2,16 +2,6 @@
 
 namespace Glint;
 
-/// <summary>A walkable top face: an oriented box. Its centre and orientation are the entity's
-/// <c>Transform</c> (Euler angles, applied as Rx * Ry * Rz); scripts have no contact queries, so
-/// the ball asks this instead of the physics engine.</summary>
-[Component]
-public partial struct Surface
-{
-    /// <summary>Half extents of the box in metres.</summary>
-    [Unit(Units.Meters)] public Vector3 Half;
-}
-
 /// <summary>A platform that slides back and forth along a straight path on the tick clock.</summary>
 [Component]
 public partial struct Mover
