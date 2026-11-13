@@ -193,6 +193,143 @@ pub fn id_for_body(world: &World, body: BodyHandle) -> Option<u64> {
         .find_map(|(&id, b)| (b.body() == Some(body)).then_some(id))
 }
 
+/// The first solid surface along a ray (sensors excluded) and the entity that owns it, from
+/// the bodies as physics last left them. `ignore` leaves one entity's own body out.
+///
+/// For gameplay code that runs inside an exclusive phase and holds only a world cell.
+///
+/// # Safety
+/// Nothing may mutate the physics world, this seam's bindings or any `PhysicsId` while this
+/// runs: call it from an exclusive gameplay phase, never beside the physics boundary.
+pub unsafe fn ray_entity<B: PhysicsBackend>(
+    world: bevy_ecs::world::unsafe_world_cell::UnsafeWorldCell<'_>,
+    origin: [f32; 3],
+    displacement: [f32; 3],
+    ignore: Option<Entity>,
+) -> Result<Option<(Entity, crate::QueryHit)>> {
+    // SAFETY: the caller rules out concurrent mutation of these resources and of `PhysicsId`.
+    let (physics, runtime) = unsafe {
+        let (Some(physics), Some(runtime)) = (
+            world.get_resource::<PhysicsWorld<B>>(),
+            world.get_resource::<Runtime>(),
+        ) else {
+            return Ok(None);
+        };
+        (physics, runtime)
+    };
+    let own = ignore.and_then(|entity| {
+        // SAFETY: as above; `PhysicsId` is only read.
+        let id = unsafe { world.get_entity(entity).ok()?.get::<PhysicsId>() }?;
+        runtime.bindings.get(&id.value)?.body()
+    });
+    let hit = physics.query_first(crate::Query::Ray {
+        origin,
+        displacement,
+        filter: crate::QueryFilter {
+            sensors: false,
+            ignore: own,
+            ..Default::default()
+        },
+    })?;
+    // `rows` is sorted by `PhysicsId`, which is the body's user data.
+    Ok(hit.and_then(|hit| {
+        let row = runtime
+            .rows
+            .binary_search_by_key(&hit.user_data, |r| r.0)
+            .ok()?;
+        Some((runtime.rows[row].1, hit))
+    }))
+}
+
+/// One contact of an entity's body or character in the last completed tick.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct EntityContact {
+    /// The entity touched; `None` once it has been removed (a stopped contact).
+    pub other: Option<Entity>,
+    /// World-space contact point.
+    pub point: [f32; 3],
+    /// Normal out of the other surface, towards the entity asked about.
+    pub normal: [f32; 3],
+    /// Started, persisted or stopped this tick.
+    pub phase: crate::ContactPhase,
+    /// The other collider is a trigger: there was no collision response.
+    pub sensor: bool,
+}
+
+/// Appends the contacts `entity` took part in during the last completed tick, in the events'
+/// own deterministic order: solid contacts, then triggers, then character contacts.
+///
+/// # Safety
+/// As [`ray_entity`]: call it from an exclusive gameplay phase, never beside the physics
+/// boundary.
+pub unsafe fn contacts_of<B: PhysicsBackend>(
+    world: bevy_ecs::world::unsafe_world_cell::UnsafeWorldCell<'_>,
+    entity: Entity,
+    out: &mut Vec<EntityContact>,
+) {
+    // SAFETY: the caller rules out concurrent mutation of these resources and of `PhysicsId`.
+    let found = unsafe {
+        (
+            world.get_resource::<PhysicsWorld<B>>(),
+            world.get_resource::<Runtime>(),
+            world
+                .get_entity(entity)
+                .ok()
+                .and_then(|e| e.get::<PhysicsId>()),
+        )
+    };
+    let (Some(physics), Some(runtime), Some(id)) = found else {
+        return;
+    };
+    let id = id.value;
+    let entity_of = |id: u64| {
+        let row = runtime.rows.binary_search_by_key(&id, |r| r.0).ok()?;
+        Some(runtime.rows[row].1)
+    };
+    let events = physics.events();
+    let pairs = events
+        .contacts
+        .iter()
+        .map(|contact| (contact, false))
+        .chain(
+            events
+                .triggers
+                .iter()
+                .map(|trigger| (&trigger.contact, true)),
+        );
+    for (contact, sensor) in pairs {
+        // The event's normal runs from A towards B.
+        let (other, sign) = if contact.user_data_a == id {
+            (contact.user_data_b, -1.0)
+        } else if contact.user_data_b == id {
+            (contact.user_data_a, 1.0)
+        } else {
+            continue;
+        };
+        out.push(EntityContact {
+            other: entity_of(other),
+            point: contact.point,
+            normal: contact.normal.map(|n| n * sign),
+            phase: contact.phase,
+            sensor,
+        });
+    }
+    for contact in events
+        .character_contacts
+        .iter()
+        .filter(|c| c.user_data == id)
+    {
+        out.push(EntityContact {
+            other: entity_of(contact.other_user_data),
+            point: contact.point,
+            // Reported from the character towards the other actor.
+            normal: contact.normal.map(|n| -n),
+            phase: contact.phase,
+            sensor: contact.sensor,
+        });
+    }
+}
+
 /// Extracts lifecycle/configuration changes without advancing a tick or consuming input.
 /// Use this after scene projection and before the initial tick-zero simulation snapshot.
 pub fn prepare_ecs<B: PhysicsBackend>(world: &mut World) -> Result<()> {

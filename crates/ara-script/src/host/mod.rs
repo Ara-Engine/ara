@@ -53,6 +53,66 @@ pub struct ScriptInputs {
 #[derive(Resource, Default)]
 pub struct ScriptNavigation(pub Vec<(u64, Option<[f32; 3]>)>);
 
+/// What a ray cast from C# found: the entity, the point and outward normal in world space,
+/// and the distance along the ray as a fraction of its length.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ScriptRayHit {
+    /// The entity that owns the surface (`Entity::to_bits`).
+    pub entity: u64,
+    /// World-space contact point.
+    pub point: [f32; 3],
+    /// Outward surface normal.
+    pub normal: [f32; 3],
+    /// How far along the ray the hit is, 0 to 1.
+    pub fraction: f32,
+}
+
+/// The scene ray query exclusive C# gameplay may ask (`Physics.Raycast`), supplied by the
+/// embedding runtime, which knows the physics backend: origin, full displacement and an
+/// entity whose own body is left out. Absent, every ray misses.
+///
+/// The function is called with the world cell of the running exclusive phase and may only
+/// read through it.
+#[derive(Resource, Clone, Copy)]
+pub struct ScriptRays(pub RayQuery);
+
+/// A scene ray query: the running phase's world cell, the ray's origin and full displacement,
+/// and an entity whose own body is left out.
+pub type RayQuery = unsafe fn(
+    bevy_ecs::world::unsafe_world_cell::UnsafeWorldCell<'_>,
+    [f32; 3],
+    [f32; 3],
+    Option<Entity>,
+) -> Option<ScriptRayHit>;
+
+/// One contact of an entity this tick, as C# sees it (`Physics.Contacts`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ScriptContact {
+    /// The entity touched (`Entity::to_bits`), or zero once it has been removed.
+    pub other: u64,
+    /// World-space contact point.
+    pub point: [f32; 3],
+    /// Normal out of the other surface, towards the entity asked about.
+    pub normal: [f32; 3],
+    /// 0 started, 1 persisted, 2 stopped.
+    pub phase: u32,
+    /// The other collider is a trigger.
+    pub sensor: bool,
+}
+
+/// The contacts an entity took part in during the last completed physics tick, supplied by
+/// the embedding runtime like [`ScriptRays`]. Absent, nothing touches anything.
+#[derive(Resource, Clone, Copy)]
+pub struct ScriptContacts(pub ContactQuery);
+
+/// A contact query: the running phase's world cell, the entity asked about and the list to
+/// append its contacts to, in physics' own deterministic order.
+pub type ContactQuery = unsafe fn(
+    bevy_ecs::world::unsafe_world_cell::UnsafeWorldCell<'_>,
+    Entity,
+    &mut Vec<ScriptContact>,
+);
+
 /// Per-tick native controls emitted by exclusive C# gameplay, drained before physics/animation.
 #[derive(Resource, Default)]
 pub struct ScriptControls {
