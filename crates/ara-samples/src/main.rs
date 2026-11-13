@@ -152,6 +152,18 @@ enum Command {
         /// Write the file's stills (the `captures` it lists, by tick) into this directory.
         #[arg(long)]
         captures: Option<PathBuf>,
+        /// With `--captures`: play this many live frames at each still (1 to 600, no history
+        /// cut after the first), so the capture's timings are steady state. The last live
+        /// frame is written as `<name>.live.png`.
+        #[arg(long)]
+        hold: Option<u32>,
+        /// With `--hold`: move the camera this many metres along its heading over those
+        /// frames, written as a clip in `<name>.video/` instead of a still.
+        #[arg(long)]
+        travel: Option<f32>,
+        /// Capture size as `WIDTHxHEIGHT` (default `1280x720`).
+        #[arg(long)]
+        size: Option<String>,
         /// Render three seconds of the world's sound at the end of the run into this WAV and
         /// fail if the master bus is silent (the mixer's check; it opens no audio device).
         #[arg(long)]
@@ -327,6 +339,9 @@ fn main() -> Result<()> {
             file,
             record,
             captures,
+            hold,
+            travel,
+            size,
             audio,
         } => {
             let root = samples.join("glint");
@@ -336,6 +351,15 @@ fn main() -> Result<()> {
                 file: &file,
                 record,
                 captures,
+                hold,
+                travel,
+                size: match size.as_deref() {
+                    Some(text) => text
+                        .split_once('x')
+                        .and_then(|(w, h)| Some([w.parse().ok()?, h.parse().ok()?]))
+                        .ok_or_else(|| anyhow::anyhow!("--size is WIDTHxHEIGHT, got {text}"))?,
+                    None => [1280, 720],
+                },
                 audio,
             })?;
         }
