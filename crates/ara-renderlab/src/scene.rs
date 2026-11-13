@@ -305,6 +305,17 @@ fn emissive_source() -> Option<String> {
                     RETURN,
                     "    return min(exposed+exposed_product(s.glow,vec3<f32>(1.0)),vec3<f32>(65504.0));",
                 )
+                // Renderlab's material pass (RENDERLAB_MATERIAL_PASS): the glow travels in
+                // the material record's emission. Where the standard program has no record
+                // mapping these find nothing and change nothing.
+                .replace(
+                    "s.n,s.base,s.alpha,s.metal,s.rough,vec3<f32>(0.0),",
+                    "s.n,s.base,s.alpha,s.metal,s.rough,s.glow,",
+                )
+                .replace(
+                    "    s.alpha=m.alpha;\n    return s;",
+                    "    s.alpha=m.alpha;\n    s.glow=m.emission;\n    return s;",
+                )
         )
     })
 }
