@@ -47,6 +47,8 @@ ara-samples build glint                                 # re-author everything f
 ara-samples glint-replay                                # replay the recorded run, check the result
 ara-samples glint-replay --captures target/glint-shots  # also write the stills listed in the replay
 ara-samples glint-replay --audio target/glint-sound/end.wav  # also render 3 s of the run's sound; fails if the mixer is silent
+ara-samples glint-replay --captures <dir> --hold 300         # 300 live frames at each still: steady-state timings, `<name>.live.png`
+ara-samples glint-replay --captures <dir> --hold 300 --travel 20 --size 1920x1080  # a 300-frame clip at each, moving 20 m along the camera's heading
 python3 samples/glint/replay/autopilot.py --ara <ara>   # play the course again and rewrite the replay (`python` on Windows)
 ```
 
@@ -87,6 +89,16 @@ Physical units, one fixed exposure, no auto-exposure. The same numbers are in
 | Checkpoint lights (3) | point, 90,000 lm, radius 0.3 m, range 16 m, coral |
 | Goal light | point, 160,000 lm, radius 0.8 m, range 40 m |
 | Emissive | chevrons 45,000 cd/m2, rings, arches, cannon and platforms 50,000, goal 70,000, orbs 90,000 (a sunlit deck is about 7,000) |
+
+Deck design: every deck has a darker running lane (0.25, 0.29, 0.38) between coral pinstripes
+and panel seams every 4 m, and every straight deck opens with a navy band from kerb to kerb.
+Each section has its own block: the fast ones (descent, run-up, kicker) wear coral kerbs and
+the kicker's lip is banded; the climbs are stepped with a dark band every 2 m; the spinner
+deck is dark from kerb to kerb with each bar's sweep painted as a disc in a coral ring; the
+sliders are navy; the launch deck has a chequered start line. What
+holds the course up and the far islands are slate (0.2, 0.235, 0.3), the second material
+family against the pale cloud; a lit ring 56 m across stands behind the goal as the thing to
+aim at from the start. Before and after: `preview/r7/`.
 
 Surfaces: stone (0.68, 0.67, 0.64) at roughness 0.75 and white paint at 0.5 are matte; the
 polish is deliberate and limited to the navy inlay down each deck (roughness 0.06), a disc on
@@ -187,9 +199,8 @@ warm-up (GPU ms, pipelined present off):
 
 So at that view the untraced path costs 1.5 to 1.8 times the traced one in steady play. The
 other replay views are not measured yet: until Ara #168 a running world could only be captured
-as a still, and a still is taken right after a history cut (`ara-samples glint-replay
---captures <dir> --hold 300`, with `--travel 20` for a moving clip, does every view once #168
-is in; it is on the branch `t3/sample-glint-hold`). After a cut the untraced path runs about
+as a still, and a still is taken right after a history cut. `ara-samples glint-replay
+--captures <dir> --hold 300`, with `--travel 20` for a moving clip, now does every view. After a cut the untraced path runs about
 50 slow frames while its GI cache gathers; what that means for this game is FINDINGS 29.
 
 ## Files
