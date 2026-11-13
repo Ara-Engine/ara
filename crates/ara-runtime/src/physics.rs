@@ -90,6 +90,23 @@ fn build(world: &mut World, config: &PhysicsConfig) -> Result<()> {
     Ok(())
 }
 
+/// The first solid surface along a ray and the entity that owns it, for gameplay that runs
+/// inside an exclusive phase (C# `Physics.Raycast`). A world without physics has no hits.
+///
+/// # Safety
+/// As [`ara_physics::ray_entity`]: nothing may mutate physics while this runs.
+pub unsafe fn ray(
+    world: bevy_ecs::world::unsafe_world_cell::UnsafeWorldCell<'_>,
+    origin: [f32; 3],
+    displacement: [f32; 3],
+    ignore: Option<Entity>,
+) -> Option<(Entity, ara_physics::QueryHit)> {
+    // SAFETY: forwarded from the caller.
+    unsafe { ara_physics::ray_entity::<JoltBackend>(world, origin, displacement, ignore) }
+        .ok()
+        .flatten()
+}
+
 /// Drops the native world and every physics infrastructure resource.
 fn teardown(world: &mut World) {
     for ty in ara_physics::infrastructure_type_ids::<JoltBackend>() {
