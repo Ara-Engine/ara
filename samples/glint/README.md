@@ -6,7 +6,8 @@ high above a cloud deck, in low warm sun. Steer a chrome ball with momentum; a g
 50 to 90 seconds.
 
 The course, in order: a wide straight (teaches steering), a gap (the first jump), a descent and
-a kicker that throws the ball over a second gap, a climb, a split (a narrow beam paved with
+a kicker that throws the ball over a second gap onto a glass bridge (the cloud shows through
+it), a climb, a split (a narrow beam paved with
 orbs, or a wide detour), a banked turn that descends, two sliding platforms that hand over
 to each other, three spinner bars to jump, a ramp up the cannon tower, and the cannon: it
 draws the ball in, winds up and fires it 80 m through two rings onto the goal plaza. The goal's
@@ -79,8 +80,8 @@ Physical units, one fixed exposure, no auto-exposure. The same numbers are in
 
 Surfaces: stone (0.68, 0.67, 0.64) at roughness 0.75 and white paint at 0.5 are matte; the
 polish is deliberate and limited to the navy inlay down each deck (roughness 0.06), a disc on
-each pad and the goal's floor; chrome on posts and the ball; the rails are transmission glass
-(IOR 1.5). One accent colour: coral (1.0, 0.33, 0.12).
+each pad and the goal's floor; chrome on posts, the ball, the cannon's barrel and the goal portal's casing; the rails and
+the bridge's slab are transmission glass (IOR 1.5). Small lit studs run along every kerb. One accent colour: coral (1.0, 0.33, 0.12).
 
 ## The deterministic replay
 
@@ -122,17 +123,21 @@ What could break it:
 
 ## Cost (M5 Pro, 1280 x 720, Renderlab traced path; the Mac loaded by other work)
 
-From this branch's captures with binaries built from Ara main `5b1f8807b` (Renderlab 360a0179), on a Mac busy with other work, so treat them as relative; the
-Mac GPU thread measures the branch head separately.
+Binaries built from Ara main `5addb1cd2` (pipelined present on). Each view captured three
+times, interleaved with the others; the three runs agree within 0.3 ms and the median is
+given. The Mac GPU thread measures the branch head separately.
 
-| View | GPU ms | Shading | Indirect cache |
-|---|---|---|---|
-| Start (follow camera) | 24.0 | 15.2 | 1.7 |
-| Overview | 16.2 | 10.2 | 1.6 |
-| Turn | 20.8 | 13.8 | 1.7 |
-| Sliders | 22.3 | 14.9 | 1.7 |
-| Cannon | 16.6 | 10.1 | 1.4 |
-| Goal | 18.4 | 11.6 | 1.5 |
+| View | GPU ms | Shading | Indirect cache | Before the glass bridge, studs and chrome |
+|---|---|---|---|---|
+| Start (follow camera) | 24.6 | 15.6 | 1.7 | 24.0 |
+| Glass bridge | 28.5 | 19.2 | 1.7 | (new view) |
+| Turn | 21.3 | 14.0 | 1.7 | 20.8 |
+| Cannon | 17.6 | 10.7 | 1.5 | 16.6 |
+| Goal | 19.2 | 12.2 | 1.5 | 18.4 |
+
+The last column is one run each on the main before (`5b1f8807b`), so the differences of 0.5 to
+1.0 ms are at the edge of what one run shows; the view that looks down through the glass
+slab is the dearest after the start.
 
 What moved it, round by round (same views, same binary):
 
@@ -145,7 +150,9 @@ What moved it, round by round (same views, same binary):
   which of them the cache was paying for is not isolated.
 - Renderlab 316033ce (cheaper glossy reflections), with the great arch and the gantry added:
   17 to 26 ms.
-- Renderlab 360a0179 (weak glossy reflectors trace fewer rays): the table above.
+- Renderlab 360a0179 (weak glossy reflectors trace fewer rays): 16 to 24 ms.
+- A glass bridge the ball lands on, lit studs on every kerb, a chrome cannon barrel and a mirror
+  casing on the goal portal: the table above.
 
 Glossy surface on screen is small by design (the inlay, the pad discs, the ball, the goal's
 floor); the start view has the most, a 6 m polished disc under the camera, and it is the

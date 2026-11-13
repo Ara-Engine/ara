@@ -149,7 +149,12 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
     each flip (-64 rad/s read for one tick). Fixed by writing the whole vector. *Smallest
     change:* keep the authored Euler triple when the pose physics hands back is the pose the
     script asked for, or give `Transform` a yaw setter.
-25. **Small ones:** `ara_play read` takes `paths`, `status` takes no world, `events` takes no
+25. **Two captures of the same view are not byte-identical here.** On one build, two
+    `ara capture` runs of the same camera and tick differ in up to 0.06 percent of pixels (most
+    by one level, a few by up to 14). So a hash cannot say "this is the same frame"; comparing
+    stills needs a pixel tolerance. (With the pipelined present on and off the replay's stills
+    differ by no more than that, which is how "the still is the frame asked for" was checked.)
+26. **Small ones:** `ara_play read` takes `paths`, `status` takes no world, `events` takes no
     limit (each rejected with a good message); entity ids must be `prefix_base32`;
     `HeightFog.falloff` has no stated unit in its range error; the capture JSON's pass list
     needs a script to read.

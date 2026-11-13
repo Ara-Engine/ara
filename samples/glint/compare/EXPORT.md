@@ -34,8 +34,8 @@ fly-over has to be built from this file in each engine.
 |---|---|
 | Decks, pylons, rings, arches, the great arch, the cannon and its gantry, goal, islands | glTF meshes, one node per draw with its world matrix; flat base colour, roughness and metallic factors (no textures in this level) |
 | Chevrons, ring bands, orbs, goal lights, beacon | `emissiveFactor` plus `KHR_materials_emissive_strength` in nits: 45,000 to 90,000 (table in the spec) |
-| Glass rails (launch deck, banked turn) | `KHR_materials_transmission` with the IOR (1.5) and thickness (0, a thin wall) in the sidecar |
-| Chrome (ball, posts) and the polished navy inlay | metallic 1 roughness 0.06, and dielectric roughness 0.06 |
+| Glass rails (launch deck, banked turn) and the glass bridge's slab | `KHR_materials_transmission` with the IOR (1.5) and thickness (0 for the rails, a thin wall; 0.16 m for the slab) in the sidecar |
+| Chrome (ball, posts, the cannon's barrel, the goal portal's casing) and the polished navy inlay | metallic 1 roughness 0.06, and dielectric roughness 0.06 |
 | Sun | a directional light (95,000 lux) and the sidecar's `sun` |
 | Checkpoint and goal lights | point lights in candela (`lumens / 4 pi`), range, source radius in the sidecar |
 | Sky | `sky.hdr` (the gradient, in cd/m2) and the sidecar's `environment` |
