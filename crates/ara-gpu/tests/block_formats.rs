@@ -101,6 +101,11 @@ fn block_compressed_chains_round_trip_in_layers() -> Result<()> {
             source: input,
             destination: image,
         });
+        rec.barriers([barrier(
+            Resource::Image(image),
+            Access::CopyDestination,
+            Access::CopyDestination,
+        )]);
         rec.push(Command::UploadImageRegion {
             source: patch,
             destination: image,
