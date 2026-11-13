@@ -96,7 +96,7 @@
     {
       "name": "navy paint",
       "baseColor": [0.03500000014901161, 0.07999999821186066, 0.2199999988079071, 1],
-      "roughness": 0.44999998807907104,
+      "roughness": 0.5,
       "metallic": 0
     },
     {
@@ -106,9 +106,9 @@
       "metallic": 0
     },
     {
-      "name": "coral lacquer",
+      "name": "coral paint",
       "baseColor": [1, 0.33000001311302185, 0.11999999731779099, 1],
-      "roughness": 0.25,
+      "roughness": 0.5,
       "metallic": 0
     },
     {

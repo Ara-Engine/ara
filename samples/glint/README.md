@@ -28,7 +28,7 @@ The crates are the set `samples/README.md` builds for Outpost on Windows. **`dot
 not optional:** it makes the C# host and compile server every Ara game with scripts needs, and
 they must come from the same commit as the player. Without it nothing starts (`ARA0904: C# SDK
 tools are missing`); with a host from another commit it stops at `ARA0921` (FINDINGS 27). `fetch`
-downloads the one pinned third-party file set Glint uses (the Kenney UI font, CC0);
+downloads the two pinned third-party packs Glint uses (the Kenney UI font and the menu's click, both CC0);
 `kits` writes the generated, git-ignored files (kit geometry and the synthesised sounds).
 Everything else (scenes, scripts, UI, import settings) is committed. On Windows (RTX PC,
 release build) the build, `fetch`, `kits` and the headless replay were run by the integration
@@ -100,7 +100,10 @@ holds the course up and the far islands are slate (0.2, 0.235, 0.3), the second 
 family against the pale cloud; a lit ring 56 m across stands behind the goal as the thing to
 aim at from the start. Before and after: `preview/r7/`.
 
-Surfaces: stone (0.68, 0.67, 0.64) at roughness 0.75 and white paint at 0.5 are matte; the
+Surfaces: stone (0.68, 0.67, 0.64) at roughness 0.75 is matte; white, navy and coral paint are
+satin at 0.5, which is where the renderer stops tracing a glossy reflection for a surface
+(navy at 0.45 and coral at 0.25 cost 2 to 3 ms a frame on the decks: FINDINGS, renderer notes,
+and `preview/r8/` for the pairs); the
 polish is deliberate and limited to the navy inlay down each deck (roughness 0.06), a disc on
 each pad and the goal's floor; chrome on posts, the ball, the cannon's barrel and the goal portal's casing; the rails and
 the bridge's slab are transmission glass (IOR 1.5). Small lit studs run along every kerb. One accent colour: coral (1.0, 0.33, 0.12).
