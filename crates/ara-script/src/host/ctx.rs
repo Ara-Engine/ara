@@ -167,6 +167,7 @@ impl HostCtx {
             graphics: super::graphics::host_graphics,
             graphics_revision: super::graphics::host_graphics_revision,
             physics_raycast: host_physics_raycast,
+            physics_contacts: host_physics_contacts,
         }
     }
 }
@@ -658,6 +659,49 @@ unsafe extern "C" fn host_physics_raycast(
         std::ptr::copy_nonoverlapping(values.as_ptr(), hit, values.len());
     }
     1
+}
+
+unsafe extern "C" fn host_physics_contacts(
+    c: *mut c_void,
+    entity: u64,
+    out: *mut crate::abi::ContactRecord,
+    cap: u32,
+) -> u32 {
+    // SAFETY: the caller returns its live host context on the exclusive callback thread.
+    let Some(scope) = (unsafe { ctx(c) }).current() else {
+        return 0;
+    };
+    // SAFETY: the seam resource is not writable from C#.
+    let Some(query) = (unsafe { scope.world.get_resource::<super::ScriptContacts>() }).copied()
+    else {
+        return 0;
+    };
+    let Some(entity) = Entity::try_from_bits(entity) else {
+        return 0;
+    };
+    let mut contacts = Vec::new();
+    // SAFETY: this is an exclusive gameplay phase, as the seam's function requires.
+    unsafe { (query.0)(scope.world, entity, &mut contacts) };
+    let count = contacts.len() as u32;
+    if count > cap || out.is_null() {
+        return count;
+    }
+    for (index, contact) in contacts.iter().enumerate() {
+        let record = crate::abi::ContactRecord {
+            other: contact.other,
+            px: contact.point[0],
+            py: contact.point[1],
+            pz: contact.point[2],
+            nx: contact.normal[0],
+            ny: contact.normal[1],
+            nz: contact.normal[2],
+            phase: contact.phase,
+            sensor: u32::from(contact.sensor),
+        };
+        // SAFETY: the caller provides room for `cap` records and `index < count <= cap`.
+        unsafe { out.add(index).write(record) };
+    }
+    count
 }
 
 unsafe extern "C" fn host_animation_bool(

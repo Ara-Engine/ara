@@ -107,6 +107,20 @@ pub unsafe fn ray(
         .flatten()
 }
 
+/// The contacts `entity` took part in during the last completed tick, for gameplay that runs
+/// inside an exclusive phase (C# `Physics.Contacts`).
+///
+/// # Safety
+/// As [`ara_physics::contacts_of`]: nothing may mutate physics while this runs.
+pub unsafe fn contacts(
+    world: bevy_ecs::world::unsafe_world_cell::UnsafeWorldCell<'_>,
+    entity: Entity,
+    out: &mut Vec<ara_physics::EntityContact>,
+) {
+    // SAFETY: forwarded from the caller.
+    unsafe { ara_physics::contacts_of::<JoltBackend>(world, entity, out) }
+}
+
 /// Drops the native world and every physics infrastructure resource.
 fn teardown(world: &mut World) {
     for ty in ara_physics::infrastructure_type_ids::<JoltBackend>() {

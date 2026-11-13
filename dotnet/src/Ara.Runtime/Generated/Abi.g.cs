@@ -63,6 +63,50 @@ namespace Ara
 namespace Ara.Hosting
 {
     /// <summary>
+    /// One contact of a body in the last completed physics tick (<c>physics_contacts</c>).
+    /// </summary>
+    [StructLayout(LayoutKind.Explicit, Size = 40)]
+    public unsafe partial struct ContactRecord
+    {
+        /// <summary>
+        /// The entity touched, or zero once it has been removed.
+        /// </summary>
+        [FieldOffset(0)] public ulong Other;
+        /// <summary>
+        /// World-space contact point, X.
+        /// </summary>
+        [FieldOffset(8)] public float Px;
+        /// <summary>
+        /// Contact point, Y.
+        /// </summary>
+        [FieldOffset(12)] public float Py;
+        /// <summary>
+        /// Contact point, Z.
+        /// </summary>
+        [FieldOffset(16)] public float Pz;
+        /// <summary>
+        /// Normal out of the other surface, towards the entity asked about, X.
+        /// </summary>
+        [FieldOffset(20)] public float Nx;
+        /// <summary>
+        /// Normal, Y.
+        /// </summary>
+        [FieldOffset(24)] public float Ny;
+        /// <summary>
+        /// Normal, Z.
+        /// </summary>
+        [FieldOffset(28)] public float Nz;
+        /// <summary>
+        /// 0 started, 1 persisted, 2 stopped.
+        /// </summary>
+        [FieldOffset(32)] public uint Phase;
+        /// <summary>
+        /// 1 when the other collider is a trigger.
+        /// </summary>
+        [FieldOffset(36)] public uint Sensor;
+    }
+
+    /// <summary>
     /// One contiguous run of rows of one ECS table, handed to one C# system.
     /// </summary>
     [StructLayout(LayoutKind.Explicit, Size = 48)]
@@ -294,7 +338,7 @@ namespace Ara.Hosting
     /// <summary>
     /// Passed to <c>ara_script_init</c>: ABI identity, the host context and the host table.
     /// </summary>
-    [StructLayout(LayoutKind.Explicit, Size = 200)]
+    [StructLayout(LayoutKind.Explicit, Size = 208)]
     public unsafe partial struct HostInit
     {
         /// <summary>
@@ -322,7 +366,7 @@ namespace Ara.Hosting
     /// <summary>
     /// Functions the Rust host offers C#. Each takes the opaque <c>ctx</c> from <c>HostInit</c>.
     /// </summary>
-    [StructLayout(LayoutKind.Explicit, Size = 176)]
+    [StructLayout(LayoutKind.Explicit, Size = 184)]
     public unsafe partial struct HostApi
     {
         /// <summary>
@@ -448,6 +492,13 @@ namespace Ara.Hosting
         /// </summary>
         // (void* ctx, float ox, float oy, float oz, float dx, float dy, float dz, ulong ignore, ulong* entity, float* hit)
         [FieldOffset(168)] public delegate* unmanaged<void*, float, float, float, float, float, float, ulong, ulong*, float*, uint> PhysicsRaycast;
+        /// <summary>
+        /// Copies the contacts <c>entity</c> took part in during the last completed physics tick,
+        /// in physics' own order. Returns the required count and writes nothing when <c>cap</c>
+        /// is too small. Exclusive gameplay phases only.
+        /// </summary>
+        // (void* ctx, ulong entity, global::Ara.Hosting.ContactRecord* out, uint cap)
+        [FieldOffset(176)] public delegate* unmanaged<void*, ulong, global::Ara.Hosting.ContactRecord*, uint, uint> PhysicsContacts;
     }
 
     /// <summary>
@@ -736,20 +787,21 @@ namespace Ara.Hosting
     public static class AbiInfo
     {
         /// <summary>Must equal the host's <c>ABI_VERSION</c>.</summary>
-        public const uint Version = 6;
+        public const uint Version = 7;
         /// <summary>Hash of every ABI layout and the engine components this file was generated from.</summary>
-        public const ulong LayoutHash = 0x2E1839C21AA9C88AUL;
+        public const ulong LayoutHash = 0xC67ADF8E92A671C9UL;
 
         /// <summary>Checks that the C# layouts agree with the generated sizes; returns an error or null.</summary>
         public static string? VerifySizes()
         {
             if (Unsafe.SizeOf<global::Ara.Tick>() != 32) return "global::Ara.Tick: expected 32 bytes, got " + Unsafe.SizeOf<global::Ara.Tick>();
             if (Unsafe.SizeOf<global::Ara.Frame>() != 16) return "global::Ara.Frame: expected 16 bytes, got " + Unsafe.SizeOf<global::Ara.Frame>();
+            if (Unsafe.SizeOf<global::Ara.Hosting.ContactRecord>() != 40) return "global::Ara.Hosting.ContactRecord: expected 40 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.ContactRecord>();
             if (Unsafe.SizeOf<global::Ara.Hosting.SystemCall>() != 48) return "global::Ara.Hosting.SystemCall: expected 48 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.SystemCall>();
             if (Unsafe.SizeOf<global::Ara.Hosting.BehaviourCall>() != 56) return "global::Ara.Hosting.BehaviourCall: expected 56 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.BehaviourCall>();
             if (Unsafe.SizeOf<global::Ara.Hosting.CommandCall>() != 112) return "global::Ara.Hosting.CommandCall: expected 112 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.CommandCall>();
             if (Unsafe.SizeOf<global::Ara.Hosting.ReloadReport>() != 120) return "global::Ara.Hosting.ReloadReport: expected 120 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.ReloadReport>();
-            if (Unsafe.SizeOf<global::Ara.Hosting.HostInit>() != 200) return "global::Ara.Hosting.HostInit: expected 200 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.HostInit>();
+            if (Unsafe.SizeOf<global::Ara.Hosting.HostInit>() != 208) return "global::Ara.Hosting.HostInit: expected 208 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.HostInit>();
             if (Unsafe.SizeOf<global::Ara.Transform>() != 36) return "global::Ara.Transform: expected 36 bytes, got " + Unsafe.SizeOf<global::Ara.Transform>();
             return null;
         }
