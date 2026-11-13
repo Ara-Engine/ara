@@ -43,6 +43,12 @@ mod sky;
 mod splat;
 mod terrain;
 mod texture;
+#[cfg(not(target_vendor = "apple"))]
+mod unity_export;
+#[cfg(not(target_vendor = "apple"))]
+mod unity_export_mesh;
+#[cfg(not(target_vendor = "apple"))]
+mod unity_gltf;
 
 use anyhow::Result;
 use ara_gpu::GpuDevice;

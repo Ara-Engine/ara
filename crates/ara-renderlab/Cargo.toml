@@ -11,6 +11,9 @@ workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
+serde_json = { workspace = true }
+# PNG files for the Unity comparison export (`unity_export`).
+image = { workspace = true, features = ["png"] }
 ara-components = { workspace = true }
 ara-gpu = { path = "../ara-gpu" }
 ara-render-fidelity = { path = "../ara-render-fidelity" }
