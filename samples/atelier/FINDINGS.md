@@ -123,8 +123,8 @@ No engine code was changed for any of these.
     42 to 44 m away, 8 m in front of a wall that faces the sun: no shadow on the gravel or
     the wall. With the camera moved to 25 m from the masts and nothing else changed
     ([`preview/defects/shadow_from_25m.jpg`](preview/defects/shadow_from_25m.jpg)) the
-    three shadows are on the wall, sRGB 110/89/96 against 203/172/159 beside them, and on
-    the gravel. The same cause as Glint's finding 33 (pylons that cast nothing on the
+    three shadows are on the wall, sRGB 41/29/34 against 126/86/71 beside them, and on
+    the gravel (both stills at the shadow still's own exposure, EV100 12). The same cause as Glint's finding 33 (pylons that cast nothing on the
     clouds); a renderer fix for the sun's shadow range is on its way and this still is the
     check for it. Same build as item 15.
 
@@ -162,4 +162,7 @@ their cameras.
 - **`shadow`**: three masts and a boundary wall south-west of the building, outside every
   other camera's view except the first frames of the dolly, where the wall's end shows left
   of the building. The wall is very dark (0.06, 0.025, 0.014) for the reason the render
-  is: at the room's exposure it still displays as a pale terracotta in sun.
+  is: at the room's exposure it still displays as a pale terracotta in sun. The still has
+  its own exposure, EV100 12, from a 2 m box volume round its camera (`e_shadowev`), so
+  the stripes are judged at a sensible level; the room's exposure is untouched and no
+  other camera comes within 8 m of the box.

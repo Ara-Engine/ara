@@ -11,6 +11,7 @@
       "name": "still",
       "note": "Interior from the doorway side: sun patches, sculpture, table, armchair.",
       "duration": 0,
+      "ev100": 10,
       "keys": [
         {
           "t": 0,
@@ -26,6 +27,7 @@
       "name": "dolly",
       "note": "A slow push from the courtyard through the doorway toward the table.",
       "duration": 8,
+      "ev100": 10,
       "keys": [
         {
           "t": 0,
@@ -49,6 +51,7 @@
       "name": "cut",
       "note": "A low courtyard pan, a hard cut at 3 s to the chrome sphere.",
       "duration": 6,
+      "ev100": 10,
       "keys": [
         {
           "t": 0,
@@ -88,6 +91,7 @@
       "name": "glow",
       "note": "The table's end, in shade: a glowing globe on a polished nickel tray (roughness 0.07) beside a chrome sphere (0.03).",
       "duration": 0,
+      "ev100": 10,
       "keys": [
         {
           "t": 0,
@@ -103,6 +107,7 @@
       "name": "shadow",
       "note": "From the gravel west of the courtyard: three masts 42 to 44 m away and their shadows on the boundary wall at 50 to 54 m.",
       "duration": 0,
+      "ev100": 12,
       "keys": [
         {
           "t": 0,

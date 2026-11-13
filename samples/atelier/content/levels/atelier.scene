@@ -7,7 +7,7 @@
   "records": {
     "e_camcut0": {
       "name": "Camera cut 0",
-      "order": "aX",
+      "order": "aY",
       "Camera": {
         "fov": 46,
         "priority": 10
@@ -19,7 +19,7 @@
     },
     "e_camcut1": {
       "name": "Camera cut 1",
-      "order": "aY",
+      "order": "aZ",
       "Camera": {
         "fov": 46,
         "priority": 10
@@ -31,7 +31,7 @@
     },
     "e_camcut2": {
       "name": "Camera cut 2",
-      "order": "aZ",
+      "order": "aa",
       "Camera": {
         "fov": 40,
         "priority": 10
@@ -43,7 +43,7 @@
     },
     "e_camcut3": {
       "name": "Camera cut 3",
-      "order": "aa",
+      "order": "ab",
       "Camera": {
         "fov": 40,
         "priority": 10
@@ -55,7 +55,7 @@
     },
     "e_camdolly0": {
       "name": "Camera dolly 0",
-      "order": "aV",
+      "order": "aW",
       "Camera": {
         "fov": 50,
         "priority": 10
@@ -67,7 +67,7 @@
     },
     "e_camdolly1": {
       "name": "Camera dolly 1",
-      "order": "aW",
+      "order": "aX",
       "Camera": {
         "fov": 50,
         "priority": 10
@@ -79,7 +79,7 @@
     },
     "e_camglow0": {
       "name": "Camera glow 0",
-      "order": "ab",
+      "order": "ac",
       "Camera": {
         "fov": 34,
         "priority": 10
@@ -91,7 +91,7 @@
     },
     "e_camprop": {
       "name": "Antique camera",
-      "order": "aB",
+      "order": "aC",
       "MeshRenderer": {
         "model": "@third_party/khronos_antique_camera/AntiqueCamera.gltf#as_khronosantiquecamera"
       },
@@ -103,7 +103,7 @@
     },
     "e_camshadow0": {
       "name": "Camera shadow 0",
-      "order": "ac",
+      "order": "ad",
       "Camera": {
         "fov": 26,
         "priority": 10
@@ -115,7 +115,7 @@
     },
     "e_camstill0": {
       "name": "Camera still 0",
-      "order": "aU",
+      "order": "aV",
       "Camera": {
         "fov": 46
       },
@@ -126,7 +126,7 @@
     },
     "e_courtyard": {
       "name": "Courtyard dressing",
-      "order": "aA",
+      "order": "aB",
       "MeshRenderer": {
         "model": "@kit/atelier_courtyard.gltf#as_kitateliercourtyard",
         "emissive": [5000, 5000, 5000]
@@ -135,7 +135,7 @@
     },
     "e_dust": {
       "name": "Dust motes in the sun shaft",
-      "order": "aT",
+      "order": "aU",
       "Transform": {
         "position": [-1, 0.8, -1.6]
       },
@@ -168,7 +168,7 @@
     },
     "e_furniture": {
       "name": "Furniture",
-      "order": "a9",
+      "order": "aA",
       "MeshRenderer": {
         "model": "@kit/atelier_furniture.gltf#as_kitatelierfurniture",
         "emissive": [6000, 6000, 6000]
@@ -177,7 +177,7 @@
     },
     "e_helmet": {
       "name": "Flight helmet",
-      "order": "aC",
+      "order": "aD",
       "MeshRenderer": {
         "model": "@third_party/khronos_flight_helmet/FlightHelmet.gltf#as_khronosflighthelmet"
       },
@@ -189,7 +189,7 @@
     },
     "e_lantern": {
       "name": "Lantern",
-      "order": "aE",
+      "order": "aF",
       "MeshRenderer": {
         "model": "@third_party/lantern_01/Lantern_01_2k.gltf#as_lantern01"
       },
@@ -201,7 +201,7 @@
     },
     "e_lcup": {
       "name": "Table lamp glow",
-      "order": "a7",
+      "order": "a8",
       "Light": {
         "color": [1, 0.800000011920929, 0.550000011920929, 1],
         "intensity": 120,
@@ -214,7 +214,7 @@
     },
     "e_lfloor": {
       "name": "Floor lamp reading spot",
-      "order": "a3",
+      "order": "a4",
       "Light": {
         "kind": "spot",
         "color": [1, 0.800000011920929, 0.5799999833106995, 1],
@@ -231,7 +231,7 @@
     },
     "e_llantern": {
       "name": "Courtyard wall lantern",
-      "order": "a6",
+      "order": "a7",
       "Light": {
         "color": [1, 0.7799999713897705, 0.5, 1],
         "intensity": 600,
@@ -244,7 +244,7 @@
     },
     "e_lpendant": {
       "name": "Pendant over the table",
-      "order": "a2",
+      "order": "a3",
       "Light": {
         "color": [1, 0.8199999928474426, 0.6000000238418579, 1],
         "intensity": 900,
@@ -257,7 +257,7 @@
     },
     "e_lpicture": {
       "name": "Picture light",
-      "order": "a4",
+      "order": "a5",
       "Light": {
         "kind": "spot",
         "color": [1, 0.8999999761581421, 0.75, 1],
@@ -274,7 +274,7 @@
     },
     "e_lshelf": {
       "name": "Shelf LED strip",
-      "order": "a5",
+      "order": "a6",
       "Light": {
         "color": [1, 0.9300000071525574, 0.800000011920929, 1],
         "intensity": 300,
@@ -287,7 +287,7 @@
     },
     "e_mannequin": {
       "name": "Mannequin (idle)",
-      "order": "aS",
+      "order": "aT",
       "Animator": {
         "idle": "Idle_Talking"
       },
@@ -306,7 +306,7 @@
     },
     "e_plant0": {
       "name": "Plant",
-      "order": "aF",
+      "order": "aG",
       "MeshRenderer": {
         "model": "@third_party/shrub_04/shrub_04_1k.gltf#as_shrub04"
       },
@@ -316,7 +316,7 @@
     },
     "e_plant1": {
       "name": "Plant",
-      "order": "aG",
+      "order": "aH",
       "MeshRenderer": {
         "model": "@third_party/fern_02/fern_02_1k.gltf#as_fern02"
       },
@@ -327,7 +327,7 @@
     },
     "e_plant10": {
       "name": "Plant",
-      "order": "aP",
+      "order": "aQ",
       "MeshRenderer": {
         "model": "@third_party/potted_plant_01/potted_plant_01_1k.gltf#as_pottedplant01"
       },
@@ -339,7 +339,7 @@
     },
     "e_plant11": {
       "name": "Plant",
-      "order": "aQ",
+      "order": "aR",
       "MeshRenderer": {
         "model": "@third_party/potted_plant_02/potted_plant_02_1k.gltf#as_pottedplant02"
       },
@@ -350,7 +350,7 @@
     },
     "e_plant12": {
       "name": "Plant",
-      "order": "aR",
+      "order": "aS",
       "MeshRenderer": {
         "model": "@third_party/potted_plant_01/potted_plant_01_1k.gltf#as_pottedplant01"
       },
@@ -361,7 +361,7 @@
     },
     "e_plant2": {
       "name": "Plant",
-      "order": "aH",
+      "order": "aI",
       "MeshRenderer": {
         "model": "@third_party/shrub_04/shrub_04_1k.gltf#as_shrub04"
       },
@@ -373,7 +373,7 @@
     },
     "e_plant3": {
       "name": "Plant",
-      "order": "aI",
+      "order": "aJ",
       "MeshRenderer": {
         "model": "@third_party/fern_02/fern_02_1k.gltf#as_fern02"
       },
@@ -384,7 +384,7 @@
     },
     "e_plant4": {
       "name": "Plant",
-      "order": "aJ",
+      "order": "aK",
       "MeshRenderer": {
         "model": "@third_party/fern_02/fern_02_1k.gltf#as_fern02"
       },
@@ -395,7 +395,7 @@
     },
     "e_plant5": {
       "name": "Plant",
-      "order": "aK",
+      "order": "aL",
       "MeshRenderer": {
         "model": "@third_party/shrub_04/shrub_04_1k.gltf#as_shrub04"
       },
@@ -406,7 +406,7 @@
     },
     "e_plant6": {
       "name": "Plant",
-      "order": "aL",
+      "order": "aM",
       "MeshRenderer": {
         "model": "@third_party/potted_plant_01/potted_plant_01_1k.gltf#as_pottedplant01"
       },
@@ -417,7 +417,7 @@
     },
     "e_plant7": {
       "name": "Plant",
-      "order": "aM",
+      "order": "aN",
       "MeshRenderer": {
         "model": "@third_party/potted_plant_02/potted_plant_02_1k.gltf#as_pottedplant02"
       },
@@ -428,7 +428,7 @@
     },
     "e_plant8": {
       "name": "Plant",
-      "order": "aN",
+      "order": "aO",
       "MeshRenderer": {
         "model": "@third_party/shrub_04/shrub_04_1k.gltf#as_shrub04"
       },
@@ -440,7 +440,7 @@
     },
     "e_plant9": {
       "name": "Plant",
-      "order": "aO",
+      "order": "aP",
       "MeshRenderer": {
         "model": "@third_party/fern_02/fern_02_1k.gltf#as_fern02"
       },
@@ -452,7 +452,7 @@
     },
     "e_radio": {
       "name": "Radio",
-      "order": "aD",
+      "order": "aE",
       "MeshRenderer": {
         "model": "@third_party/vintage_radio_transceiver/vintage_radio_transceiver_2k.gltf#as_vintageradiotransceiver"
       },
@@ -462,9 +462,27 @@
         "scale": [0.8, 0.8, 0.8]
       }
     },
+    "e_shadowev": {
+      "name": "Exposure for the shadow still",
+      "order": "a1",
+      "PostProcessVolume": {
+        "shape": "box",
+        "priority": 10,
+        "overrides": [
+          {
+            "exposure": "manual",
+            "ev100": 12
+          }
+        ]
+      },
+      "Transform": {
+        "position": [-8.5, 1.29, 6],
+        "scale": [2, 2, 2]
+      }
+    },
     "e_shell": {
       "name": "Room and courtyard",
-      "order": "a8",
+      "order": "a9",
       "MeshRenderer": {
         "model": "@kit/atelier_shell.gltf#as_kitateliershell"
       },
@@ -472,7 +490,7 @@
     },
     "e_sun": {
       "name": "Sun",
-      "order": "a1",
+      "order": "a2",
       "Light": {
         "kind": "directional",
         "color": [1, 0.9100000262260437, 0.7599999904632568, 1],

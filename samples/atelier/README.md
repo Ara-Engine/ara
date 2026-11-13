@@ -32,6 +32,7 @@ direction the light moves, not where it comes from.
 |---|---|
 | Exposure | fixed, **EV100 10.0**, set for the room (walls in shade read as white), no auto-exposure, no compensation (photometric `H = L / (1.2 * 2^EV100)`) |
 | Tone mapping | AgX, Medium High Contrast look, in Ara (the sunlit floor is about ten times the walls in shade, and Neutral clipped it to flat white); for comparisons use linear HDR |
+| The `shadow` still | **EV100 12.0**, its own: it looks at the sunlit exterior, which the room's exposure washes out. In the scene a 2 m box volume round its camera (`e_shadowev`) sets it; `camera_clips.json` gives every clip its `ev100` |
 | Post | no bloom, vignette, grading, fog, decals or material graphs |
 
 ## Sky and sun
@@ -103,7 +104,7 @@ between keys, a key with `cut: true` ends its segment.
 | `dolly` | 8 s | push from the courtyard through the doorway toward the table |
 | `cut` | 6 s | 3 s low courtyard pan, hard cut to the chrome sphere |
 | `glow` | 1 frame | test still at the table's end, in shade (1.85, 1.3, -5.7 looking at 0.8, 0.8, -6.13, 34 deg): the glowing globe on the nickel tray beside the small chrome sphere, so one emitter is seen directly, in a near-mirror (roughness 0.07) and in chrome (0.03) |
-| `shadow` | 1 frame | test still from the gravel west of the courtyard (-8.5, 1.29, 6.0 looking at -17.5, 5.0, -44.0, 26 deg): three masts 42 to 44 m from the camera, whose shadows cross the gravel and climb the boundary wall 50 to 54 m away as stripes 0.46, 0.23 and 0.12 m wide |
+| `shadow` | 1 frame | test still from the gravel west of the courtyard (-8.5, 1.29, 6.0 looking at -17.5, 5.0, -44.0, 26 deg): three masts 42 to 44 m from the camera, whose shadows cross the gravel and climb the boundary wall 50 to 54 m away as stripes 0.46, 0.23 and 0.12 m wide; exposed at EV100 12 |
 
 ## Engine-side extras (do not export)
 

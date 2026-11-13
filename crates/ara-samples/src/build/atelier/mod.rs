@@ -31,6 +31,10 @@ pub const SCENE: (&str, &str) = ("levels/atelier.scene", "sc_atelier01");
 /// ISO 100, ACES-style reference of 1.2·2^EV cd/m² at white in Ara's meter convention),
 /// the same in every engine.
 const EV100: f32 = 10.0;
+/// The `shadow` still's own exposure: it looks at the sunlit exterior, which the room's
+/// exposure washes out. A box volume round its camera sets it in the scene, and its clip
+/// carries the number for other engines.
+const SHADOW_EV100: f32 = 12.0;
 /// The sun: illuminance on a surface facing it, lux, and the direction its light
 /// travels (unit, world space; it shines in through the doorway and the east window).
 const SUN_LUX: f32 = 45_000.0;
@@ -331,6 +335,7 @@ fn clips() -> Value {
         "interpolation": "position: linear; rotation: slerp; a key with cut=true ends its segment",
         "clips": CLIPS.iter().map(|(name, note, keys)| json!({
             "name": name, "note": note, "duration": keys.last().map_or(0.0, |k| k.t),
+            "ev100": if *name == "shadow" { SHADOW_EV100 } else { EV100 },
             "keys": keys.iter().map(|k| json!({
                 "t": k.t, "position": round3(k.position), "rotation": look_rotation(k.position, k.target),
                 "lookAt": round3(k.target), "fovYDeg": k.fov, "cut": k.cut,
@@ -406,6 +411,21 @@ pub fn build(ctx: &Ctx) -> Result<()> {
             "PostProcessVolume": {"overrides": [
                 {"exposure": "manual", "ev100": EV100},
                 {"module": "toneMapping", "toneMapping": "agxMediumHighContrast"},
+            ]},
+        }),
+    );
+    // The `shadow` camera stands in this box; no other camera comes within 8 m of it.
+    let shadow_camera = CLIPS
+        .iter()
+        .find(|(name, ..)| *name == "shadow")
+        .map_or(Vec3::ZERO, |(_, _, keys)| keys[0].position);
+    s.entity(
+        "e_shadowev",
+        "Exposure for the shadow still",
+        json!({
+            "Transform": {"position": round3(shadow_camera), "scale": [2, 2, 2]},
+            "PostProcessVolume": {"shape": "box", "priority": 10, "overrides": [
+                {"exposure": "manual", "ev100": SHADOW_EV100},
             ]},
         }),
     );
