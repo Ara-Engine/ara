@@ -413,6 +413,7 @@ fn run_scripts(world: &mut World) {
     world.insert_resource(ara_script::ScriptInputs { actions, players });
     world.init_resource::<ara_script::ScriptNavigation>();
     world.init_resource::<ara_script::ScriptControls>();
+    world.insert_resource(ara_script::ScriptRays(cast_ray));
     world.resource_scope::<Scripts, _>(|world, mut scripts| {
         apply_writes(&scripts, world);
         scripts.host.run_tick(world, tick);
@@ -539,6 +540,26 @@ fn run_command(world: &mut World, name: &str, params: &Value, tick: u64) -> Resu
     })
 }
 
+/// `Physics.Raycast` for C#: the runtime's physics, read through the exclusive phase's world.
+///
+/// # Safety
+/// Only from an exclusive gameplay phase (see `ara_script::ScriptRays`).
+unsafe fn cast_ray(
+    world: bevy_ecs::world::unsafe_world_cell::UnsafeWorldCell<'_>,
+    origin: [f32; 3],
+    displacement: [f32; 3],
+    ignore: Option<Entity>,
+) -> Option<ara_script::ScriptRayHit> {
+    // SAFETY: forwarded from the caller.
+    let (entity, hit) = unsafe { ara_runtime::physics::ray(world, origin, displacement, ignore) }?;
+    Some(ara_script::ScriptRayHit {
+        entity: entity.to_bits(),
+        point: hit.point,
+        normal: hit.normal,
+        fraction: hit.fraction,
+    })
+}
+
 /// Captures C# components (by entity identity) and C# resources into snapshots and
 /// state hashes; restores them through the host (C#-spawned entities included: they
 /// are named when spawned).
@@ -554,6 +575,7 @@ impl StateProvider for ScriptProvider {
             TypeId::of::<ara_script::ScriptInputs>(),
             TypeId::of::<ara_script::ScriptNavigation>(),
             TypeId::of::<ara_script::ScriptControls>(),
+            TypeId::of::<ara_script::ScriptRays>(),
         ]
     }
     fn owned_components(&self, world: &World) -> Vec<ComponentId> {

@@ -231,3 +231,46 @@ fn tick_zero_checkpoint_prepares_structure_without_consuming_intent() {
         expected
     );
 }
+
+#[test]
+fn a_ray_finds_the_entity_that_owns_the_surface_and_can_leave_one_out() {
+    let (mut w, mut schedule, floor, body) = setup(false);
+    schedule.run(&mut w);
+    let cast = |w: &World, ignore| {
+        // SAFETY: nothing else touches the world during the call.
+        unsafe {
+            ray_entity::<JoltBackend>(
+                w.as_unsafe_world_cell_readonly(),
+                [0.0, 20.0, 0.0],
+                [0.0, -40.0, 0.0],
+                ignore,
+            )
+        }
+        .expect("query")
+    };
+    // The falling box (about y = 5) is met first, on its top face.
+    let (entity, hit) = cast(&w, None).expect("the box");
+    assert_eq!(entity, body);
+    assert!(
+        hit.normal[1] > 0.99 && (hit.point[1] - 5.5).abs() < 0.1,
+        "{hit:?}"
+    );
+    // Leaving it out, the ray reaches the floor's top at y = 0.
+    let (entity, hit) = cast(&w, Some(body)).expect("the floor");
+    assert_eq!(entity, floor);
+    assert!(
+        hit.point[1].abs() < 1e-3 && (hit.fraction - 0.5).abs() < 1e-3,
+        "{hit:?}"
+    );
+    // A ray that meets nothing.
+    // SAFETY: nothing else touches the world during the call.
+    let miss = unsafe {
+        ray_entity::<JoltBackend>(
+            w.as_unsafe_world_cell_readonly(),
+            [100.0, 20.0, 0.0],
+            [0.0, -40.0, 0.0],
+            None,
+        )
+    };
+    assert_eq!(miss.expect("query"), None);
+}
