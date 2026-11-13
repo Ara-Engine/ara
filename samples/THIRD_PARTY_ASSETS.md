@@ -46,7 +46,7 @@ lighting and the generated kit geometry are original Ara work.
 | Dry Ground 01 (`dry_ground_01`) | texture | Rob Tuytel | outpost | <https://polyhaven.com/a/dry_ground_01> |
 | Dry Ground Rocks (`dry_ground_rocks`) | texture | Rob Tuytel | outpost | <https://polyhaven.com/a/dry_ground_rocks> |
 | Exterior Aircon Unit (`exterior_aircon_unit`) | model | Monsta3D | outpost | <https://polyhaven.com/a/exterior_aircon_unit> |
-| Fabric Leather 02 (`fabric_leather_02`) | texture | Rob Tuytel | atelier, showcase | <https://polyhaven.com/a/fabric_leather_02> |
+| Fabric Leather 02 (`fabric_leather_02`) | texture | Rob Tuytel | showcase | <https://polyhaven.com/a/fabric_leather_02> |
 | Fern 02 (`fern_02`) | model | Rob Tuytel, Rico Cilliers | atelier | <https://polyhaven.com/a/fern_02> |
 | Green Metal Rust (`green_metal_rust`) | texture | Rob Tuytel | outpost | <https://polyhaven.com/a/green_metal_rust> |
 | Hand Truck (`hand_truck`) | model | Mutanzom3D | outpost | <https://polyhaven.com/a/hand_truck> |
