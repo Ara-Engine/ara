@@ -50,7 +50,8 @@ comparison files (`compare/`) and the replay's route all read that table, so the
 physics and the scripts cannot disagree about where a piece is.
 
 - **Scripts** (`content/scripts/Glint`, C# as a user would write it): plain `[Component]`
-  structs; `Behaviour`s for the ball, the cannon, the camera, the run director and the ball's
+  structs; the ball finds the ground with `Physics.Raycast` and its landings with
+  `Physics.Contacts`; `Behaviour`s for the ball, the cannon, the camera, the run director and the ball's
   effects; `[Query]` systems for the sliders, spinners and bobbing orbs. Gameplay state lives in
   ECS components only.
 - **UI** (`content/ui`): native UI bound to component fields. The markup is generated
