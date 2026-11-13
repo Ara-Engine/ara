@@ -278,6 +278,29 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
   the one place where the level's brightest emitters, its only mirror floor and the whole
   course in the background are in one frame. Not changed: it is where the run ends and it is
   meant to be the richest view.
+  *A second pass, looking for anything free* (M5, traced, 720p, 60 held frames, on Renderlab
+  614b15da; base 30.6 ms of GPU, 21.8 of shading, two runs agreeing within 0.1; the spinner
+  deck in the same pass is 18.7):
+
+  | One change at the goal | GPU ms | Returned |
+  |---|---|---|
+  | Beacon thin again (radius 1.4 to 0.5 m) | 30.6 | 0.0 |
+  | Spires' lit fins rebuilt as surface strips, no emitter buried in the pillar (same picture) | 30.6 | 0.0 |
+  | Floor rings unlit | 30.1 | 0.5 |
+  | Portal and halo bands unlit | 29.8 | 0.8 |
+  | Great ring's band unlit | 29.7 | 0.9 |
+  | Spires' lit fins unlit | 29.5 | 1.1 |
+  | Chrome portal casing painted | 29.2 | 1.4 |
+  | Mirror floor at roughness 0.5 | 29.1 | 1.5 |
+  | Mirror floor at roughness 0.2 | 32.8 | -2.2 |
+
+  Nothing at the goal sits just under the 0.5 cut-off by accident: the only surfaces under
+  it are the mirror floor (0.05) and the chrome (0.06), both meant. No emitter costs more
+  than about a millisecond, emitting area that cannot be seen costs nothing (the thick beacon
+  and the buried fins are free), and every change that returns time changes the picture. So
+  there is no pair here that cannot be told apart; the goal's cost is the renderer's to
+  bring down. One thing worth its knowing: a floor at roughness 0.2 costs 2.2 ms more than
+  the same floor as a mirror, so between the cut-off and a mirror, rougher is dearer.
 - **A still is already the frozen case.** `ara capture` and `ara_play capture` do not tick the
   world: with a world stepped to tick 30, a capture left the tick at 30 and an orb's transform
   unchanged (checked on the Mac). So the replay stills measure a level in which none of the

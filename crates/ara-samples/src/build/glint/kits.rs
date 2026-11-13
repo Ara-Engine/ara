@@ -1174,9 +1174,10 @@ pub fn gantry(root: &Path, lock: &Lock) -> Result<String> {
     const CORAL: usize = 1;
     const NAVY: usize = 3;
     const LIT: usize = 4;
-    // A slate frame with coral and lit trim, like everything else that holds the course up.
+    // A navy frame with coral collars and lit trim, the cannon's own colours: in full sun
+    // slate legs read as pale as the white ones did.
     let mut k = Kit::new(vec![
-        slate(),
+        navy(),
         coral(),
         cool("pylon band"),
         navy(),
@@ -1198,6 +1199,17 @@ pub fn gantry(root: &Path, lock: &Lock) -> Result<String> {
         );
         oriented(&mut k, NAVY, foot, v(1.5, 0.5, 1.5), Quat::IDENTITY);
         pylon(&mut k, foot - v(0.0, 0.5, 0.0), 1.1);
+        // Three coral collars up each leg.
+        for t in [0.22f32, 0.5, 0.78] {
+            let radius = 1.1 + (0.55 - 1.1) * t;
+            oriented(
+                &mut k,
+                CORAL,
+                foot + (head - foot) * t,
+                v(radius + 0.08, 0.28, radius + 0.08),
+                lean,
+            );
+        }
         // A lit strip up the inside of each leg.
         let mid = (foot + head) * 0.5 - v(side * 0.62, 0.0, 0.0);
         oriented(
