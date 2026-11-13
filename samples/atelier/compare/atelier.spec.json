@@ -10,20 +10,20 @@
   },
   "exposure": {
     "mode": "fixed",
-    "ev100": 11.5,
+    "ev100": 10,
     "isoNote": "ISO 100; photometric exposure H = L / (1.2 * 2^EV100)",
-    "toneMapping": "Khronos PBR Neutral in Ara; export linear HDR for comparisons"
+    "toneMapping": "AgX (Medium High Contrast look) in Ara; export linear HDR for comparisons"
   },
   "sky": {
     "kind": "gradient equirect, no sun disc",
     "zenith": [0.20000000298023224, 0.36000001430511475, 0.8500000238418579],
     "horizon": [0.7200000286102295, 0.8199999928474426, 0.949999988079071],
-    "ground": [0.2800000011920929, 0.25999999046325684, 0.23000000417232513],
+    "ground": [0.4000000059604645, 0.4000000059604645, 0.38999998569488525],
     "scaleCdPerM2": 9000,
     "falloff": 3
   },
   "sun": {
-    "illuminanceLux": 75000,
+    "illuminanceLux": 45000,
     "color": [1, 0.9100000262260437, 0.7599999904632568],
     "travelDirection": [-0.44938385486602783, -0.43740028142929077, -0.7789320349693298],
     "angularDiameterDeg": 0.5357,

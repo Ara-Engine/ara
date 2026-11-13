@@ -98,3 +98,33 @@ No engine code was changed for any of these.
     carry: the idle animation (skinned draws are baked at one pose), the particles, a
     per-light shadow flag (it states Ara has none), source radius as a glTF property
     (sidecar only).
+14. **A polished floor washes out to near-white in shade (observed, cause not isolated).**
+    Same scene, same camera (`e_camstill0`), floor base colour 0.18, EV100 10, AgX: at
+    roughness 0.36 the shaded floor in the foreground is sRGB 157/162/174 and 170/177/190;
+    at roughness 0.9 the same two pixels are 104/117/141 and 101/111/134. The walls and
+    ceiling are unchanged between the two (176/176/181 against 175/176/180). Going from base
+    colour 0.3 to 0.18 at roughness 0.36 changed almost nothing, so at that roughness the
+    floor's look is its reflection, not its colour. From that camera the mirror direction
+    of those pixels is the shaded back wall and ceiling, which are darker than what the
+    floor shows, so the glossy term looks too bright; not checked against a reference
+    render or another engine. The floor is authored honed (roughness 0.7).
+
+## The look pass of 13 November
+
+The first version read brown and dim: every wall and the floor were warm, the exposure was
+a compromise between room and courtyard, and Neutral clipped the sun patches. What changed:
+
+- **Exposure is set for the room** (EV100 11.5 to 10.0) and the sun is 45,000 lux (was
+  75,000), so the white plaster in shade displays as light grey-white (sRGB about 176)
+  instead of 152/118/86.
+- **AgX instead of Neutral.** The sunlit floor is about ten times the walls in shade;
+  Neutral turned every patch into flat white.
+- **One accent.** Terracotta is one panel behind the sculpture, not a whole wall; the
+  weathered-steel planters repeat it outside. Everything else is white, grey, black, walnut.
+- **Dark where the sun lands.** The floor (0.18), the plinth (0.04), the outside render
+  (0.065), the paving, the gravel and the mannequin are dark, because at the room's
+  exposure a pale surface in full sun is several times display white.
+- **The west wall has something on it**: a 2.2 x 1.5 m canvas and a walnut console with a
+  brass bowl and books; the still now looks at that corner at 46 degrees instead of 56.
+- Not fixed: the blotches of item 2 are as visible on white as they were on beige, and the
+  sky is nearly white at this exposure.

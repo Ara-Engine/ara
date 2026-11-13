@@ -1,7 +1,7 @@
 //! "Atelier": a small, clean cross-engine comparison scene. A white-plaster studio with
-//! a terracotta wall, lit by one sun through a doorway, an east window and a roof slot,
-//! opening onto a limestone courtyard with a few plants; so bounce light matters. Metal
-//! (chrome, brass, steel), glass, walnut, graphite leather, marble, oak and emissive bulbs;
+//! one terracotta panel, lit by one sun through a doorway, an east window and a roof slot,
+//! opening onto a concrete courtyard with a few plants; so bounce light matters. Metal
+//! (chrome, brass, steel), glass, walnut, graphite leather, concrete, oak and emissive bulbs;
 //! one idling mannequin; six local lights with explicit source sizes.
 //!
 //! Built to cross engines: one fixed exposure, physical light units, a gradient sky
@@ -26,18 +26,19 @@ use std::path::Path;
 /// Level scene.
 pub const SCENE: (&str, &str) = ("levels/atelier.scene", "sc_atelier01");
 
-/// Fixed exposure (EV100 at ISO 100, ACES-style reference of 1.2·2^EV cd/m² at white
-/// in Ara's meter convention), the same in every engine.
-const EV100: f32 = 11.5;
+/// Fixed exposure, set for the room so its shaded white walls read as white (EV100 at
+/// ISO 100, ACES-style reference of 1.2·2^EV cd/m² at white in Ara's meter convention),
+/// the same in every engine.
+const EV100: f32 = 10.0;
 /// The sun: illuminance on a surface facing it, lux, and the direction its light
 /// travels (unit, world space; it shines in through the doorway and the east window).
-const SUN_LUX: f32 = 75_000.0;
+const SUN_LUX: f32 = 45_000.0;
 const SUN_COLOR: [f32; 3] = [1.0, 0.91, 0.76];
 const SUN_DIRECTION: Vec3 = Vec3::new(-0.45, -0.438, -0.78);
 /// Gradient sky (linear colour, cd/m² at scale 1): no sun disc; the sun is the light.
 const SKY_ZENITH: [f32; 3] = [0.2, 0.36, 0.85];
 const SKY_HORIZON: [f32; 3] = [0.72, 0.82, 0.95];
-const SKY_GROUND: [f32; 3] = [0.28, 0.26, 0.23];
+const SKY_GROUND: [f32; 3] = [0.4, 0.4, 0.39];
 const SKY_SCALE_CD: f32 = 9000.0;
 const SKY_FALLOFF: f32 = 3.0;
 
@@ -174,9 +175,9 @@ const CLIPS: [(&str, &str, &[Pose]); 3] = [
         "Interior from the doorway side: sun patches, sculpture, table, armchair.",
         &[key(
             0.0,
-            Vec3::new(3.4, 1.5, -0.3),
-            Vec3::new(-1.2, 1.15, -4.6),
-            56.0,
+            Vec3::new(3.1, 1.5, -0.6),
+            Vec3::new(-1.5, 1.6, -5.0),
+            46.0,
             false,
         )],
     ),
@@ -280,7 +281,7 @@ fn spec() -> Value {
             "roomForward": "The room runs toward -Z from its front wall at z=0; the courtyard is on +Z.",
         },
         "exposure": {"mode": "fixed", "ev100": EV100, "isoNote": "ISO 100; photometric exposure H = L / (1.2 * 2^EV100)",
-            "toneMapping": "Khronos PBR Neutral in Ara; export linear HDR for comparisons"},
+            "toneMapping": "AgX (Medium High Contrast look) in Ara; export linear HDR for comparisons"},
         "sky": {"kind": "gradient equirect, no sun disc", "zenith": SKY_ZENITH, "horizon": SKY_HORIZON,
             "ground": SKY_GROUND, "scaleCdPerM2": SKY_SCALE_CD, "falloff": SKY_FALLOFF},
         "sun": {"illuminanceLux": SUN_LUX, "color": SUN_COLOR, "travelDirection": SUN_DIRECTION.normalize().to_array(),
@@ -343,18 +344,24 @@ pub fn build(ctx: &Ctx) -> Result<()> {
     ] {
         ctx.third_party(&mut models, name, asset)?;
     }
-    // A pale clay mannequin: the suit palette recast, not Outpost's graphite.
+    // A mid-grey clay mannequin (the suit palette recast): it stands in full sun, where a
+    // pale one clips at the room's exposure.
     let palette = crate::kit::recolor(
         &ctx.root,
         &ctx.lock,
         "m2m_human",
         "color-palette",
-        [0.78, 0.76, 0.72],
+        [0.3, 0.29, 0.27],
         "human_suit",
     )?;
     super::materials::palette(ctx, &mut models, "human", "m2m_human", &palette)?;
     for (name, path) in kits_written(&ctx.root, &ctx.lock)? {
-        ctx.model(&mut models, &name, &path, &format!("as_kit{}", short(&name)))?;
+        ctx.model(
+            &mut models,
+            &name,
+            &path,
+            &format!("as_kit{}", short(&name)),
+        )?;
     }
     ctx.new_document(SCENE.0, "scene", SCENE.1)?;
     let mut s = Scene::new(&models);
@@ -368,10 +375,11 @@ pub fn build(ctx: &Ctx) -> Result<()> {
                 "ground": [SKY_GROUND[0], SKY_GROUND[1], SKY_GROUND[2], 1],
                 "skyFalloff": SKY_FALLOFF, "intensity": SKY_SCALE_CD, "skyLight": 1,
             },
-            // One fixed exposure and a plain display transform: nothing else.
+            // One fixed exposure and one display transform: nothing else. AgX because the sunlit
+            // floor is about ten times the walls in shade, which Neutral clips to flat white.
             "PostProcessVolume": {"overrides": [
                 {"exposure": "manual", "ev100": EV100},
-                {"module": "toneMapping", "toneMapping": "neutral"},
+                {"module": "toneMapping", "toneMapping": "agxMediumHighContrast"},
             ]},
         }),
     );
@@ -395,28 +403,74 @@ pub fn build(ctx: &Ctx) -> Result<()> {
     }
     // The architecture and the furniture: one model each, no collision.
     s.prop(
-        Prop::new("e_shell", "Room and courtyard", "atelier_shell", Vec3::ZERO, 0.0)
-            .at_origin()
-            .decor(),
+        Prop::new(
+            "e_shell",
+            "Room and courtyard",
+            "atelier_shell",
+            Vec3::ZERO,
+            0.0,
+        )
+        .at_origin()
+        .decor(),
     );
     s.prop(
-        Prop::new("e_furniture", "Furniture", "atelier_furniture", Vec3::ZERO, 0.0)
-            .at_origin()
-            .decor()
-            .renderer(json!({"emissive": [6000, 6000, 6000]})),
+        Prop::new(
+            "e_furniture",
+            "Furniture",
+            "atelier_furniture",
+            Vec3::ZERO,
+            0.0,
+        )
+        .at_origin()
+        .decor()
+        .renderer(json!({"emissive": [6000, 6000, 6000]})),
     );
     s.prop(
-        Prop::new("e_courtyard", "Courtyard dressing", "atelier_courtyard", Vec3::ZERO, 0.0)
-            .at_origin()
-            .decor()
-            .renderer(json!({"emissive": [5000, 5000, 5000]})),
+        Prop::new(
+            "e_courtyard",
+            "Courtyard dressing",
+            "atelier_courtyard",
+            Vec3::ZERO,
+            0.0,
+        )
+        .at_origin()
+        .decor()
+        .renderer(json!({"emissive": [5000, 5000, 5000]})),
     );
     // Third-party objects: on the table, the shelf and the bench.
     for (id, name, model, at, yaw, scale) in [
-        ("e_camprop", "Antique camera", "antique_camera", Vec3::new(-0.35, 0.765, -5.95), 25.0, 0.11),
-        ("e_helmet", "Flight helmet", "flight_helmet", Vec3::new(-2.45, 2.22, -8.7), 200.0, 0.9),
-        ("e_radio", "Radio", "radio", Vec3::new(-1.7, 1.19, -8.7), 170.0, 0.8),
-        ("e_lantern", "Lantern", "lantern", Vec3::new(-5.6, 0.48, 4.0), 20.0, 1.6),
+        (
+            "e_camprop",
+            "Antique camera",
+            "antique_camera",
+            Vec3::new(-0.35, 0.765, -5.95),
+            25.0,
+            0.11,
+        ),
+        (
+            "e_helmet",
+            "Flight helmet",
+            "flight_helmet",
+            Vec3::new(-2.45, 2.22, -8.7),
+            200.0,
+            0.9,
+        ),
+        (
+            "e_radio",
+            "Radio",
+            "radio",
+            Vec3::new(-1.7, 1.19, -8.7),
+            170.0,
+            0.8,
+        ),
+        (
+            "e_lantern",
+            "Lantern",
+            "lantern",
+            Vec3::new(-5.6, 0.48, 4.0),
+            20.0,
+            1.6,
+        ),
     ] {
         s.prop(Prop::new(id, name, model, at, yaw).scaled(scale).decor());
     }
@@ -441,15 +495,20 @@ pub fn build(ctx: &Ctx) -> Result<()> {
     .into_iter()
     .enumerate()
     {
-        s.prop(Prop::new(&format!("e_plant{i}"), "Plant", model, at, yaw).scaled(scale).decor());
+        s.prop(
+            Prop::new(&format!("e_plant{i}"), "Plant", model, at, yaw)
+                .scaled(scale)
+                .decor(),
+        );
     }
-    // The mannequin stands in the courtyard, in view of the dolly and the cut clip but not the
-    // interior still: none of the library's idle clips is a relaxed standing pose (wide stance).
+    // The mannequin stands by the courtyard bench, turned toward the doorway: in view of the
+    // dolly and the cut clip but not the interior still, because none of the library's idle
+    // clips is a relaxed standing pose (wide stance).
     s.entity(
         "e_mannequin",
         "Mannequin (idle)",
         json!({
-            "Transform": transform(Vec3::new(-3.6, 0.0, 2.2), 150.0, 1.0),
+            "Transform": transform(Vec3::new(-4.7, 0.0, 3.3), 105.0, 1.0),
             "MeshRenderer": models.get("human").renderer,
             "Animator": {"idle": "Idle_Talking"},
         }),
@@ -478,7 +537,11 @@ pub fn build(ctx: &Ctx) -> Result<()> {
         }
     }
     let calls = std::mem::take(&mut s.commands);
-    ctx.apply(SCENE.0, "Atelier: studio interior, courtyard and light table", calls)?;
+    ctx.apply(
+        SCENE.0,
+        "Atelier: studio interior, courtyard and light table",
+        calls,
+    )?;
     ctx.set_main(SCENE.0, SCENE.1)?;
     let compare = ctx.root.join("compare");
     std::fs::create_dir_all(&compare)?;
