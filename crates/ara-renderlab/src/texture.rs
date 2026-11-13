@@ -1,8 +1,63 @@
-//! Cooked Ara textures (KTX2, BC7 or BC5) as Renderlab's prepared RGBA8 mip chains.
-//! Renderlab takes uncompressed chains, so each texture is decoded once and its
-//! levels are box-filtered here: colour in linear light, normals renormalized.
+//! Cooked Ara textures (KTX2, BC7 or BC5) for Renderlab: as shipped, block-compressed with
+//! the file's own mip levels (`compressed`), where the device samples BC and the file meets
+//! the GPU's rules; otherwise as a prepared RGBA8 chain, decoded once and box-filtered here,
+//! colour in linear light and normals renormalized (`prepare`).
 use anyhow::Result;
-use renderlab::asset::{Mip, Texture, TextureRole};
+use renderlab::asset::{BlockFormat, CompressedTexture, Mip, Texture, TextureRole};
+
+/// Why a cooked texture cannot be handed to the GPU as shipped.
+pub(crate) type Fallback = &'static str;
+
+/// The cooked texture's own blocks and levels for `role`, with no decode: the outer error
+/// is an unreadable file, the inner one a file the GPU's block rules refuse (its base
+/// level is not whole 4x4 blocks, or its chain does not run to 1x1 in whole blocks), which
+/// the caller uploads as RGBA8 instead.
+pub(crate) fn compressed(
+    ktx2: &[u8],
+    role: TextureRole,
+) -> Result<std::result::Result<CompressedTexture, Fallback>> {
+    use ara_asset_format::TextureFormat as Cooked;
+    let texture =
+        ara_asset_format::Texture::read(ktx2).map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    // The role decides how the blocks are read, as it does for the decoded path: a
+    // base colour is sRGB whatever the file says of itself.
+    let format = match (texture.format(), role) {
+        (Cooked::Bc7 | Cooked::Bc7Srgb, TextureRole::BaseColorSrgb) => BlockFormat::Bc7Srgb,
+        (Cooked::Bc7 | Cooked::Bc7Srgb, TextureRole::MetallicRoughnessLinear) => {
+            BlockFormat::Bc7Linear
+        }
+        (Cooked::Bc5, role) if role.is_normal() => BlockFormat::Bc5,
+        _ => return Ok(Err("its format does not fit the role it is bound in")),
+    };
+    let [width, height] = texture.dimensions();
+    if width % BlockFormat::BLOCK != 0 || height % BlockFormat::BLOCK != 0 {
+        return Ok(Err("its base level is not whole 4x4 blocks"));
+    }
+    let mips: Vec<Vec<u8>> = texture.levels().map(<[u8]>::to_vec).collect();
+    if mips.len() as u32 != u32::BITS - width.max(height).leading_zeros() {
+        return Ok(Err("its mip chain stops above 1x1"));
+    }
+    let whole = mips.iter().enumerate().all(|(level, data)| {
+        let (w, h) = ((width >> level).max(1), (height >> level).max(1));
+        data.len() as u64 == BlockFormat::level_bytes(w, h)
+    });
+    if !whole {
+        return Ok(Err("a mip level is not whole 4x4 blocks"));
+    }
+    Ok(Ok(CompressedTexture {
+        format,
+        width,
+        height,
+        mips,
+    }))
+}
+
+/// Comparison switch, off by default: `ARA_RENDERLAB_RGBA8_TEXTURES=1` keeps every
+/// texture on the decoded RGBA8 path, as before compressed uploads.
+pub(crate) fn rgba8_only() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("ARA_RENDERLAB_RGBA8_TEXTURES").is_some_and(|v| v == "1"))
+}
 
 /// Decodes `ktx2` and builds the complete chain for `role`.
 pub(crate) fn prepare(ktx2: &[u8], role: TextureRole) -> Result<Texture> {
@@ -330,6 +385,67 @@ mod tests {
                 assert!((linear - 0.5).abs() < 1e-3, "({x}, {y}): {linear}");
             }
         }
+    }
+
+    /// A cooked BC7 texture of flat grey, with a full chain or one cut to `levels`.
+    fn cooked(width: u32, height: u32, levels: Option<usize>) -> Vec<u8> {
+        cooked_as(ara_asset_format::TextureFormat::Bc7, width, height, levels)
+    }
+
+    fn cooked_as(
+        format: ara_asset_format::TextureFormat,
+        width: u32,
+        height: u32,
+        levels: Option<usize>,
+    ) -> Vec<u8> {
+        let full = (u32::BITS - width.max(height).leading_zeros()) as usize;
+        let chain: Vec<Vec<u8>> = (0..levels.unwrap_or(full))
+            .map(|level| {
+                let (w, h) = ((width >> level).max(1), (height >> level).max(1));
+                vec![0x40; BlockFormat::level_bytes(w, h) as usize]
+            })
+            .collect();
+        ara_asset_format::write_ktx2(width, height, format, &chain).expect("a valid chain")
+    }
+
+    #[test]
+    fn a_cooked_texture_goes_through_as_shipped_or_says_why_not() {
+        let whole = compressed(&cooked(8, 4, None), TextureRole::BaseColorSrgb)
+            .expect("readable")
+            .expect("whole blocks and a full chain");
+        // The role picks the colour space; the levels are the file's own, to 1x1.
+        assert_eq!(whole.format, BlockFormat::Bc7Srgb);
+        assert_eq!((whole.width, whole.height, whole.mips.len()), (8, 4, 4));
+        assert_eq!(whole.mips[3].len(), 16);
+        let data = compressed(&cooked(8, 4, None), TextureRole::MetallicRoughnessLinear)
+            .expect("readable")
+            .expect("the same file as data");
+        assert_eq!(data.format, BlockFormat::Bc7Linear);
+        let refused = |ktx2: &[u8], role| {
+            compressed(ktx2, role)
+                .expect("readable")
+                .expect_err("a file the block rules refuse")
+        };
+        assert_eq!(
+            refused(&cooked(6, 8, None), TextureRole::BaseColorSrgb),
+            "its base level is not whole 4x4 blocks"
+        );
+        assert_eq!(
+            refused(&cooked(8, 8, Some(2)), TextureRole::BaseColorSrgb),
+            "its mip chain stops above 1x1"
+        );
+        // A BC5 normal map goes through with its two channels; z and variance are the
+        // renderer's to rebuild.
+        let normal = cooked_as(ara_asset_format::TextureFormat::Bc5, 8, 8, None);
+        let normal = compressed(&normal, TextureRole::NormalLinear)
+            .expect("readable")
+            .expect("a normal map as shipped");
+        assert_eq!((normal.format, normal.mips.len()), (BlockFormat::Bc5, 4));
+        // BC7 is not a normal map's format.
+        assert_eq!(
+            refused(&cooked(8, 8, None), TextureRole::NormalLinear),
+            "its format does not fit the role it is bound in"
+        );
     }
 
     #[test]
