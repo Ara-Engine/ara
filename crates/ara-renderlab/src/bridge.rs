@@ -152,6 +152,20 @@ pub(crate) struct Bridge {
     /// How many frames `begin` allows in flight (`Options::frames_in_flight`, at most
     /// `MAX_IN_FLIGHT`).
     in_flight_limit: usize,
+    /// How long `finish` sleeps after a poll that found the oldest frame still on the GPU
+    /// (`ARA_RENDERLAB_FINISH_SLEEP_US`, default 0: the caller's loop polls again at once).
+    /// Each poll on Renderlab's device runs wgpu's deferred destruction, so fewer polls while
+    /// the GPU draws leave the device alone for the next frame's submit.
+    finish_sleep: Duration,
+    /// `Self::pump` calls since the last frame was taken, for the bridge log.
+    polls: u32,
+    /// `ARA_RENDERLAB_PACE=1`: `begin` waits until the GPU should be about to finish the frame
+    /// in flight before recording the next, so the next frame's `queue.submit` finds an almost
+    /// empty queue instead of the driver blocking it (`ARA_RENDERLAB_PACE_MARGIN_US`, default
+    /// 1500, is how long before the estimated end the recording starts).
+    pace: Option<Duration>,
+    /// Moving average of `Pending::begin_ms`: the CPU chain a frame's recording takes.
+    begin_ms_average: f64,
     /// The frames begun and not yet taken, oldest first (`Bridge::begin`, `Bridge::finish`).
     pending: std::collections::VecDeque<Pending>,
     /// The last frame's eye and view direction, to notice a view that jumps.
@@ -288,6 +302,24 @@ impl Bridge {
                 .unwrap_or(options.frames_in_flight)
                 .clamp(1, MAX_IN_FLIGHT),
             pending: std::collections::VecDeque::new(),
+            finish_sleep: Duration::from_micros(
+                std::env::var("ARA_RENDERLAB_FINISH_SLEEP_US")
+                    .ok()
+                    .and_then(|value| value.parse().ok())
+                    .unwrap_or(0),
+            ),
+            polls: 0,
+            pace: std::env::var("ARA_RENDERLAB_PACE")
+                .is_ok_and(|value| value == "1")
+                .then(|| {
+                    Duration::from_micros(
+                        std::env::var("ARA_RENDERLAB_PACE_MARGIN_US")
+                            .ok()
+                            .and_then(|value| value.parse().ok())
+                            .unwrap_or(1500),
+                    )
+                }),
+            begin_ms_average: 0.,
             last_view: None,
         })
     }
@@ -370,6 +402,7 @@ impl Bridge {
     /// CPU records the next while the GPU draws the last); it is an error to begin another
     /// before one is taken.
     pub fn begin(&mut self, gpu: &mut GpuDevice, view: &ExternalView<'_>) -> Result<()> {
+        self.pace_before_recording();
         let begin_started = Instant::now();
         anyhow::ensure!(
             self.pending.len() < self.in_flight_limit,
@@ -565,9 +598,34 @@ impl Bridge {
         Ok(())
     }
 
+    /// With pacing on: waits, polling now and then, until the frame in flight has been on the GPU
+    /// for its last measured span minus the CPU chain of recording the next frame (and the
+    /// margin), or it is done. Bounded by `FRAME_WAIT`. The wait is the one place the CPU
+    /// catches up with the GPU, instead of the driver stalling a `queue.submit`.
+    fn pace_before_recording(&mut self) {
+        let Some(margin) = self.pace else { return };
+        let (Some(gpu_ms), true) = (self.gpu_ms, self.begin_ms_average > 0.) else {
+            return;
+        };
+        let wait_ms = (gpu_ms - self.begin_ms_average).max(0.) - margin.as_secs_f64() * 1000.;
+        while let Some(newest) = self.pending.back() {
+            if newest.done || newest.since.elapsed() > FRAME_WAIT {
+                break;
+            }
+            if newest.since.elapsed().as_secs_f64() * 1000. >= wait_ms {
+                break;
+            }
+            std::thread::sleep(Duration::from_micros(200));
+            if self.pump().is_err() {
+                break;
+            }
+        }
+    }
+
     /// Reads the engine's events: the GPU's pass timings, and whether the frame in flight has
     /// completed (any caller's poll may be the one that sees it).
     fn pump(&mut self) -> Result<renderlab::engine::Events> {
+        self.polls += 1;
         let events = self.engine.poll()?;
         if let Some(sample) = events.gpu.last() {
             let ms = |pass: Option<std::time::Duration>| pass.map(|d| d.as_secs_f64() * 1000.);
@@ -608,6 +666,9 @@ impl Bridge {
             return Ok(None);
         };
         if !oldest.done && oldest.since.elapsed() <= FRAME_WAIT {
+            if !self.finish_sleep.is_zero() {
+                std::thread::sleep(self.finish_sleep);
+            }
             return Ok(None);
         }
         let Some(taken) = self.pending.pop_front() else {
@@ -648,9 +709,14 @@ impl Bridge {
             upload(gpu, target, &rgba8)?
         };
         let handoff_ms = started.elapsed().as_secs_f64() * 1000.;
+        self.begin_ms_average = if self.begin_ms_average > 0. {
+            0.9 * self.begin_ms_average + 0.1 * taken.begin_ms
+        } else {
+            taken.begin_ms
+        };
         log_line(|| {
             format!(
-                "bridge_log thread={:?} frame={} begin={:.2} done_after={} in_flight={:.2} handoff={handoff_ms:.2} still_pending={}",
+                "bridge_log thread={:?} frame={} begin={:.2} done_after={} in_flight={:.2} handoff={handoff_ms:.2} still_pending={} polls={}",
                 std::thread::current().id(),
                 taken.frame.0,
                 taken.begin_ms,
@@ -659,6 +725,7 @@ impl Bridge {
                     .map_or("none".into(), |ms| format!("{ms:.2}")),
                 taken.since.elapsed().as_secs_f64() * 1000.,
                 self.pending.len(),
+                std::mem::take(&mut self.polls),
             )
         });
 
