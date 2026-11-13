@@ -32,6 +32,28 @@ pub fn package_scene_for_export(
     package(root, worker, Some(scripts), report)
 }
 
+/// The errors that stop packaging. A project-level error (the C# tools are not built, a
+/// module does not compile) leaves the schema without the project's own types, so every
+/// document then reports unknown components: the project's errors are returned alone, and
+/// the documents' only when the project itself is sound.
+fn problems<'a>(
+    project: &[ara_diag::Diagnostic],
+    documents: impl Iterator<Item = &'a ara_diag::Diagnostic>,
+) -> Vec<String> {
+    let errors = |diagnostics: &mut dyn Iterator<Item = &ara_diag::Diagnostic>| -> Vec<String> {
+        diagnostics
+            .filter(|diagnostic| diagnostic.severity == ara_diag::Severity::Error)
+            .map(ToString::to_string)
+            .collect()
+    };
+    let project = errors(&mut project.iter());
+    if project.is_empty() {
+        errors(&mut { documents })
+    } else {
+        project
+    }
+}
+
 fn package(
     root: &Path,
     worker: &Path,
@@ -51,13 +73,7 @@ fn package(
         .unwrap_or(Ok(600))?;
     let project = crate::open_project(root).map_err(|error| error.to_string())?;
     let (workspace, diagnostics) = project.load(&[]);
-    let problems: Vec<_> = project
-        .diags
-        .iter()
-        .chain(diagnostics.values().flatten())
-        .filter(|diagnostic| diagnostic.severity == ara_diag::Severity::Error)
-        .map(ToString::to_string)
-        .collect();
+    let problems = problems(&project.diags, diagnostics.values().flatten());
     if !problems.is_empty() {
         return Err(problems.join("\n"));
     }
@@ -145,4 +161,27 @@ fn package(
             .map(|(id, path)| (id.to_owned(), path.to_owned()))
             .collect(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::problems;
+    use ara_diag::{Code, Diagnostic};
+
+    #[test]
+    fn a_project_error_is_reported_without_the_document_errors_it_causes() {
+        let tools = Diagnostic::error(Code(904), "C# SDK tools are missing");
+        let unknown = Diagnostic::error(Code(1106), "unknown component `Survivor`");
+        let warning = Diagnostic::warning(Code(1106), "a warning");
+        let both = problems(std::slice::from_ref(&tools), [&unknown].into_iter());
+        assert_eq!(both.len(), 1);
+        assert!(both[0].contains("ARA0904"), "{both:?}");
+        // A sound project reports its documents; warnings never stop packaging.
+        let documents = problems(
+            std::slice::from_ref(&warning),
+            [&unknown, &warning].into_iter(),
+        );
+        assert_eq!(documents.len(), 1);
+        assert!(documents[0].contains("ARA1106"), "{documents:?}");
+    }
 }
