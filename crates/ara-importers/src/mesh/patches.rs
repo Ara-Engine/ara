@@ -70,12 +70,50 @@ pub fn load_or_build(
     };
     let key = cache::Key::new(mesh, settings);
     let bytes = cache.read(key)?;
-    let prepared = cache::prepare(mesh, settings, bytes.as_deref())
-        .map_err(|e| Error::Invalid(e.to_string()))?;
+    let prepared = cache::prepare(mesh, settings, bytes.as_deref()).map_err(|e| {
+        Error::Invalid(match e {
+            ara_patch_charts::Error::FragmentLimit => too_large(mesh, settings),
+            e => e.to_string(),
+        })
+    })?;
     if let Some(bytes) = prepared.write_back {
         cache.write(prepared.key, &bytes)?;
     }
     Ok(prepared.charts)
+}
+
+/// What to tell the author when a mesh's surface is more than the chart budget covers: how
+/// much surface it has, how much fits, and what to do. The limit itself says none of that.
+fn too_large(mesh: Mesh<'_>, settings: Settings) -> String {
+    let scale = settings.scale.map(f64::from);
+    let at = |index: u32| {
+        let p = mesh.positions[index as usize];
+        [0, 1, 2].map(|axis| f64::from(p[axis]) * scale[axis])
+    };
+    let area: f64 = mesh
+        .triangles
+        .iter()
+        .map(|triangle| {
+            let [a, b, c] = triangle.vertices.map(at);
+            let (u, v) = (
+                [b[0] - a[0], b[1] - a[1], b[2] - a[2]],
+                [c[0] - a[0], c[1] - a[1], c[2] - a[2]],
+            );
+            let cross = [
+                u[1] * v[2] - u[2] * v[1],
+                u[2] * v[0] - u[0] * v[2],
+                u[0] * v[1] - u[1] * v[0],
+            ];
+            0.5 * (cross[0] * cross[0] + cross[1] * cross[1] + cross[2] * cross[2]).sqrt()
+        })
+        .sum();
+    // A flat square metre is cut into two fragments per patch cell.
+    let edge = f64::from(settings.edge);
+    let fits = f64::from(settings.max_fragments) * edge * edge / 2.0;
+    format!(
+        "patch charts: the mesh has about {area:.0} m2 of surface, more than {} fragments of {edge} m patches can cover (about {fits:.0} m2 when flat). Split it into several meshes, or author it smaller and scale the entity.",
+        settings.max_fragments
+    )
 }
 
 #[cfg(test)]
@@ -142,5 +180,36 @@ mod tests {
             .unwrap(),
             imported
         );
+    }
+
+    #[test]
+    fn a_mesh_too_large_for_its_charts_says_how_large_and_what_to_do() {
+        // A 10 m square (two triangles) against a budget of 1,000 fragments of 0.25 m patches.
+        let vertices =
+            [[0., 0., 0.], [10., 0., 0.], [10., 0., 10.], [0., 0., 10.]].map(|position| Vertex {
+                position,
+                ..Vertex::default()
+            });
+        let error = load_or_build(
+            &vertices,
+            &[0, 2, 1, 0, 3, 2],
+            0,
+            [0.5; 3],
+            Settings {
+                max_fragments: 1000,
+                ..Settings::default()
+            },
+            &MemoryCache::default(),
+        )
+        .unwrap_err()
+        .to_string();
+        for part in [
+            "about 100 m2 of surface",
+            "1000 fragments of 0.25 m",
+            "about 31 m2",
+            "scale the entity",
+        ] {
+            assert!(error.contains(part), "{error}");
+        }
     }
 }
