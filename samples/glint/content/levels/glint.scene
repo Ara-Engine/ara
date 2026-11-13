@@ -307,14 +307,14 @@
     },
     "e_camcannon": {
       "name": "Cannon view",
-      "order": "b3i",
+      "order": "b3j",
       "Camera": {
         "fov": 60,
         "priority": 10
       },
       "Transform": {
-        "position": [-294.359, 5.77, 109.35],
-        "rotation": [17.706093, 61.87438, -15.725025]
+        "position": [-302.477, 6.27, 117.037],
+        "rotation": [13.910729, 53.677784, -11.285161]
       }
     },
     "e_camera": {
@@ -341,9 +341,21 @@
         "position": [-0.213, 3.6, -9.465]
       }
     },
+    "e_camglass": {
+      "name": "Glass bridge view",
+      "order": "b3g",
+      "Camera": {
+        "fov": 58,
+        "priority": 10
+      },
+      "Transform": {
+        "position": [-90.889, -1.075, 84.235],
+        "rotation": [-44.517105, 56.54627, 39.364937]
+      }
+    },
     "e_camgoal": {
       "name": "Goal view",
-      "order": "b3j",
+      "order": "b3k",
       "Camera": {
         "fov": 60,
         "priority": 10
@@ -367,7 +379,7 @@
     },
     "e_camsliders": {
       "name": "Slider view",
-      "order": "b3h",
+      "order": "b3i",
       "Camera": {
         "fov": 60,
         "priority": 10
@@ -379,7 +391,7 @@
     },
     "e_camturn": {
       "name": "Turn view",
-      "order": "b3g",
+      "order": "b3h",
       "Camera": {
         "fov": 60,
         "priority": 10
@@ -3300,7 +3312,7 @@
     },
     "e_run": {
       "name": "Run",
-      "order": "b3k",
+      "order": "b3l",
       "GlintRun": {
         "orbTotal": 43,
         "start": [-4.213244438171387, 0.6000000238418579, -5.4646687507629395]

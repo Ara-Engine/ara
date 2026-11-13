@@ -4093,7 +4093,7 @@
   "expect": {
     "finishTicks": 2998,
     "falls": 0,
-    "hash": "ce8dce54a75e36ef8484e98ca9e83f2118293e634a02ad17fb316eed53feb6b2",
+    "hash": "d31da09a260d91f4afcfd4cc89e437d7f0172a6bd2530419ae21f8c2429169f4",
     "platform": "macos-aarch64"
   }
 }

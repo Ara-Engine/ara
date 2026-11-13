@@ -487,8 +487,8 @@ pub struct View {
     pub fov: f32,
 }
 
-/// The review cameras, in route order: the world from behind the start, the turn, the sliders,
-/// the cannon's shot, the goal. The comparison's stills and fly-over use the same list.
+/// The review cameras, in route order: the world from behind the start, the glass bridge, the
+/// turn, the sliders, the cannon's shot, the goal. The comparison's stills and fly-over use the same list.
 fn views(c: &Course) -> Vec<View> {
     let (cannon, goal) = (c.cannon.as_ref().expect("cannon"), c.goal);
     let ahead = Quat::from_rotation_y(course::START_HEADING.to_radians()) * Vec3::Z;
@@ -496,6 +496,12 @@ fn views(c: &Course) -> Vec<View> {
     let turn = c.waypoints[c.waypoints.len() * 3 / 5];
     let shot = Quat::from_rotation_y(cannon.heading.to_radians());
     let sliders = (c.sliders[0].origin + c.sliders[1].origin) * 0.5;
+    let glass = c
+        .pieces
+        .iter()
+        .find(|p| p.kind == course::Kind::Glass)
+        .expect("the course has a glass bridge");
+    let along = glass.rot * Vec3::Z;
     vec![
         View {
             id: "e_camover",
@@ -503,6 +509,13 @@ fn views(c: &Course) -> Vec<View> {
             at: c.start - ahead * 46.0 + left * 34.0 + Vec3::Y * 30.0,
             look: c.start + ahead * 150.0 - left * 30.0 - Vec3::Y * 10.0,
             fov: 62.0,
+        },
+        View {
+            id: "e_camglass",
+            name: "Glass bridge view",
+            at: glass.center + (glass.rot * Vec3::X) * 13.0 + Vec3::Y * 6.0 - along * 5.0,
+            look: glass.center + along * 1.0,
+            fov: 58.0,
         },
         View {
             id: "e_camturn",
@@ -521,7 +534,7 @@ fn views(c: &Course) -> Vec<View> {
         View {
             id: "e_camcannon",
             name: "Cannon view",
-            at: cannon.breech + shot * Vec3::new(9.0, 6.0, -22.0),
+            at: cannon.breech + shot * Vec3::new(19.0, 6.5, -17.0),
             look: cannon.arc(cannon.flight * 0.5),
             fov: 60.0,
         },

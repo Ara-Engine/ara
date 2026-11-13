@@ -30,6 +30,8 @@ pub enum Kind {
     Beam,
     /// One segment of a banked curve.
     Bank,
+    /// A glass bridge: a transmission-glass slab in a metal frame, the drop visible through it.
+    Glass,
 }
 
 /// A static, walkable box.
@@ -314,8 +316,8 @@ pub fn build() -> Course {
     let s = t.piece("Checkpoint pad 1", Kind::Pad, 12.0, 10.0, 0.0);
     t.course.checkpoints.push((s.at(6.0), t.heading));
     t.roll(s.at(11.5), 1.0);
-    // 4. A descent, a run-up and a kicker: full speed carries the ball over the gap to a deck
-    //    2.5 m lower, through three orbs on the arc.
+    // 4. A descent, a run-up and a kicker: full speed carries the ball over the gap onto a
+    //    glass bridge 2.5 m lower, through three orbs on the arc.
     let s = t.piece("Descent", Kind::Deck, 30.0, 6.0, -8.0);
     for i in 0..5 {
         t.course.pickups.push(s.orb(4.0 + i as f32 * 5.5));
@@ -331,7 +333,7 @@ pub fn build() -> Course {
     }
     t.roll(lip, 1.0);
     t.gap(5.0, -(lip.y - s.at(0.0).y) - 2.5);
-    let s = t.piece("Landing deck", Kind::Deck, 18.0, 9.0, 0.0);
+    let s = t.piece("Landing deck", Kind::Glass, 18.0, 9.0, 0.0);
     t.ring(s.at(-2.0) + Vec3::Y * 2.6, 5.5);
     t.roll(s.at(17.0), 1.0);
     // 5. The climb back up, narrower.

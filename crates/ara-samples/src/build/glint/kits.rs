@@ -144,6 +144,7 @@ pub fn course(root: &Path, lock: &Lock, c: &Course) -> Result<String> {
     const GLOW: usize = 6;
     const CHROME: usize = 7;
     const GLASS: usize = 8;
+    const BRIDGE: usize = 9;
     let mut k = Kit::new(vec![
         stone(),
         paint(),
@@ -163,10 +164,81 @@ pub fn course(root: &Path, lock: &Lock, c: &Course) -> Result<String> {
                 attenuation_distance: 1.5,
             },
         ),
+        // The bridge's slab: thick transmission glass, faintly blue through its depth.
+        Material::solid_glass(
+            "bridge glass",
+            Glass {
+                ior: 1.5,
+                thickness: 0.16,
+                attenuation_color: [0.7, 0.9, 1.0],
+                attenuation_distance: 0.6,
+            },
+        ),
     ]);
     let v = Vec3::new;
     for p in &c.pieces {
         let h = p.half;
+        if p.kind == Kind::Glass {
+            // A glass bridge: a slab the ball rolls on, in a chrome frame on painted ribs, with
+            // the chevrons laid on the glass. Nothing under it but the drop.
+            local(
+                &mut k,
+                BRIDGE,
+                p,
+                v(0.0, h.y - 0.08, 0.0),
+                v(h.x - 0.24, 0.08, h.z - 0.24),
+                Quat::IDENTITY,
+            );
+            for side in [-1.0f32, 1.0] {
+                local(
+                    &mut k,
+                    CHROME,
+                    p,
+                    v(side * (h.x - 0.12), h.y - 0.2, 0.0),
+                    v(0.12, 0.2, h.z),
+                    Quat::IDENTITY,
+                );
+                local(
+                    &mut k,
+                    CHROME,
+                    p,
+                    v(0.0, h.y - 0.2, side * (h.z - 0.12)),
+                    v(h.x, 0.2, 0.12),
+                    Quat::IDENTITY,
+                );
+                local(
+                    &mut k,
+                    NAVY,
+                    p,
+                    v(side * (h.x - 0.12), h.y + 0.03, 0.0),
+                    v(0.12, 0.03, h.z),
+                    Quat::IDENTITY,
+                );
+            }
+            let ribs = (h.z * 2.0 / 3.0).floor() as u32;
+            for i in 1..ribs {
+                let z = -h.z + h.z * 2.0 * i as f32 / ribs as f32;
+                local(
+                    &mut k,
+                    PAINT,
+                    p,
+                    v(0.0, h.y - 0.34, z),
+                    v(h.x, 0.1, 0.07),
+                    Quat::IDENTITY,
+                );
+                for side in [-1.0f32, 1.0] {
+                    local(
+                        &mut k,
+                        CHEVRON,
+                        p,
+                        v(side * 0.17, h.y + 0.014, z + 1.5),
+                        v(0.06, 0.008, 0.28),
+                        Quat::from_rotation_y(-side * 38f32.to_radians()),
+                    );
+                }
+            }
+            continue;
+        }
         let kerb = if p.kind == Kind::Beam { 0.1 } else { 0.16 };
         // A painted body, a matte stone top between two navy kerbs, a keel and a cool glow below.
         local(
@@ -255,6 +327,24 @@ pub fn course(root: &Path, lock: &Lock, c: &Course) -> Result<String> {
                 v(0.55, 0.004, h.z),
                 Quat::IDENTITY,
             );
+        }
+        // Small lit studs along both kerbs: they carry the route through shade and at angles
+        // where the sun does not reach the deck.
+        if p.kind != Kind::Beam {
+            let studs = (h.z * 2.0 / 3.0).floor().max(1.0) as u32;
+            for i in 0..studs {
+                let z = -h.z + h.z * 2.0 * (i as f32 + 0.5) / studs as f32;
+                for side in [-1.0f32, 1.0] {
+                    local(
+                        &mut k,
+                        CHEVRON,
+                        p,
+                        v(side * (h.x - kerb), h.y + 0.07, z),
+                        v(0.05, 0.015, 0.16),
+                        Quat::IDENTITY,
+                    );
+                }
+            }
         }
         // Lit chevrons along the best line, pointing the way.
         let spacing = if p.kind == Kind::Pad { 2.0 } else { 3.0 };
@@ -663,7 +753,8 @@ pub fn cannon(root: &Path, lock: &Lock, muzzle_offset: Vec3) -> Result<String> {
     let length = muzzle_offset.length() + 1.6;
     let base = v(0.0, 1.0, 0.0) - axis * 1.4;
     let at = |p: Vec3| Mat4::from_translation(p) * Mat4::from_quat(tilt);
-    k.cylinder(PAINT, 1.0, length, 40, at(base), Vec2::ONE);
+    // The barrel is polished metal: it mirrors the deck, the sky and the ball rolling up to it.
+    k.cylinder(CHROME, 1.0, length, 40, at(base), Vec2::ONE);
     for f in [0.2f32, 0.5, 0.78] {
         k.cylinder(
             CORAL,
@@ -702,7 +793,7 @@ pub fn cannon(root: &Path, lock: &Lock, muzzle_offset: Vec3) -> Result<String> {
 }
 
 /// The goal, on the plaza's centre (local +Z is the way the ball arrives): a polished court, a
-/// great lit portal the shot passes through, four spires carrying a halo, and a beacon.
+/// great lit portal in a mirror casing the shot passes through, four spires carrying a halo, and a beacon.
 pub fn goal(root: &Path, lock: &Lock) -> Result<String> {
     const PAINT: usize = 0;
     const LIT: usize = 1;
@@ -728,7 +819,7 @@ pub fn goal(root: &Path, lock: &Lock) -> Result<String> {
     let portal = Mat4::from_translation(v(0.0, 7.6, -6.0));
     ring(
         &mut k,
-        PAINT,
+        CHROME,
         portal,
         6.6,
         Vec2::new(0.7, 1.1),
