@@ -97,7 +97,12 @@ fn balls() -> Vec<(&'static str, Material, f32)> {
         ),
         (
             "emissive",
-            Material::emitter("emissive", [1.0, 0.45, 0.12]),
+            // A material sample, not a lamp: it keeps the soft highlight it has always had
+            // (roughness 0.4, so the renderer traces a reflection for it).
+            Material {
+                roughness: 0.4,
+                ..Material::emitter("emissive", [1.0, 0.45, 0.12])
+            },
             2400.0,
         ),
     ]

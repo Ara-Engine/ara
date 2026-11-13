@@ -71,11 +71,14 @@ impl Material {
             glass: None,
         }
     }
-    /// A pure emitter (light panels, bulbs); colour is the emission tint.
+    /// A pure emitter (light panels, bulbs); colour is the emission tint. Rough enough
+    /// (0.6) that the renderer does not also trace it as a glossy reflector: under roughness
+    /// 0.5 every lit panel paid for a reflection that cannot be seen under its own light. A
+    /// surface that should glow and reflect sets its own `roughness`.
     pub fn emitter(name: &str, tint: [f32; 3]) -> Self {
         Self {
             emissive: tint,
-            ..Self::flat(name, [0.05, 0.05, 0.05], 0.4, 0.0)
+            ..Self::flat(name, [0.05, 0.05, 0.05], 0.6, 0.0)
         }
     }
     /// Clear glass: low roughness, blended.
