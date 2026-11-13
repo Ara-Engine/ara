@@ -257,6 +257,9 @@ pub struct PlayCaptureParams {
     /// Render what windowed frames draw (terrain chunks as meshes; no landscape or
     /// VFX composite) instead of the full capture (default false).
     pub presented: Option<bool>,
+    /// The game UI screen to draw over the image instead of the in-game HUD (the title,
+    /// the lobby, the loading page, settings or pause). The project must have a game UI.
+    pub screen: Option<ara_play::UiScreen>,
 }
 
 /// Params of `play.watch`.

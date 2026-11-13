@@ -89,6 +89,10 @@ pub struct CaptureArgs {
     /// decal-coverage, light-complexity or shadow-penumbra.
     #[arg(long, value_parser = ["lit", "albedo", "normals", "depth", "roughness-metal", "entity-ids", "shadow-cascades", "wireframe", "lit-wireframe", "gi-diffuse", "overdraw", "vertex-color", "vertex-color-red", "vertex-color-green", "vertex-color-blue", "vertex-color-alpha", "decal-coverage", "light-complexity", "shadow-penumbra"])]
     view: Option<String>,
+    /// Draw this game UI screen over the image instead of the in-game HUD, to look at a
+    /// menu without playing to it.
+    #[arg(long, value_parser = ["main-menu", "lobby", "loading", "settings", "pause", "hud"])]
+    screen: Option<String>,
     /// Measure flicker: settle this many live frames, then report how much they change.
     #[arg(long)]
     stability: Option<u32>,
@@ -124,6 +128,8 @@ impl CaptureArgs {
             params: params(json!({"scene":self.scene,"camera":self.camera,
             "path":self.path,"width":self.width,"height":self.height,"preset":self.preset,
             "ticks":self.ticks,"seed":self.seed,"marks":self.marks,"stability":self.stability,
+            // The protocol names screens in camelCase; only the title has two words.
+            "screen":self.screen.map(|screen| if screen == "main-menu" { "mainMenu".to_owned() } else { screen }),
             "video":self.video,"videoMove":self.video_move,"videoYaw":self.video_yaw,
             "videoCutAt":self.video_cut_at,"videoCutMove":self.video_cut_move,"videoCutYaw":self.video_cut_yaw,
             "renderDebug":render_debug(&self.without, self.full_resolution, self.reflections.as_deref(),

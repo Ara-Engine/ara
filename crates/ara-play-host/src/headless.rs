@@ -70,6 +70,10 @@ pub struct SceneCaptureParams {
     pub video_cut_move: Option<[f32; 3]>,
     /// Turn of the cut, in degrees about the vertical axis.
     pub video_cut_yaw: Option<f32>,
+    /// The game UI screen to draw over the image instead of the in-game HUD (the title,
+    /// the lobby, the loading page, settings or pause), to look at a menu without playing
+    /// to it. The project must have a game UI.
+    pub screen: Option<ara_play::UiScreen>,
 }
 
 fn tick_count(ticks: Option<u32>, duration: Option<f64>, hz: u32) -> Result<u32, Vec<Diagnostic>> {
@@ -225,6 +229,7 @@ impl PlayService {
                     "camera":p.camera,"preset":p.preset,"stability":p.stability,
                     "video":p.video,"videoMove":p.video_move,"videoYaw":p.video_yaw,
                     "videoCutAt":p.video_cut_at,"videoCutMove":p.video_cut_move,"videoCutYaw":p.video_cut_yaw,
+                    "screen":p.screen,
                 }),
                 false,
             )?;

@@ -178,3 +178,34 @@ fn outpost_native_menu_and_settings_controls_layout_activate_and_resize() -> Res
     surface.save(&directory.join("main-1080.png"))?;
     Ok(())
 }
+
+#[test]
+fn a_capture_can_ask_for_any_shell_screen() -> Result<()> {
+    // Three screens, each a solid 16 px square of its own colour in its own place.
+    let source: GameUi = serde_json::from_value(serde_json::json!({
+        "markup":"<ui id='r'><panel id='hud'/><panel id='main-menu'/><panel id='pause'/></ui>",
+        "stylesheet":"ui {width:100%;height:100%;} panel {position:absolute;top:0px;width:16px;height:16px;} #hud {left:0px;background:#ff0000ff;} #main-menu {left:24px;background:#00ff00ff;} #pause {left:48px;background:#0000ffff;}",
+        "bindings":[]
+    }))?;
+    let mut surface = Surface::plain(&source, [64, 16], 1.)?;
+    // Whether the red, green and blue squares are drawn (the title also paints a scrim).
+    let mut drawn = |screen: ara_play::UiScreen| -> Result<[bool; 3]> {
+        surface.screen(screen.into())?;
+        let image = surface.image()?;
+        Ok([(8, 0), (32, 1), (56, 2)].map(|(x, channel)| image.get_pixel(x, 8)[channel] > 200))
+    };
+    use ara_play::UiScreen;
+    assert_eq!(drawn(UiScreen::Hud)?, [true, false, false]);
+    assert_eq!(drawn(UiScreen::MainMenu)?, [false, true, false]);
+    assert_eq!(
+        drawn(UiScreen::Pause)?,
+        [true, false, true],
+        "pause sits over the HUD"
+    );
+    assert_eq!(
+        drawn(UiScreen::Lobby)?,
+        [false, false, false],
+        "a screen the UI lacks draws nothing"
+    );
+    Ok(())
+}
