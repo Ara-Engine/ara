@@ -274,3 +274,68 @@ fn a_ray_finds_the_entity_that_owns_the_surface_and_can_leave_one_out() {
     };
     assert_eq!(miss.expect("query"), None);
 }
+
+#[test]
+fn an_entitys_contacts_name_the_other_entity_with_the_normal_towards_it() {
+    let mut w = World::new();
+    let mut schedule = Schedule::default();
+    register::<JoltBackend>(
+        &mut w,
+        &mut schedule,
+        PhysicsConfig {
+            max_bodies: 64,
+            event_capacity: 256,
+            ..Default::default()
+        },
+    )
+    .expect("register");
+    let floor = spawn(&mut w, 1, [0.0, -0.5, 0.0], MotionType::Static);
+    w.get_mut::<Collider>(floor)
+        .expect("floor collider")
+        .half_extents = [20.0, 0.5, 20.0];
+    let body = spawn(&mut w, 2, [0.0, 0.6, 0.0], MotionType::Dynamic);
+    let lone = spawn(&mut w, 3, [10.0, 30.0, 0.0], MotionType::Dynamic);
+    let of = |w: &World, entity| {
+        let mut out = Vec::new();
+        // SAFETY: nothing else touches the world during the call.
+        unsafe { contacts_of::<JoltBackend>(w.as_unsafe_world_cell_readonly(), entity, &mut out) };
+        out
+    };
+    // The box lands, rests and (being allowed to) falls asleep; a sleeping body's contacts
+    // stop. Collect what each tick reported on the way.
+    let (mut started, mut persisted, mut stopped) = (false, 0, false);
+    for _ in 0..240 {
+        schedule.run(&mut w);
+        for contact in of(&w, body) {
+            assert_eq!(contact.other, Some(floor));
+            assert!(!contact.sensor);
+            match contact.phase {
+                ContactPhase::Started => started = true,
+                ContactPhase::Stopped => stopped = true,
+                ContactPhase::Persisted => {
+                    persisted += 1;
+                    // Out of the floor, towards the box.
+                    assert!(contact.normal[1] > 0.99, "{contact:?}");
+                    // The same contact seen from the floor points the other way.
+                    let seen = of(&w, floor);
+                    assert!(
+                        seen.iter()
+                            .any(|c| c.other == Some(body) && c.normal[1] < -0.99),
+                        "{seen:?}"
+                    );
+                }
+            }
+        }
+    }
+    assert!(started, "the landing was reported as started");
+    assert!(
+        persisted > 10,
+        "then as persisted while it settled: {persisted}"
+    );
+    assert!(
+        stopped && of(&w, body).is_empty(),
+        "and it ended when the box fell asleep"
+    );
+    // A body in the air touches nothing.
+    assert!(of(&w, lone).is_empty());
+}

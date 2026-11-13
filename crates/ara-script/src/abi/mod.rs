@@ -20,7 +20,7 @@ pub(crate) use describe::Fnv;
 pub use describe::{AbiConst, AbiField, AbiFn, AbiStruct, AbiTable};
 
 /// Bumped on any incompatible change to the semantics of the tables.
-pub const ABI_VERSION: u32 = 6;
+pub const ABI_VERSION: u32 = 7;
 
 abi_structs! { PUBLIC_STRUCTS;
     /// The fixed simulation tick that every system, behaviour and command sees.
@@ -48,6 +48,27 @@ abi_structs! { PUBLIC_STRUCTS;
 }
 
 abi_structs! { ABI_STRUCTS;
+    /// One contact of a body in the last completed physics tick (`physics_contacts`).
+    pub struct ContactRecord {
+        /// The entity touched, or zero once it has been removed.
+        pub other: u64,
+        /// World-space contact point, X.
+        pub px: f32,
+        /// Contact point, Y.
+        pub py: f32,
+        /// Contact point, Z.
+        pub pz: f32,
+        /// Normal out of the other surface, towards the entity asked about, X.
+        pub nx: f32,
+        /// Normal, Y.
+        pub ny: f32,
+        /// Normal, Z.
+        pub nz: f32,
+        /// 0 started, 1 persisted, 2 stopped.
+        pub phase: u32,
+        /// 1 when the other collider is a trigger.
+        pub sensor: u32,
+    }
     /// One contiguous run of rows of one ECS table, handed to one C# system.
     pub struct SystemCall {
         /// System id (`module << 16 | index`).
@@ -332,6 +353,10 @@ abi_table! {
         /// to `hit` (point, outward normal, fraction of the displacement) and returns 1;
         /// otherwise 0. Exclusive gameplay phases only.
         fn physics_raycast(ctx: *mut c_void, ox: f32, oy: f32, oz: f32, dx: f32, dy: f32, dz: f32, ignore: u64, entity: *mut u64, hit: *mut f32) -> u32;
+        /// Copies the contacts `entity` took part in during the last completed physics tick,
+        /// in physics' own order. Returns the required count and writes nothing when `cap`
+        /// is too small. Exclusive gameplay phases only.
+        fn physics_contacts(ctx: *mut c_void, entity: u64, out: *mut ContactRecord, cap: u32) -> u32;
     }
 }
 

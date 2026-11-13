@@ -121,6 +121,21 @@ public static unsafe class Host
         entity = new Entity(bits);
         return true;
     }
+    /// <summary>
+    /// Copies the contacts <paramref name="entity"/> took part in during the last completed
+    /// physics tick and returns how many there are. Throws if the span is too small.
+    /// </summary>
+    public static int PhysicsContacts(Entity entity, Span<ContactRecord> records)
+    {
+        var context = RequireExclusive();
+        if (context.Init.Api.PhysicsContacts == null) return 0;
+        fixed (ContactRecord* p = records)
+        {
+            var count = context.Init.Api.PhysicsContacts(context.Init.Ctx, entity.Bits, p, (uint)records.Length);
+            if (count > records.Length) throw new ArgumentException($"Contacts need {count} slots", nameof(records));
+            return (int)count;
+        }
+    }
     /// <summary>Queues a named boolean animator input at the fixed-tick boundary.</summary>
     public static void AnimationBool(Entity entity, string name, bool value)
     {

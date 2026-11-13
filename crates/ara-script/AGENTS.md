@@ -8,7 +8,7 @@ Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs,
 - `engine_bindings()`: the canonical ordered engine columns exposed to C# (currently
   checked native `Transform`), shared by the runtime, export hash and checked-in binding generation.
   A direct pointer view requires an explicit checked binding; other components use codecs.
-- `abi` (ABI v6): `HostInit` (+ `HostApi`, Rust → C#) and `ScriptApi` (C# → Rust), `Tick`,
+- `abi` (ABI v7): `HostInit` (+ `HostApi`, Rust → C#) and `ScriptApi` (C# → Rust), `Tick`,
   `Frame`, `SystemCall`, `BehaviourCall`, `CommandCall`, `ReloadReport` (kind, escalation,
   origin, cascade size, per-phase µs), the `ABI_CONSTS` (`RELOAD_*`, `ESC_*`, `ORIGIN_*`) and
   `layout_hash(engine_layouts)`. Entry: `ara_script_init(*const HostInit, *mut ScriptApi)`; Rust rejects null slots with ARA0922 before dispatch.
@@ -17,6 +17,7 @@ Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs,
   stops and boolean animator parameters, supplied/drained by the embedding runtime.
   `ScriptRays` is the scene ray query behind `Physics.Raycast`: the runtime supplies a
   function that reads physics through the exclusive phase's world cell; absent, rays miss.
+  `ScriptContacts` is the same for `Physics.Contacts` (an entity's contacts in the last tick).
   Every callback uses the active host context and its world resources.
   HostApi: component_json precedes query/input/navigation/control callbacks; regenerate C# after edits.
 - `HostApi.graphics`/`graphics_revision`: exclusive access to `ara-graphics-settings::Service`;
