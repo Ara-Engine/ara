@@ -122,17 +122,17 @@ What could break it:
 
 ## Cost (M5 Pro, 1280 x 720, Renderlab traced path; the Mac loaded by other work)
 
-From this branch's captures with binaries built from Ara main `b12de7d66` (Renderlab 316033ce), on a Mac busy with other work, so treat them as relative; the
+From this branch's captures with binaries built from Ara main `5b1f8807b` (Renderlab 360a0179), on a Mac busy with other work, so treat them as relative; the
 Mac GPU thread measures the branch head separately.
 
 | View | GPU ms | Shading | Indirect cache |
 |---|---|---|---|
-| Start (follow camera) | 26.4 | 17.6 | 1.7 |
-| Overview | 17.1 | 11.1 | 1.6 |
-| Turn | 22.4 | 15.4 | 1.7 |
-| Sliders | 23.7 | 16.2 | 1.7 |
-| Cannon | 18.5 | 12.0 | 1.4 |
-| Goal | 19.9 | 13.2 | 1.5 |
+| Start (follow camera) | 24.0 | 15.2 | 1.7 |
+| Overview | 16.2 | 10.2 | 1.6 |
+| Turn | 20.8 | 13.8 | 1.7 |
+| Sliders | 22.3 | 14.9 | 1.7 |
+| Cannon | 16.6 | 10.1 | 1.4 |
+| Goal | 18.4 | 11.6 | 1.5 |
 
 What moved it, round by round (same views, same binary):
 
@@ -144,7 +144,8 @@ What moved it, round by round (same views, same binary):
   intersecting spheres to one 7,700-triangle surface; the pylons from about 30 to about 20), so
   which of them the cache was paying for is not isolated.
 - Renderlab 316033ce (cheaper glossy reflections), with the great arch and the gantry added:
-  the table above.
+  17 to 26 ms.
+- Renderlab 360a0179 (weak glossy reflectors trace fewer rays): the table above.
 
 Glossy surface on screen is small by design (the inlay, the pad discs, the ball, the goal's
 floor); the start view has the most, a 6 m polished disc under the camera, and it is the
