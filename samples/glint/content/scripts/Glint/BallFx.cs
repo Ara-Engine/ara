@@ -29,7 +29,7 @@ public sealed partial class BallFx : Behaviour
         transform.Position = World.Read<Transform>(ball).Position - new Vector3(0, 0.46f, 0);
         if (pace > 0f && speed > 0.5f)
         {
-            Course.Resting(World.Read<Transform>(ball).Position, 0.5f, out var up, out _);
+            var up = Physics.Raycast(World.Read<Transform>(ball).Position, -Vector3.UnitY, 1.5f, out var floor, ball) ? floor.Normal : Vector3.UnitY;
             transform.Rotation = Course.LookEuler(velocity / speed, up);
         }
         transform.Scale = new Vector3(1f, 1f, TrailLength * pace);

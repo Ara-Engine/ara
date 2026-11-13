@@ -4,8 +4,7 @@ namespace Glint;
 /// Steers the rolling ball with momentum. The ball is a dynamic sphere; this behaviour only
 /// writes its velocity (planar acceleration toward the stick along whatever surface it rests
 /// on, a jump, rolling spin), so the physics engine still resolves every contact. Grounding
-/// and the surface's tilt come from the course's <see cref="Surface"/> boxes, because scripts
-/// have no contact events or ray casts.
+/// and the surface's tilt come from a ray cast straight down; landings from the ball's contacts.
 /// </summary>
 public sealed partial class BallController : Behaviour
 {
@@ -35,15 +34,28 @@ public sealed partial class BallController : Behaviour
             ball.Grounded = false;
             return;
         }
-        var grounded = Course.Resting(position, Radius, out var normal, out var under);
+        // Grounded: a surface just under the ball, by a ray straight down from its centre. On a
+        // slope the ray is longer than the gap, so the gap is measured along the normal.
+        var grounded = Physics.Raycast(position, -Vector3.UnitY, Radius + 0.8f, out var floor, Entity)
+            && floor.Normal.Y > 0.3f && floor.Distance * floor.Normal.Y - Radius <= 0.22f;
+        var normal = grounded ? floor.Normal : Vector3.UnitY;
+        var under = grounded ? floor.Entity : Entity.Null;
+        // A landing: a contact that started on something below, after a real drop. The fall's
+        // speed is kept until the ball touches (the ray says "grounded" a tick or two early).
+        var touching = false;
+        Span<Contact> scratch = stackalloc Contact[16];
+        foreach (ref readonly var contact in Physics.Contacts(Entity, scratch))
+        {
+            if (contact.Phase == ContactPhase.Stopped || contact.Normal.Y < 0.5f) continue;
+            touching = true;
+            if (contact.Phase == ContactPhase.Started && ball.FallSpeed > 4f) ball.LandTick = tick.Frame;
+        }
+        ball.FallSpeed = touching ? 0f : MathF.Max(ball.FallSpeed, -body.Linear.Y);
         if (grounded)
         {
-            if (!ball.Grounded && ball.FallSpeed > 4f) ball.LandTick = tick.Frame;
             ball.Flying = false;
             ball.LastGroundY = position.Y;
-            ball.FallSpeed = 0;
         }
-        else ball.FallSpeed = MathF.Max(ball.FallSpeed, -body.Linear.Y);
         // A fall: well below the last surface the ball touched (far below when flying from the cannon).
         var drop = ball.Flying ? 30f : 9f;
         if (position.Y < ball.LastGroundY - drop || position.Y < -90f)

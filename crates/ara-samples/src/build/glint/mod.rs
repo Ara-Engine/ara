@@ -4,7 +4,7 @@
 //! steered by C# (`samples/glint/content/scripts/Glint`).
 //!
 //! Everything comes from `course.rs` (the route as data). Two scenes share one art pass:
-//! `levels/glint.scene` (the game: colliders, `Surface` boxes, movers, the ball, the director)
+//! `levels/glint.scene` (the game: colliders, movers, the ball, the director)
 //! and `levels/menu.scene` (the native menu's backdrop: the same art, no gameplay components, a
 //! fly-over camera marked by two points). The UI's markup, bindings and resources, the sounds and
 //! the autopilot's route are generated here too.
@@ -554,7 +554,7 @@ fn game(ctx: &Ctx, c: &Course) -> Result<()> {
     let models = models(ctx, c)?;
     let mut s = Scene::new(&models);
     art(&mut s, c, true);
-    // Invisible collision and walkable boxes: the course kit draws the pieces.
+    // Invisible collision: the course kit draws the pieces, and the ball finds them by ray.
     for p in &c.pieces {
         let half = p.half.to_array();
         s.entity(
@@ -564,7 +564,6 @@ fn game(ctx: &Ctx, c: &Course) -> Result<()> {
                 "Transform": {"position": round3(p.center), "rotation": round3(Vec3::from_array(p.euler()))},
                 "RigidBody": {"motion": "static"},
                 "Collider": {"halfExtents": half},
-                "Surface": {"half": half},
             }),
         );
     }
@@ -591,7 +590,6 @@ fn game(ctx: &Ctx, c: &Course) -> Result<()> {
                 "MeshRenderer": renderer,
                 "RigidBody": {"motion": "kinematic"},
                 "Collider": {"halfExtents": half},
-                "Surface": {"half": half},
                 "Mover": {"origin": m.origin.to_array(), "travel": m.travel.to_array(), "periodTicks": m.period, "phaseTicks": m.phase},
             }),
         );

@@ -35,13 +35,13 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
    add the physics components when the body is authored (zeroed), or retry a faulted behaviour
    next tick for this exception, and print behaviour faults in `ara_play step`'s result.
    **Engine PRs: #153 (a resting `Velocity` from tick zero), #154 (`faults` in a step's result).**
-2. **Scripts have no contact events, ray casts or sweeps.** *Wanted:* "is the ball on
-   something, and what is its normal". *Happened:* nothing to ask. *Workaround:* every
-   walkable box carries a `Surface` component with the same half extents as its collider and
-   the ball tests itself against them each tick (`Course.Resting`); the course is limited to
-   boxes. *Smallest change:* `Physics.Raycast(origin, direction, distance)`
-   returning entity, point and normal, and a per-tick contact list on a body.
-   **Engine PR: #158 (`Physics.Raycast`)**; the contact list is a second PR, not opened yet.
+2. **Scripts had no contact events, ray casts or sweeps.** *Wanted:* "is the ball on
+   something, and what is its normal". *Happened:* nothing to ask, so every walkable box
+   carried a `Surface` component with its collider's half extents and the ball tested itself
+   against those boxes each tick; the course was limited to boxes. **Engine PRs: #158
+   (`Physics.Raycast`) and #159 (`Physics.Contacts`).** With them the ball is grounded by one
+   ray straight down, landings come from its contacts, and the `Surface` component and the
+   box maths are gone from the scripts. Still missing: sweeps and overlaps.
 3. **Withdrawn: a kinematic platform does carry what rests on it.** These notes said a body
    moved by writing its transform slides out from under a rider and has no velocity to read.
    Both were wrong. The write becomes a kinematic target, physics moves the body with a real

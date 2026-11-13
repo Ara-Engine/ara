@@ -1,5 +1,5 @@
 //! Glint's course as data: a turtle walks the route and emits the pieces everything else is
-//! built from (the visual kit, the colliders and their `Surface` faces, the waypoints the camera
+//! built from (the visual kit, the colliders, the waypoints the camera
 //! follows, the pickups, checkpoints, movers, bars, the cannon, the goal, the decorative rings
 //! the route passes through and the autopilot's plan). One table, so the look, the physics, the
 //! scripts and the replay cannot disagree about where a piece is.
