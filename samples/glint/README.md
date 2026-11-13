@@ -47,6 +47,8 @@ ara-samples build glint                                 # re-author everything f
 ara-samples glint-replay                                # replay the recorded run, check the result
 ara-samples glint-replay --captures target/glint-shots  # also write the stills listed in the replay
 ara-samples glint-replay --audio target/glint-sound/end.wav  # also render 3 s of the run's sound; fails if the mixer is silent
+ara-samples glint-replay --captures <dir> --hold 300         # 300 live frames at each still: steady-state timings, `<name>.live.png`
+ara-samples glint-replay --captures <dir> --hold 300 --travel 20 --size 1920x1080  # a 300-frame clip at each, moving 20 m along the camera's heading
 python3 samples/glint/replay/autopilot.py --ara <ara>   # play the course again and rewrite the replay (`python` on Windows)
 ```
 
@@ -187,9 +189,8 @@ warm-up (GPU ms, pipelined present off):
 
 So at that view the untraced path costs 1.5 to 1.8 times the traced one in steady play. The
 other replay views are not measured yet: until Ara #168 a running world could only be captured
-as a still, and a still is taken right after a history cut (`ara-samples glint-replay
---captures <dir> --hold 300`, with `--travel 20` for a moving clip, does every view once #168
-is in; it is on the branch `t3/sample-glint-hold`). After a cut the untraced path runs about
+as a still, and a still is taken right after a history cut. `ara-samples glint-replay
+--captures <dir> --hold 300`, with `--travel 20` for a moving clip, now does every view. After a cut the untraced path runs about
 50 slow frames while its GI cache gathers; what that means for this game is FINDINGS 29.
 
 ## Files
