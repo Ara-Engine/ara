@@ -65,6 +65,10 @@ captures leave tracked sample evidence unchanged.
   Only generated non-document assets and scratch directories are removed directly.
 - Keep generated files deterministic so a rebuild leaves `git status` clean apart
   from intended changes.
+  A rebuild's diff can still be text only: a version upgrade by `ara fmt` writes a component's
+  defaults out in full (a `PostProcessVolume`'s exposure, tone mapping, grading, vignette)
+  and the builder writes only what it sets. Compare the resolved values before calling a
+  rebuild a look change.
 - Agent edits apply immediately under amended D24, with attribution, why and undo.
   Terrain strokes and foliage exclusions use stable IDs so rebuilds retain identity.
   Outpost's 144 `TerrainChunk` entities are children of `e_terrain` (identity transform,
@@ -74,6 +78,8 @@ captures leave tracked sample evidence unchanged.
 
 `ara-samples game` also authors Outpost's native `content/levels/menu.scene` through entity
 and prefab commands; it shares the compound art but contains no gameplay components.
+It is a copy of `outpost.scene`: a change made to the level by typed commands is repeated in
+the menu (or `game` is rerun). `game::backdrop`'s test fails when the committed pair disagree.
 
 `cargo test -p ara-samples` (lock validation, mirror fallback/integrity/errors,
 kit geometry, source-pivot bounds, fold-in maths). Fetch tests use curl `file://`
