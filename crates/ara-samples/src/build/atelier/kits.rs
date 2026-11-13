@@ -503,7 +503,15 @@ pub fn courtyard(root: &Path, lock: &Lock) -> Result<String> {
     // Wall lantern right of the doorway: bracket, frame and glowing glass.
     let l = v(3.3, 2.4, 0.5);
     block(&mut k, STEEL, l + v(0.0, 0.0, 0.08), v(0.04, 0.5, 0.04));
-    block(&mut k, STEEL, l + v(0.0, 0.0, 0.18), v(0.2, 0.34, 0.2));
+    // Four corner bars, not a box: a solid frame round the glass hid it completely.
+    for (dx, dz) in [(-0.09, -0.09), (0.09, -0.09), (-0.09, 0.09), (0.09, 0.09)] {
+        block(
+            &mut k,
+            STEEL,
+            l + v(dx, 0.0, 0.18 + dz),
+            v(0.02, 0.34, 0.02),
+        );
+    }
     block(&mut k, LANTERN, l + v(0.0, 0.0, 0.18), v(0.17, 0.3, 0.17));
     // Cap and foot of the lantern, and two steel bands round the glass.
     block(&mut k, STEEL, l + v(0.0, 0.18, 0.18), v(0.24, 0.03, 0.24));

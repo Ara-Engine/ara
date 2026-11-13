@@ -3,7 +3,8 @@
 Every surface in `levels/atelier.scene` whose roughness is under 0.5, the value at which
 Renderlab stops tracing a glossy reflection (under 0.05 a one-ray mirror; between the two a
 lobe that, from Renderlab 99f5d395, fades out between 0.35 and 0.5). Read from the kit glTF the
-builder writes and from the third-party models as fetched, on Ara main `9a6541060`.
+builder writes and from the third-party models as fetched; the previews are shot on Ara main
+`f134c989f` (Renderlab `9ae2929d`).
 
 ## Set by a number
 
@@ -62,6 +63,17 @@ Per texel from a metallic-roughness texture (factors 1.0), sampled at 256 x 256.
 - **An emitter in two reflectors.** The `glow` still frames the table lamp's globe (an
   emitter, in shade) on the nickel tray beside the small chrome sphere: the same glowing
   object directly, in a glossy lobe at roughness 0.07 and in a one-ray mirror.
+- **The wall lantern outdoors has nothing to be seen in.** Its glass (an emitter at 5000
+  nits on a base colour of 0.05, so in full sun its own light is about nine times what it
+  reflects) is on the front wall right of the doorway, at 3.3, 2.4, 0.68. The doorway is an
+  open hole, not glazed, and the east window's pane is round the corner, out of the
+  lantern's sight. What is within reach is all at the faint end: the lantern's own black
+  steel frame and bracket (0.42), the leaves in the planter below it (shrub 04, mean 0.46;
+  potted plant 01, mean 0.55) and the courtyard stone under it (mean 0.52, 14% of its texels
+  under 0.5, none under 0.49). None is a mirror or a near-mirror, so the lantern is an
+  emitter seen directly and nothing more; the indoor globe is the scene's only emitter in a
+  reflector. To make the lantern an outdoor check it needs a reflector added beside or below
+  it (a polished backplate on the wall, or a strip of polished stone or water on the paving).
 - **What does reflect** is small on screen: the chrome sphere (a one-ray mirror), brass, the
   steel frames and legs, the walnut table top and console, the plinth and the armchair, most
   of them inside the fade.

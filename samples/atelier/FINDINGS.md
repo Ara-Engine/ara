@@ -166,3 +166,7 @@ their cameras.
   its own exposure, EV100 12, from a 2 m box volume round its camera (`e_shadowev`), so
   the stripes are judged at a sensible level; the room's exposure is untouched and no
   other camera comes within 8 m of the box.
+- **The wall lantern glows now.** Its glass sat inside a solid steel block of the frame's
+  outer size, so nothing of it showed: a dark box on the wall in the dolly's first frame
+  and the courtyard pan. The frame is four corner bars with the cap, foot and two bands it
+  had. A mistake in the scene's own builder, not an engine finding.
