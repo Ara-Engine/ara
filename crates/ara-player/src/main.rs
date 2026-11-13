@@ -247,7 +247,7 @@ fn run(args: Args, launched: Instant) -> Result<()> {
                 }
             };
             Some(ara_runtime_script::ScriptPlugin::prewarm(config).context(
-                "ARA0922: C# pre-warm failed; run `ara doctor` to check the .NET 10 installation",
+                "ARA0922: C# pre-warm failed; run `ara doctor` to check the .NET 10 installation and Ara's C# tools",
             )?)
         }
         Err(_) => None,
