@@ -893,13 +893,18 @@ impl World {
             if let Some(exposure) = applied {
                 capture.metadata.request.exposure = exposure;
             }
-            if let Some(ui) = &self.ui {
-                crate::game_ui::capture(
+            match &self.ui {
+                Some(ui) => crate::game_ui::capture(
                     ui,
                     &self.runtime,
                     self.runtime.player().0,
+                    params.screen,
                     &mut capture.image,
-                )?;
+                )?,
+                None if params.screen.is_some() => {
+                    bail!("the capture asks for a game UI screen, but this project has no game UI")
+                }
+                None => {}
             }
             capture.write(std::path::Path::new(path))?;
             marks = capture

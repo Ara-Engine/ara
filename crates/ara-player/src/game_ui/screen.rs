@@ -14,6 +14,20 @@ pub(crate) enum Screen {
     Game,
 }
 
+impl From<ara_play::UiScreen> for Screen {
+    fn from(screen: ara_play::UiScreen) -> Self {
+        use ara_play::UiScreen;
+        match screen {
+            UiScreen::MainMenu => Self::Main,
+            UiScreen::Lobby => Self::Lobby,
+            UiScreen::Loading => Self::Loading,
+            UiScreen::Settings => Self::Settings,
+            UiScreen::Pause => Self::Pause,
+            UiScreen::Hud => Self::Game,
+        }
+    }
+}
+
 #[derive(Default)]
 pub(crate) struct Router {
     state: InputState,

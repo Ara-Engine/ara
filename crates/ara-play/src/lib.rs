@@ -18,7 +18,7 @@ mod process;
 mod render_debug;
 pub mod shm;
 pub use editor_control::{Control, Controlled, View, ViewCamera};
-pub use game_ui::{GameUi, UiBinding, UiMusic, UiSound};
+pub use game_ui::{GameUi, UiBinding, UiMusic, UiScreen, UiSound};
 pub use imports::{ImportState, Stall};
 pub use process::ProcessMode;
 pub use render_debug::{DebugView, ReferenceTrace, ReflectionView, RenderDebug};
@@ -599,6 +599,9 @@ pub struct CaptureParams {
     /// Turn of the cut in degrees about the vertical axis.
     #[serde(default)]
     pub video_cut_yaw: Option<f32>,
+    /// The game UI screen drawn over the image; absent draws the in-game HUD.
+    #[serde(default)]
+    pub screen: Option<UiScreen>,
 }
 fn width() -> u32 {
     1280
