@@ -514,6 +514,10 @@ impl Bridge {
                     ("shadow_upload", cpu.shadow_upload),
                     ("shadow_encode", cpu.shadow_encode),
                 ],
+                [
+                    ("finish", cpu.finish),
+                    ("early_submit", cpu.early_submit),
+                ],
             )
         });
         let target = self.target.as_mut().context("target ensured above")?;
