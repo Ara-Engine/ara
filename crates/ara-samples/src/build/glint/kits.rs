@@ -40,15 +40,19 @@ fn lane() -> Material {
 fn seam() -> Material {
     Material::flat("deck seam", [0.13, 0.15, 0.19], 0.85, 0.0)
 }
+/// Satin, like the white paint: roughness 0.5 is where the renderer stops tracing a glossy
+/// reflection for a surface, and navy covers kerbs, entry bands and the sliders' tops. At 0.45
+/// it cost 1.5 ms of shading a frame on the decks for a sheen nobody could point at.
 fn navy() -> Material {
-    Material::flat("navy paint", [0.035, 0.08, 0.22], 0.45, 0.0)
+    Material::flat("navy paint", [0.035, 0.08, 0.22], 0.5, 0.0)
 }
 /// The deliberate polish: a dark mirror-like stone inlay.
 fn polish() -> Material {
     Material::flat("polished navy stone", [0.03, 0.06, 0.16], 0.06, 0.0)
 }
+/// Satin for the same reason as the navy: the pinstripes and kerbs run the length of every deck.
 fn coral() -> Material {
-    Material::flat("coral lacquer", ACCENT, 0.25, 0.0)
+    Material::flat("coral paint", ACCENT, 0.5, 0.0)
 }
 fn chrome() -> Material {
     Material::flat("chrome", [0.93, 0.93, 0.95], 0.06, 1.0)

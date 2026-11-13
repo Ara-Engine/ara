@@ -57,6 +57,7 @@
       "target": "e_music"
     }
   ],
+  "click": "third_party/outpost_interface/Audio/click_001.ogg",
   "fonts": [
     "third_party/outpost_ui/Font/Kenney Future.ttf"
   ],
