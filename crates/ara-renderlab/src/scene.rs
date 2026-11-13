@@ -136,6 +136,9 @@ pub(crate) struct Scene {
     /// reason the file could not go through as it is (`texture_report`).
     compressed: u32,
     decoded: std::collections::BTreeMap<texture::Fallback, u32>,
+    /// Time `texture` has spent turning cooked textures into uploads, on either path
+    /// (decode and mip chain, or passing the blocks through). Glow hosts are not timed.
+    upload_time: std::time::Duration,
     /// The texture count `log_textures` last printed.
     logged: u32,
     objects: HashMap<u64, Object>,
@@ -1302,10 +1305,12 @@ impl Scene {
         if let Some(id) = self.textures.get(&key) {
             return Ok(*id);
         }
+        let started = std::time::Instant::now();
         let id = match self.as_shipped(engine, texture, role)? {
             Some(id) => id,
             None => engine.create_texture(texture::prepare(&texture.ktx2, role)?)?,
         };
+        self.upload_time += started.elapsed();
         self.textures.insert(key, id);
         Ok(id)
     }
@@ -1362,8 +1367,8 @@ impl Scene {
         }
     }
 
-    /// How this scene's textures were uploaded so far: the count as shipped, and each
-    /// reason a texture was decoded to RGBA8 with its count.
+    /// How this scene's textures were uploaded so far: the count as shipped, each reason
+    /// a texture was decoded to RGBA8 with its count, and the time both took.
     fn texture_report(&self) -> String {
         let decoded: Vec<String> = self
             .decoded
@@ -1371,13 +1376,15 @@ impl Scene {
             .map(|(reason, count)| format!("{count} decoded ({reason})"))
             .collect();
         format!(
-            "{} textures uploaded as shipped (BC blocks, the file's own mips); {}",
+            "{} textures uploaded as shipped (BC blocks, the file's own mips); {}; {:.2} s \
+             preparing and uploading them on the render thread",
             self.compressed,
             if decoded.is_empty() {
                 "none decoded".to_owned()
             } else {
                 decoded.join(", ")
-            }
+            },
+            self.upload_time.as_secs_f64()
         )
     }
 }
