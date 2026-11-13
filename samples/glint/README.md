@@ -54,7 +54,7 @@ python3 samples/glint/replay/autopilot.py --ara <ara>   # play the course again 
 Everything comes from one table, `crates/ara-samples/src/build/glint/course.rs`: a turtle walks
 the route and emits the walkable boxes, the glass rails, the sliders, bars, checkpoints, orbs,
 rings, the cannon's ballistic solution, the camera's centre line and the autopilot's plan. The
-kits (`kits.rs`), the colliders, the scripts' `Surface` components, the UI's numbers, the
+kits (`kits.rs`), the colliders, the UI's numbers, the
 comparison files (`compare/`) and the replay's route all read that table, so the look, the
 physics and the scripts cannot disagree about where a piece is.
 

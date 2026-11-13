@@ -41,7 +41,14 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
    against those boxes each tick; the course was limited to boxes. **Engine PRs: #158
    (`Physics.Raycast`) and #159 (`Physics.Contacts`).** With them the ball is grounded by one
    ray straight down, landings come from its contacts, and the `Surface` component and the
-   box maths are gone from the scripts. Still missing: sweeps and overlaps.
+   box maths are gone from the scripts. What that changed, with #155's damping field (no
+   cannon velocity override): the scripts went from 947 lines to 891 (683 to 641 without
+   blanks and comments), the scene lost 37 `Surface` components, and the autopilot finishes at
+   the same tick (2998). The tick costs the same within noise: 3000 ticks in one headless
+   step with the ball at rest took 0.19 to 0.23 ms a tick before and 0.18 to 0.23 after
+   (three runs of three each, same binary, the Mac loaded); the whole recorded run, stepped
+   four ticks a call, 2.33 to 2.39 ms a tick before and 2.37 to 2.39 after, nearly all of it
+   the cost of a step call. Still missing: sweeps and overlaps.
 3. **Withdrawn: a kinematic platform does carry what rests on it.** These notes said a body
    moved by writing its transform slides out from under a rider and has no velocity to read.
    Both were wrong. The write becomes a kinematic target, physics moves the body with a real
