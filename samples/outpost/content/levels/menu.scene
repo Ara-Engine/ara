@@ -2,7 +2,8 @@
   "$schema": "ara://schema/scene/1",
   "id": "sc_outpostmenu",
   "versions": {
-    "PostProcessVolume": 2
+    "PostProcessVolume": 2,
+    "SkyAtmosphere": 2
   },
   "records": {
     "e_aircon": {
@@ -2141,7 +2142,7 @@
           {
             "exposure": "auto",
             "ev100": 10,
-            "compensation": -0.5,
+            "compensation": -1,
             "minEv100": -2,
             "maxEv100": 16,
             "adaptationSpeed": 2
@@ -2167,7 +2168,8 @@
         ]
       },
       "SkyAtmosphere": {
-        "aerosols": 1.5,
+        "mieScatteringScale": 0.005994000239297748,
+        "mieAbsorptionScale": 0.000666000007186085,
         "cloudCoverage": 0.12
       }
     },
@@ -4627,7 +4629,7 @@
       },
       "Transform": {
         "position": [96, 40, 96],
-        "rotation": [-10.969784, -68.47948, -10.221746]
+        "rotation": [-51.7163, -77.2192, -10.221746]
       }
     },
     "e_terrain": {
