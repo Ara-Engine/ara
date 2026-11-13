@@ -98,6 +98,9 @@ pub struct Presenter {
     external: Option<Box<dyn ExternalRenderer>>,
     /// Draw count the external path last resolved content for (its environment map).
     external_draws: Option<usize>,
+    /// Present with the external renderer one frame behind, so the CPU records frame N while the
+    /// GPU draws frame N-1 (`Presenter::set_external_pipelined`).
+    external_pipelined: bool,
     /// Foliage geometry by rule asset from the content the external path last resolved.
     external_foliage: std::collections::BTreeMap<String, Vec<ara_runtime::extract::Draw>>,
     /// Terrain layer materials by reference from that same content.
@@ -157,6 +160,7 @@ impl Presenter {
             debug: RenderDebug::default(),
             external: None,
             external_draws: None,
+            external_pipelined: false,
             external_foliage: Default::default(),
             external_terrain_materials: Default::default(),
             external_passes: [("", 0.); EXTERNAL_PASSES],
