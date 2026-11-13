@@ -185,6 +185,21 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
     renders three seconds at the end of the run and fails on silence (master bus peak
     -13.1 dBFS on the Mac). The one-shot sounds are still unverified (item 10).
 
+29. **A respawn is a camera cut, and on the untraced path a cut is followed by slow frames.**
+    Reported by the integration thread on the RTX: after a history cut the untraced path
+    spends 50 or more frames gathering GI before it is back to speed (no steady-state numbers
+    yet; the stills measured so far were inside that backlog and are not quoted here). Glint
+    never asks for a cut and scripts cannot: the Renderlab bridge cuts by itself when the
+    view moves more than 20 m or turns more than 45 degrees in one frame
+    (`crates/ara-renderlab/src/bridge.rs`, `jumped`). The follow camera has no lag, so that
+    happens whenever the ball is put back: a fall (the ball returns to the last checkpoint,
+    usually more than 20 m away; a shorter hop does not cut), E mid-run (the same), and "roll again" after the goal
+    (back to the start). Each comes with a screen fade, 40 ticks after a fall (14 of them
+    opaque) and 24 after E or a restart, so part of the slow stretch is hidden but not 50
+    frames of it. The cannon does not cut: the ball is carried into the breech over a few
+    metres and the shot is continuous (about 27 m/s, under half a metre a frame, the yaw
+    limited to 110 degrees a second); nor do the results view or the pause.
+
 ## Where the engine was bypassed
 
 - **Geometry** is written as glTF by the sample builder's `Kit` (boxes, cylinders, spheres),
@@ -222,7 +237,7 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
 - **A still is already the frozen case.** `ara capture` and `ara_play capture` do not tick the
   world: with a world stepped to tick 30, a capture left the tick at 30 and an orb's transform
   unchanged (checked on the Mac). So the replay stills measure a level in which none of the
-  above moves, and the untraced path's 16 to 24 ms GI gather on the RTX is not caused by them.
+  above moves: whatever a still costs, it is not their motion.
   A live run with them frozen is not one switch today (the sliders and bars stop with
   `periodTicks` 0 and `degreesPerSecond` 0 in the scene, but the orbs' bob is a constant in
   the script).

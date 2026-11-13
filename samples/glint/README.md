@@ -177,22 +177,15 @@ The simulation with scripts is about 0.5 ms a tick.
 
 ### On the RTX PC (1920 x 1080)
 
-Measured by the integration thread from the replay's eleven stills (settled, world not ticking,
-pipelined present off; its table is `table-glint-fps.md` on the PC, not in this repository):
+Measured by the integration thread from the replay's stills on the traced path: 65 to 94 FPS
+(GPU 9.6 to 14.5 ms) at the views, and a median of 76 FPS along the course (slowest point 52).
+Each still follows a history cut, so these are frames taken 25 to 50 frames after one; the
+traced path shows no backlog there, but steady-state numbers from 300-frame clips are being
+measured and replace these when they exist.
 
-| Path | FPS | GPU ms |
-|---|---|---|
-| Traced | 65 to 94 | 9.6 to 14.5 |
-| Not traced | 23 to 32 | 13.6 to 48.7 (the beam is the worst) |
-
-Along the whole course, one still per position: traced median 76 FPS (slowest point 52),
-untraced median 32 FPS (slowest point 16, at tick 2700, the cannon).
-
-On the untraced path the renderer's GI gather takes 16 to 24 ms a frame on a still camera (1.6
-traced): a backlog of 380,000 to 900,000 queued bounce gathers of which 20,000 to 28,000 drain
-a frame, so it never empties. The glass rails and bridge cost a quarter of a millisecond and the
-sun's shadow under half. That is with the renderer threads; the level is not changed for it. What moves in the
-level, for anyone chasing it, is listed in FINDINGS under the renderer notes.
+No number is given for the untraced path: its stills were taken in the middle of the GI
+backlog that follows a cut, which overstates what playing costs. What a cut means for this
+game is FINDINGS 29; what moves in the level is listed there under the renderer notes.
 
 ## Files
 
