@@ -61,6 +61,15 @@ struct Object {
     world: [f32; 16],
     /// The posed mesh and joint count of a skinned object.
     skin: Option<(MeshId, usize)>,
+    /// Whether Renderlab has had this skinned object's pose since it was spawned.
+    posed: bool,
+}
+
+/// Whether a skinned object's transform and palette stay as Renderlab has them: the freeze is on
+/// and the object was posed once (a skinned object first seen during the freeze still gets its
+/// first pose, so it is not left in the bind pose). Rigid objects are never held.
+fn holds_pose(frozen: bool, skinned: bool, posed: bool) -> bool {
+    frozen && skinned && posed
 }
 
 /// A draw's transform with its last row made exactly (0, 0, 0, 1) when it is within 1e-3 of it:
@@ -141,6 +150,12 @@ pub(crate) struct Scene {
     /// objects by entity (`false`), batches by material key (`true`).
     tags: Tags,
     palette: Vec<Mat4>,
+    /// While set, an already posed skinned object gets no new transform and no new palette
+    /// (`ARA_RENDERLAB_FREEZE_SKIN_AFTER`, set by the bridge before each `sync`).
+    pub(crate) skin_frozen: bool,
+    /// `ARA_RENDERLAB_DROP_SKINNED=1`: skinned draws are not handed to Renderlab at all (an A/B
+    /// for what having skinned members costs its acceleration structures).
+    pub(crate) skin_dropped: bool,
     /// The emissive program once tried: `Some(None)` when Renderlab rejected it.
     emissive: Option<Option<ProgramId>>,
     /// Mean linear colour of each emissive map packed so far, by its content key.
@@ -595,6 +610,7 @@ impl Scene {
             .iter()
             .map(|draw| (draw, false))
             .chain(static_draws.iter().map(|draw| (draw, true)))
+            .filter(|(draw, _)| !(self.skin_dropped && draw.skin.is_some()))
             .filter(|(draw, _)| {
                 let drawable = drawable(&draw.world);
                 singular += usize::from(!drawable);
@@ -866,18 +882,22 @@ impl Scene {
                     material_slot,
                     world,
                     skin,
+                    posed: false,
                 },
             );
         }
+        let frozen = self.skin_frozen;
         let object = self
             .objects
             .get_mut(&draw.entity)
             .context("object placed above")?;
-        if object.world != world {
+        let hold = holds_pose(frozen, object.skin.is_some(), object.posed);
+        if !hold && object.world != world {
             engine.set_transform(object.id, Mat4::from_cols_array(&world))?;
             object.world = world;
         }
-        if let (Some((posed, joints)), Some(range)) = (object.skin, draw.skin.clone()) {
+        if let (Some((posed, joints)), Some(range), false) = (object.skin, draw.skin.clone(), hold)
+        {
             self.palette.clear();
             self.palette.extend(
                 frame.palettes[range]
@@ -889,6 +909,7 @@ impl Scene {
             self.palette.push(Mat4::IDENTITY);
             // Sent every frame: Renderlab itself ignores an unchanged palette.
             engine.set_joint_palette(posed, &self.palette)?;
+            object.posed = true;
         }
         Ok(())
     }
@@ -1462,6 +1483,15 @@ fn skinned_mesh(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_frozen_scene_holds_only_skinned_objects_that_were_posed() {
+        // Off: nothing is held. On: a rigid object is never held, a skinned one is held once
+        // posed and not before (it still gets its first pose).
+        assert!(!holds_pose(false, true, true));
+        assert!(!holds_pose(true, false, true));
+        assert!(!holds_pose(true, true, false));
+        assert!(holds_pose(true, true, true));
+    }
     /// Transforms Renderlab can light draw; a zero or squashed scale, a non-finite one or axes
     /// collapsed onto a plane do not.
     #[test]
