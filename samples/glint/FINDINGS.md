@@ -41,6 +41,7 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
    the ball tests itself against them each tick (`Course.Resting`); the course is limited to
    boxes. *Smallest change:* `Physics.Raycast(origin, direction, distance)`
    returning entity, point and normal, and a per-tick contact list on a body.
+   **Engine PR: #158 (`Physics.Raycast`)**; the contact list is a second PR, not opened yet.
 3. **Withdrawn: a kinematic platform does carry what rests on it.** These notes said a body
    moved by writing its transform slides out from under a rider and has no velocity to read.
    Both were wrong. The write becomes a kinematic target, physics moves the body with a real

@@ -18,10 +18,12 @@ the last checkpoint arch. Times: gold 1:00, silver 1:15, bronze 1:40.
 On a fresh clone (Windows, PowerShell, from the repository root), one line:
 
 ```powershell
-cargo build --release -p ara -p ara-import-worker -p ara-player -p ara-samples; .\target\release\ara-samples fetch glint; .\target\release\ara-samples kits glint; .\target\release\ara-player --game --project samples\glint --windowed
+cargo build --release -p ara -p ara-player -p ara-import-worker -p ara-samples -p ara-shader-cook; dotnet build dotnet\Ara.slnx -c Release; .\target\release\ara-samples fetch glint; .\target\release\ara-samples kits glint; .\target\release\ara-player --game --project samples\glint --windowed
 ```
 
-`fetch` downloads the one pinned third-party file set Glint uses (the Kenney UI font, CC0);
+The crates are the set `samples/README.md` builds for Outpost on Windows; `dotnet build` makes
+the C# host the player loads (it must come from the same commit as the player). `fetch`
+downloads the one pinned third-party file set Glint uses (the Kenney UI font, CC0);
 `kits` writes the generated, git-ignored files (kit geometry and the synthesised sounds).
 Everything else (scenes, scripts, UI, import settings) is committed. Not run on Windows from
 here; on the Mac `fetch`, `kits`, `build` and the headless replay were run with debug binaries,
