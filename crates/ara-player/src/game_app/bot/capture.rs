@@ -91,7 +91,7 @@ impl Worker {
         let overlay = world
             .ui
             .as_ref()
-            .map(|ui| crate::game_ui::snapshot(ui, &world.runtime, player, [1920, 1080]))
+            .map(|ui| crate::game_ui::snapshot(ui, &world.runtime, player, None, [1920, 1080]))
             .transpose()?;
         self.send
             .send(Request {

@@ -22,6 +22,18 @@ pub(super) fn render(
     }
 }
 
+/// The second half of a Scene pass, after the composite: the next frame is submitted.
+pub(super) fn start(
+    rt: &mut Runtime<Studio>,
+    scene_view: &mut SceneView,
+    device: &mut SceneDevice,
+) {
+    let result = rt.touch(|s| scene_view.start(device, &s.editor));
+    if let Err(error) = result {
+        rt.touch(|s| s.editor.report_failure(&*error));
+    }
+}
+
 /// The next queued capture is served. Runs every pass: a
 /// capture of the editor window or its layout completes the same as with the Scene in front.
 /// `presented` says the Scene is on screen; a `viewport` capture without it finishes with an
