@@ -260,6 +260,29 @@ pub struct PlayCaptureParams {
     /// The game UI screen to draw over the image instead of the in-game HUD (the title,
     /// the lobby, the loading page, settings or pause). The project must have a game UI.
     pub screen: Option<ara_play::UiScreen>,
+    /// Hold the view: render this many live frames at the world's current tick with a
+    /// still camera, report how much the last eight change and write the final one as
+    /// `<name>.live.png`. History is cut once, before the first frame, so the timings of a
+    /// long hold are steady state; a plain capture's are the frames right after a cut.
+    #[ara(range(min = 1, max = 600))]
+    pub stability: Option<u32>,
+    /// Record a clip at the world's current tick: render this many live frames (60 per
+    /// second) while the camera moves by `videoMove` and turns by `videoYaw`, writing each
+    /// to `<name>.video/NNNNN.png`. The world does not tick while it is recorded.
+    #[ara(range(min = 1, max = 3600))]
+    pub video: Option<u32>,
+    /// World-space camera travel over the clip, in metres.
+    pub video_move: Option<[f32; 3]>,
+    /// Camera turn over the clip, in degrees about the vertical axis.
+    pub video_yaw: Option<f32>,
+    /// Cut the camera once inside the clip: from this clip frame (0-based) on, the camera
+    /// jumps by `videoCutMove` and turns by `videoCutYaw` on top of its path. Needs `video`.
+    #[ara(range(min = 0, max = 3599))]
+    pub video_cut_at: Option<u32>,
+    /// World-space jump of the cut, in metres.
+    pub video_cut_move: Option<[f32; 3]>,
+    /// Turn of the cut, in degrees about the vertical axis.
+    pub video_cut_yaw: Option<f32>,
 }
 
 /// Params of `play.watch`.
@@ -501,4 +524,24 @@ pub struct PlayRestartParams {
     /// Resume from a portable snapshot of the current tick (C# state included) instead
     /// of the start snapshot (what C# L4 restarts do).
     pub keep_state: Option<bool>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PlayCaptureParams;
+
+    #[test]
+    fn a_live_capture_takes_the_hold_and_clip_parameters_of_a_scene_capture() {
+        let params: PlayCaptureParams = serde_json::from_value(serde_json::json!({
+            "session": "s", "world": "play:1", "path": "a.png",
+            "stability": 300,
+            "video": 300, "videoMove": [0.0, 0.0, 20.0], "videoYaw": 15.0,
+            "videoCutAt": 100, "videoCutMove": [40.0, 0.0, 0.0], "videoCutYaw": 90.0,
+        }))
+        .expect("the parameters parse");
+        assert_eq!(params.stability, Some(300));
+        assert_eq!(params.video, Some(300));
+        assert_eq!(params.video_move, Some([0.0, 0.0, 20.0]));
+        assert_eq!(params.video_cut_at, Some(100));
+    }
 }

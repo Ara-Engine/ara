@@ -16,7 +16,7 @@ impl UiAudio {
         if bytes.is_empty() {
             return Ok(None);
         }
-        let Ok(device) = SdlBackend::open(48_000) else {
+        let Some(device) = crate::open_audio("menu") else {
             return Ok(None);
         };
         let mut decoder =

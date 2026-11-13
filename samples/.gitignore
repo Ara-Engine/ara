@@ -7,6 +7,8 @@
 */content/kit/**
 !*/content/kit/**/
 !*/content/kit/**/*.import.json
+# Glint's synthesised sounds are generated too (`ara-samples kits glint`).
+glint/content/audio/*.wav
 # Project-local state (journal, cooked cache, daemon) and capture scratch.
 */.ara/
 */.scratch/

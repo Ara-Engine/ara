@@ -16,6 +16,7 @@ mod credits;
 mod editor;
 mod fetch;
 mod game;
+mod glint_replay;
 mod kit;
 mod lock;
 mod play;
@@ -140,6 +141,21 @@ enum Command {
         /// A headless player instead of a window.
         #[arg(long)]
         headless: bool,
+    },
+    /// Replay Glint's recorded inputs frame-exactly and check the finish time and state hash.
+    GlintReplay {
+        /// The replay file (default: `samples/glint/replay/skyward.json`).
+        file: Option<PathBuf>,
+        /// Rewrite the file's expected result from this run instead of checking it.
+        #[arg(long)]
+        record: bool,
+        /// Write the file's stills (the `captures` it lists, by tick) into this directory.
+        #[arg(long)]
+        captures: Option<PathBuf>,
+        /// Render three seconds of the world's sound at the end of the run into this WAV and
+        /// fail if the master bus is silent (the mixer's check; it opens no audio device).
+        #[arg(long)]
+        audio: Option<PathBuf>,
     },
     /// Open a scene in `ara-editor`, frame it over the Engine Protocol and capture.
     Editor {
@@ -276,7 +292,12 @@ fn main() -> Result<()> {
                 "atelier" => {
                     build::atelier::build(&build::Ctx::open(&samples, "atelier", "Atelier", lock)?)?
                 }
-                other => anyhow::bail!("unknown project {other} (outpost, showcase, atelier)"),
+                "glint" => {
+                    build::glint::build(&build::Ctx::open(&samples, "glint", "Glint", lock)?)?
+                }
+                other => {
+                    anyhow::bail!("unknown project {other} (outpost, showcase, atelier, glint)")
+                }
             }
             println!("built {project}");
         }
@@ -287,6 +308,7 @@ fn main() -> Result<()> {
                 "outpost" => build::outpost::generate(&root, &lock)?,
                 "showcase" => build::showcase::generate(&root, &lock)?,
                 "atelier" => build::atelier::generate(&root, &lock)?,
+                "glint" => build::glint::generate(&root, &lock)?,
                 _ => {
                     println!("{project} has no generated kits");
                     return Ok(());
@@ -301,6 +323,22 @@ fn main() -> Result<()> {
                 look: &look,
             },
         )?,
+        Command::GlintReplay {
+            file,
+            record,
+            captures,
+            audio,
+        } => {
+            let root = samples.join("glint");
+            let file = file.unwrap_or_else(|| root.join("replay/skyward.json"));
+            glint_replay::run(&glint_replay::Request {
+                root: &root,
+                file: &file,
+                record,
+                captures,
+                audio,
+            })?;
+        }
         Command::Play {
             project,
             scene,

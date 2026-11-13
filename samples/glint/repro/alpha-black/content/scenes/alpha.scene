@@ -1,0 +1,309 @@
+{
+  "$schema": "ara://schema/scene/1",
+  "id": "sc_alphablack2",
+  "versions": {
+    "PostProcessVolume": 2
+  },
+  "records": {
+    "e_ball": {
+      "name": "D: chrome ball",
+      "order": "aH",
+      "MeshRenderer": {
+        "shape": "sphere",
+        "color": [0.97, 0.97, 0.98, 1],
+        "roughness": 0.03,
+        "metallic": 1
+      },
+      "Transform": {
+        "position": [1.2, 0.5, -3.8]
+      }
+    },
+    "e_black0": {
+      "name": "C: black plane alpha 0.5, castShadows True",
+      "order": "aA",
+      "MeshRenderer": {
+        "shape": "plane",
+        "size": [1, 0.01, 1],
+        "color": [0, 0, 0, 0.5],
+        "roughness": 0.9
+      },
+      "Transform": {
+        "position": [-1.8, 0.02, -2]
+      }
+    },
+    "e_black1": {
+      "name": "C: black plane alpha 0.1, castShadows True",
+      "order": "aB",
+      "MeshRenderer": {
+        "shape": "plane",
+        "size": [1, 0.01, 1],
+        "color": [0, 0, 0, 0.1],
+        "roughness": 0.9
+      },
+      "Transform": {
+        "position": [-0.6, 0.02, -2]
+      }
+    },
+    "e_black2": {
+      "name": "C: black plane alpha 0.1, castShadows False",
+      "order": "aC",
+      "MeshRenderer": {
+        "shape": "plane",
+        "size": [1, 0.01, 1],
+        "color": [0, 0, 0, 0.1],
+        "roughness": 0.9,
+        "castShadows": false
+      },
+      "Transform": {
+        "position": [0.6, 0.02, -2]
+      }
+    },
+    "e_blob0": {
+      "name": "C: blob kit alone (black films 0.09 / 0.17)",
+      "order": "aD",
+      "MeshRenderer": {
+        "model": "@models/blob_black.gltf#as_blobblack"
+      },
+      "Transform": {
+        "position": [1.9, 0.02, -2],
+        "scale": [1.5, 1, 1.5]
+      }
+    },
+    "e_blob1": {
+      "name": "D: blob kit under a point light",
+      "order": "aE",
+      "MeshRenderer": {
+        "model": "@models/blob_black.gltf#as_blobblack"
+      },
+      "Transform": {
+        "position": [-1.2, 0.02, -3.8],
+        "scale": [1.5, 1, 1.5]
+      }
+    },
+    "e_blob2": {
+      "name": "D: blob kit under a ball and a light",
+      "order": "aG",
+      "MeshRenderer": {
+        "model": "@models/blob_black.gltf#as_blobblack"
+      },
+      "Transform": {
+        "position": [1.2, 0.02, -3.8],
+        "scale": [1.5, 1, 1.5]
+      }
+    },
+    "e_camera": {
+      "name": "Camera",
+      "order": "aJ",
+      "Camera": {
+        "fov": 48
+      },
+      "Transform": {
+        "position": [0, 7.8, 7.6],
+        "rotation": [-46.909153, 0, 0]
+      }
+    },
+    "e_env": {
+      "name": "Sky and fixed exposure",
+      "order": "a0",
+      "Environment": {
+        "sky": [0.2, 0.36, 0.85, 1],
+        "horizon": [0.72, 0.82, 0.95, 1],
+        "ground": [0.28, 0.26, 0.23, 1],
+        "intensity": 9000
+      },
+      "PostProcessVolume": {
+        "overrides": [
+          {
+            "exposure": "manual",
+            "ev100": 13
+          },
+          {
+            "module": "toneMapping",
+            "toneMapping": "neutral"
+          }
+        ]
+      }
+    },
+    "e_floor": {
+      "name": "Lit floor",
+      "order": "a2",
+      "MeshRenderer": {
+        "size": [12, 0.2, 14],
+        "color": [0.28, 0.28, 0.28, 1],
+        "roughness": 0.8
+      },
+      "Transform": {
+        "position": [0, -0.1, -2]
+      }
+    },
+    "e_grey0": {
+      "name": "E: primitive plane, grey 0.1, alpha 0.5",
+      "order": "aL",
+      "MeshRenderer": {
+        "shape": "plane",
+        "size": [1, 0.01, 1],
+        "color": [0.1, 0.1, 0.1, 0.5]
+      },
+      "Transform": {
+        "position": [-1.2, 0.02, 2.8]
+      }
+    },
+    "e_grey1": {
+      "name": "E: primitive plane, grey 0.5, alpha 0.5",
+      "order": "aM",
+      "MeshRenderer": {
+        "shape": "plane",
+        "size": [1, 0.01, 1],
+        "color": [0.5, 0.5, 0.5, 0.5]
+      },
+      "Transform": {
+        "position": [0, 0.02, 2.8]
+      }
+    },
+    "e_grey2": {
+      "name": "E: primitive plane, grey 0.9, alpha 0.5",
+      "order": "aN",
+      "MeshRenderer": {
+        "shape": "plane",
+        "size": [1, 0.01, 1],
+        "color": [0.9, 0.9, 0.9, 0.5]
+      },
+      "Transform": {
+        "position": [1.2, 0.02, 2.8]
+      }
+    },
+    "e_light1": {
+      "name": "D: light above blob 1",
+      "order": "aF",
+      "Light": {
+        "color": [1, 0.88, 0.7, 1],
+        "intensity": 1500000,
+        "range": 14,
+        "sourceRadius": 0.6
+      },
+      "Transform": {
+        "position": [-1.2, 1.3, -3.8]
+      }
+    },
+    "e_light2": {
+      "name": "D: light above ball",
+      "order": "aI",
+      "Light": {
+        "color": [1, 0.88, 0.7, 1],
+        "intensity": 1500000,
+        "range": 14,
+        "sourceRadius": 0.6
+      },
+      "Transform": {
+        "position": [1.2, 1.8, -3.8]
+      }
+    },
+    "e_prim0": {
+      "name": "B: primitive plane, color alpha 0.5",
+      "order": "a7",
+      "MeshRenderer": {
+        "shape": "plane",
+        "size": [1, 0.01, 1],
+        "color": [1, 0, 0, 0.5]
+      },
+      "Transform": {
+        "position": [-1.2, 0.02, -0.4]
+      }
+    },
+    "e_prim1": {
+      "name": "B: primitive plane, color alpha 0.5",
+      "order": "a8",
+      "MeshRenderer": {
+        "shape": "plane",
+        "size": [1, 0.01, 1],
+        "color": [0, 0, 1, 0.5]
+      },
+      "Transform": {
+        "position": [0, 0.02, -0.4]
+      }
+    },
+    "e_prim2": {
+      "name": "B: primitive plane, color alpha 0.5",
+      "order": "a9",
+      "MeshRenderer": {
+        "shape": "plane",
+        "size": [1, 0.01, 1],
+        "color": [1, 1, 1, 0.5]
+      },
+      "Transform": {
+        "position": [1.2, 0.02, -0.4]
+      }
+    },
+    "e_quads": {
+      "name": "A: glTF quads, BLEND, alpha 0.5",
+      "order": "a6",
+      "MeshRenderer": {
+        "model": "@models/quads.gltf#as_quads"
+      },
+      "Transform": {
+        "position": [0, 0.02, 1.2]
+      }
+    },
+    "e_stripe0": {
+      "name": "Black stripe under the row",
+      "order": "a3",
+      "MeshRenderer": {
+        "size": [6, 0.008, 0.4],
+        "color": [0.02, 0.02, 0.02, 1],
+        "roughness": 0.9
+      },
+      "Transform": {
+        "position": [0, 0.004, 1.2]
+      }
+    },
+    "e_stripe1": {
+      "name": "Black stripe under the row",
+      "order": "a4",
+      "MeshRenderer": {
+        "size": [6, 0.008, 0.4],
+        "color": [0.02, 0.02, 0.02, 1],
+        "roughness": 0.9
+      },
+      "Transform": {
+        "position": [0, 0.004, -0.4]
+      }
+    },
+    "e_stripe2": {
+      "name": "Black stripe under the row",
+      "order": "a5",
+      "MeshRenderer": {
+        "size": [6, 0.008, 0.4],
+        "color": [0.02, 0.02, 0.02, 1],
+        "roughness": 0.9
+      },
+      "Transform": {
+        "position": [0, 0.004, -2]
+      }
+    },
+    "e_stripe3": {
+      "name": "Black stripe under the grey row",
+      "order": "aK",
+      "MeshRenderer": {
+        "size": [6, 0.008, 0.4],
+        "color": [0.02, 0.02, 0.02, 1],
+        "roughness": 0.9
+      },
+      "Transform": {
+        "position": [0, 0.004, 2.8]
+      }
+    },
+    "e_sun": {
+      "name": "Sun",
+      "order": "a1",
+      "Light": {
+        "kind": "directional",
+        "color": [1, 0.95, 0.86, 1],
+        "intensity": 80000
+      },
+      "Transform": {
+        "position": [0, 30, 10],
+        "rotation": [-57.994617, 17.640627, 25.8675]
+      }
+    }
+  }
+}

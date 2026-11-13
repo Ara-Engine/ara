@@ -6,6 +6,7 @@
 pub mod anim;
 pub mod atelier;
 mod bounds;
+pub mod glint;
 pub mod hangar;
 pub mod kits;
 mod materials;
