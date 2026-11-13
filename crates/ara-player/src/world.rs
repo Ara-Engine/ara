@@ -70,6 +70,8 @@ pub struct World<R = Play> {
     navigation_remainder: Duration,
     /// C# modules and their host's event channel, when the scene runs any.
     scripts: Option<(ScriptSettings, std::sync::mpsc::Receiver<ScriptEvent>)>,
+    /// Script events a step already read (for its fault list) and has yet to forward.
+    held: Vec<ara_play::Event>,
     /// The streamed world's cells, when the snapshot has a world.
     cells: Option<Cells>,
 }
@@ -101,6 +103,7 @@ impl<R> World<R> {
             editor_view: self.editor_view,
             navigation_remainder: self.navigation_remainder,
             scripts: self.scripts,
+            held: self.held,
             cells: self.cells,
         })
     }
@@ -375,6 +378,7 @@ impl World {
                 editor_view,
                 navigation_remainder: Duration::ZERO,
                 scripts,
+                held: Vec::new(),
                 cells,
             },
             started.elapsed().as_secs_f64() * 1000.0,
@@ -561,8 +565,16 @@ impl World {
         json!({"claimed": claimed})
     }
 
-    /// C# host events since the last call, as protocol events.
-    pub fn events(&self) -> Vec<ara_play::Event> {
+    /// C# host events since the last call, as protocol events (those a step read first,
+    /// then the rest).
+    pub fn events(&mut self) -> Vec<ara_play::Event> {
+        let mut events = std::mem::take(&mut self.held);
+        events.extend(self.script_events());
+        events
+    }
+
+    /// Drains the C# host's event channel.
+    fn script_events(&self) -> Vec<ara_play::Event> {
         let Some((_, receiver)) = &self.scripts else {
             return Vec::new();
         };
@@ -629,6 +641,15 @@ impl World {
         Ok(self.runtime.play().session().state_hash()?.to_string())
     }
 
+    /// The script faults raised since the last read of the event channel. The events are
+    /// kept and still go out through [`World::events`].
+    fn faults(&mut self) -> Vec<Value> {
+        let events = self.script_events();
+        let faults = ara_play::faults(&events);
+        self.held.extend(events);
+        faults
+    }
+
     /// `play.step`: injections first, then exact ticks in chunks; `alive` runs between
     /// chunks so a long step keeps heartbeating (the owner's hang watchdog).
     pub fn step(
@@ -654,6 +675,7 @@ impl World {
             reached: false,
             hash: self.hash()?,
             samples: samples(&collected),
+            faults: self.faults(),
         })
     }
 
@@ -698,6 +720,7 @@ impl World {
             reached,
             hash: self.hash()?,
             samples: samples(&collected),
+            faults: self.faults(),
         })
     }
 
