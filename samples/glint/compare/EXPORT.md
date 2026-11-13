@@ -32,7 +32,7 @@ fly-over has to be built from this file in each engine.
 
 | Glint | Exported as |
 |---|---|
-| Decks, pylons, rings, arches, cannon, goal, islands | glTF meshes, one node per draw with its world matrix; flat base colour, roughness and metallic factors (no textures in this level) |
+| Decks, pylons, rings, arches, the great arch, the cannon and its gantry, goal, islands | glTF meshes, one node per draw with its world matrix; flat base colour, roughness and metallic factors (no textures in this level) |
 | Chevrons, ring bands, orbs, goal lights, beacon | `emissiveFactor` plus `KHR_materials_emissive_strength` in nits: 45,000 to 90,000 (table in the spec) |
 | Glass rails (launch deck, banked turn) | `KHR_materials_transmission` with the IOR (1.5) and thickness (0, a thin wall) in the sidecar |
 | Chrome (ball, posts) and the polished navy inlay | metallic 1 roughness 0.06, and dielectric roughness 0.06 |
@@ -44,8 +44,8 @@ fly-over has to be built from this file in each engine.
 
 ## What it cannot carry, and what to do about it
 
-1. **The cloud deck's softness.** The clouds are plain matte meshes (106 instances of one
-   mesh); what turns them into a sea is the height fog, thick at the deck (density 0.012 at
+1. **The cloud deck's softness.** The clouds are plain matte meshes (106 instances of three
+   meshes); what turns them into a sea is the height fog, thick at the deck (density 0.012 at
    y = -61 m, scale height 15 m) and thin at the course. The export carries the meshes and
    the fog's numbers, not the fog. Each engine needs an exponential height fog set from the
    sidecar, or its cloud deck will look harder than Renderlab's.
@@ -57,8 +57,8 @@ fly-over has to be built from this file in each engine.
 3. **Motion.** The sliders, spinner bars, orbs (bobbing and turning) and the ball are driven
    by C# from the tick; the export is one frozen frame of them. The comparison is of stills
    and a camera fly-over, not of the game running.
-4. **Instancing.** The orbs (43), cloud banks (106), rings (7) and islands are instances of
-   one mesh each in Ara. *From reading*, the exporter writes one node per draw; whether nodes
+4. **Instancing.** The orbs (43), rings (7) and islands are instances of one mesh each in Ara,
+   the cloud banks (106) of three. *From reading*, the exporter writes one node per draw; whether nodes
    share a mesh was not checked. Draw counts in the other engines may differ from Ara's.
 5. **Emissive against a bright sun.** The emissive reads because bloom is on (0.16) and the
    exposure is fixed; an engine with auto-exposure or a different bloom threshold will show
