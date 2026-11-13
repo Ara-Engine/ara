@@ -1,0 +1,10 @@
+{
+  "$schema": "ara://schema/export/1",
+  "platform": "windows",
+  "config": "release",
+  "lane": "nativeAot",
+  "playerTemplate": "runtime",
+  "assembly": "AlphaBlack",
+  "content": "content",
+  "templates": []
+}
