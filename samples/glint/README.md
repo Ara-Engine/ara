@@ -175,17 +175,22 @@ floor); the start view has the most, a 6 m polished disc under the camera, and i
 dearest view.
 The simulation with scripts is about 0.5 ms a tick.
 
-### On the RTX PC (1920 x 1080)
+### On the RTX PC (1920 x 1080), start view only
 
-Measured by the integration thread from the replay's stills on the traced path: 65 to 94 FPS
-(GPU 9.6 to 14.5 ms) at the views, and a median of 76 FPS along the course (slowest point 52).
-Each still follows a history cut, so these are frames taken 25 to 50 frames after one; the
-traced path shows no backlog there, but steady-state numbers from 300-frame clips are being
-measured and replace these when they exist.
+Steady state, measured by the integration thread from 300-frame clips with no cut after the
+warm-up (GPU ms, pipelined present off):
 
-No number is given for the untraced path: its stills were taken in the middle of the GI
-backlog that follows a cut, which overstates what playing costs. What a cut means for this
-game is FINDINGS 29; what moves in the level is listed there under the renderer notes.
+| Path | Camera still | Camera moving 20 m along the course |
+|---|---|---|
+| Traced | 11.2 | 12.5 |
+| Not traced | 16.4 | about 22.7 |
+
+So at that view the untraced path costs 1.5 to 1.8 times the traced one in steady play. The
+other replay views are not measured yet: until Ara #168 a running world could only be captured
+as a still, and a still is taken right after a history cut (`ara-samples glint-replay
+--captures <dir> --hold 300`, with `--travel 20` for a moving clip, does every view once #168
+is in; it is on the branch `t3/sample-glint-hold`). After a cut the untraced path runs about
+50 slow frames while its GI cache gathers; what that means for this game is FINDINGS 29.
 
 ## Files
 

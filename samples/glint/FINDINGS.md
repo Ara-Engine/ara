@@ -187,8 +187,9 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
 
 29. **A respawn is a camera cut, and on the untraced path a cut is followed by slow frames.**
     Reported by the integration thread on the RTX: after a history cut the untraced path
-    spends 50 or more frames gathering GI before it is back to speed (no steady-state numbers
-    yet; the stills measured so far were inside that backlog and are not quoted here). Glint
+    spends about 50 frames gathering GI before it is back to speed. In steady state at the
+    start view it costs 16.4 ms of GPU with the camera still and about 22.7 moving, against
+    11.2 and 12.5 traced (1080p, 300-frame clips; the README has the table). Glint
     never asks for a cut and scripts cannot: the Renderlab bridge cuts by itself when the
     view moves more than 20 m or turns more than 45 degrees in one frame
     (`crates/ara-renderlab/src/bridge.rs`, `jumped`). The follow camera has no lag, so that
@@ -199,6 +200,16 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
     frames of it. The cannon does not cut: the ball is carried into the breech over a few
     metres and the shot is continuous (about 27 m/s, under half a metre a frame, the yaw
     limited to 110 degrees a second); nor do the results view or the pause.
+
+30. **A world stepped to a tick could only be captured as a still.** *Wanted:* steady-state
+    cost at each replay position. *Happened:* `ara_play capture` rejected `stability` and
+    `video` (`ARA1101: PlayCaptureParams has no field stability`), though the player renders
+    both for `ara capture`; a still is taken right after a history cut, so the first RTX
+    numbers for the replay views were read inside the untraced path's GI backlog and were
+    withdrawn. **Engine PR: #168** (the live capture takes the hold and clip parameters).
+    With it `ara-samples glint-replay --captures <dir> --hold N [--travel METRES]` plays N
+    live frames at each of the eleven positions (checked on the Mac at 24 held frames and as
+    12-frame clips; the replay still ends at the same tick and hash).
 
 ## Where the engine was bypassed
 
