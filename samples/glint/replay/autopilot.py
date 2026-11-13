@@ -113,10 +113,14 @@ def main():
 
         def step(inputs):
             nonlocal tick
+            args = {"world": world, "ticks": CHUNK}
             if inputs:
-                m.play("step", world=world, ticks=CHUNK, inputs=inputs)
-            else:
-                m.play("step", world=world, ticks=CHUNK)
+                args["inputs"] = inputs
+            # A step lists the script faults raised while it ran: a behaviour that threw is
+            # switched off until the next reload, and the run would be playing half a game.
+            faults = m.play("step", **args).get("faults")
+            if faults:
+                raise SystemExit(f"a script faulted at tick {tick}: {faults[0].get('message', faults[0])}")
             for i in inputs:
                 events.append({"tick": tick, "action": i["action"], "value": i["value"], "hold": i["holdTicks"]})
             tick += CHUNK
