@@ -1,0 +1,35 @@
+{
+  "$schema": "ara://schema/music/1",
+  "id": "mu_glint",
+  "records": {
+    "ms_settings": {
+      "initial": "sky",
+      "intensity": 0.1,
+      "seed": 7
+    },
+    "sg_sky": {
+      "name": "sky",
+      "bars": 6,
+      "tempo": [
+        {
+          "bpm": 90
+        }
+      ],
+      "stems": [
+        {
+          "name": "pad",
+          "clip": "@audio/pad.wav#as_glintpad",
+          "gainDb": -9,
+          "looping": true
+        },
+        {
+          "name": "pulse",
+          "clip": "@audio/pulse.wav#as_glintpulse",
+          "intensity": [0.3, 0.8],
+          "gainDb": -11,
+          "looping": true
+        }
+      ]
+    }
+  }
+}

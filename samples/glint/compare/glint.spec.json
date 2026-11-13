@@ -1,0 +1,126 @@
+{
+  "exposure": {
+    "ev100": 13.5,
+    "auto": false,
+    "toneMapper": "Khronos PBR Neutral",
+    "bloom": 0.16
+  },
+  "sun": {
+    "illuminanceLux": 95000,
+    "color": [1, 0.85, 0.66],
+    "travels": [-0.163, -0.342, -0.926],
+    "angularDiameterDeg": 0.5357,
+    "note": "20 degrees above the horizon; shadows on"
+  },
+  "environment": {
+    "sky": [0.04, 0.17, 0.62, 1],
+    "horizon": [0.62, 0.8, 1, 1],
+    "skyFalloff": 5.5,
+    "glow": [0.5, 0.3, 0.2, 1],
+    "glowFalloff": 34,
+    "ground": [0.72, 0.84, 1, 1],
+    "intensity": 7000,
+    "skyLight": 1
+  },
+  "fog": {
+    "density": 0.012,
+    "baseHeight": -61.130340576171875,
+    "falloff": 15,
+    "albedo": [0.78, 0.86, 1, 1],
+    "anisotropy": 0.5
+  },
+  "lights": [
+    {
+      "id": "e_lcp0",
+      "name": "Gate light",
+      "kind": "point",
+      "position": [-53.623, 4, 35.995],
+      "color": [1, 0.44999998807907104, 0.25],
+      "lumens": 90000,
+      "sourceRadius": 0.30000001192092896,
+      "range": 16
+    },
+    {
+      "id": "e_lcp1",
+      "name": "Gate light",
+      "kind": "point",
+      "position": [-198.255, -0.203, 134.752],
+      "color": [1, 0.44999998807907104, 0.25],
+      "lumens": 90000,
+      "sourceRadius": 0.30000001192092896,
+      "range": 16
+    },
+    {
+      "id": "e_lcp2",
+      "name": "Gate light",
+      "kind": "point",
+      "position": [-280.29, -0.203, 104.893],
+      "color": [1, 0.44999998807907104, 0.25],
+      "lumens": 90000,
+      "sourceRadius": 0.30000001192092896,
+      "range": 16
+    },
+    {
+      "id": "e_lgoal",
+      "name": "Goal light",
+      "kind": "point",
+      "position": [-405.923, -1.73, 59.166],
+      "color": [1, 0.6000000238418579, 0.36000001430511475],
+      "lumens": 160000,
+      "sourceRadius": 0.800000011920929,
+      "range": 40
+    }
+  ],
+  "emissiveNits": {
+    "routeChevrons": 45000,
+    "pylonBands": 30000,
+    "ringsArchesCannonPlatforms": 50000,
+    "goal": 70000,
+    "orbs": 90000,
+    "islands": 40000,
+    "sunDisc": 600000
+  },
+  "palette": [
+    {
+      "name": "pale stone",
+      "baseColor": [0.6800000071525574, 0.6700000166893005, 0.6399999856948853, 1],
+      "roughness": 0.75,
+      "metallic": 0
+    },
+    {
+      "name": "white paint",
+      "baseColor": [0.7400000095367432, 0.75, 0.7699999809265137, 1],
+      "roughness": 0.5,
+      "metallic": 0
+    },
+    {
+      "name": "navy paint",
+      "baseColor": [0.03500000014901161, 0.07999999821186066, 0.2199999988079071, 1],
+      "roughness": 0.44999998807907104,
+      "metallic": 0
+    },
+    {
+      "name": "polished navy stone",
+      "baseColor": [0.029999999329447746, 0.05999999865889549, 0.1599999964237213, 1],
+      "roughness": 0.05999999865889549,
+      "metallic": 0
+    },
+    {
+      "name": "coral lacquer",
+      "baseColor": [1, 0.33000001311302185, 0.11999999731779099, 1],
+      "roughness": 0.25,
+      "metallic": 0
+    },
+    {
+      "name": "chrome",
+      "baseColor": [0.9300000071525574, 0.9300000071525574, 0.949999988079071, 1],
+      "roughness": 0.05999999865889549,
+      "metallic": 1
+    }
+  ],
+  "notes": [
+    "Stone and paint are matte; the polish is the navy inlay, the pad discs and the goal's floor.",
+    "The guard glass is transmission glass (IOR 1.5, thin wall).",
+    "Linear colours; lengths in metres; lights are point lights in lumens with a source radius."
+  ]
+}

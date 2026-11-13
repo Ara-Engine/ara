@@ -1,0 +1,71 @@
+{
+  "sounds": [
+    {
+      "component": "Ball",
+      "field": "jumpTick",
+      "clip": "@audio/jump.wav#as_glintjump",
+      "gain": 0.6000000238418579
+    },
+    {
+      "component": "Ball",
+      "field": "landTick",
+      "clip": "@audio/land.wav#as_glintland",
+      "gain": 0.800000011920929
+    },
+    {
+      "component": "Pickup",
+      "field": "takenTick",
+      "clip": "@audio/orb.wav#as_glintorb",
+      "gain": 0.699999988079071
+    },
+    {
+      "component": "Checkpoint",
+      "field": "reachedTick",
+      "clip": "@audio/gate.wav#as_glintgate",
+      "gain": 0.8999999761581421
+    },
+    {
+      "component": "Cannon",
+      "field": "loadTick",
+      "clip": "@audio/load.wav#as_glintload",
+      "gain": 0.8999999761581421
+    },
+    {
+      "component": "Cannon",
+      "field": "fireTick",
+      "clip": "@audio/fire.wav#as_glintfire",
+      "gain": 1.2000000476837158
+    },
+    {
+      "component": "RunFeedback",
+      "field": "fallTick",
+      "clip": "@audio/fall.wav#as_glintfall",
+      "gain": 0.699999988079071
+    },
+    {
+      "component": "RunFeedback",
+      "field": "finishTick",
+      "clip": "@audio/finish.wav#as_glintfinish",
+      "gain": 0.8999999761581421
+    }
+  ],
+  "music": [
+    {
+      "entity": "e_run",
+      "component": "GlintRun",
+      "field": "intensity",
+      "target": "e_music"
+    }
+  ],
+  "fonts": [
+    "third_party/outpost_ui/Font/Kenney Future.ttf"
+  ],
+  "images": {
+    "orb": "ui/icons/orb.png",
+    "flag": "ui/icons/flag.png",
+    "fall": "ui/icons/fall.png",
+    "medal_gold": "ui/icons/medal_gold.png",
+    "medal_silver": "ui/icons/medal_silver.png",
+    "medal_bronze": "ui/icons/medal_bronze.png"
+  }
+}
