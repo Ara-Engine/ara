@@ -68,7 +68,8 @@ pub struct TextureDesc {
 }
 impl TextureDesc {
     /// Buffer bytes for a whole-image transfer, mip zero first. Pixels are packed
-    /// inside each mip; depth mips start on four-byte boundaries. Padding is untouched.
+    /// inside each mip, as whole blocks for a block format (`Format::block`); depth mips
+    /// start on four-byte boundaries. Padding is untouched.
     pub fn copy_byte_len(&self) -> Result<u64> {
         self.shape.validate(self.image.size)?;
         if self.shape.samples != SampleCount::One {
@@ -76,7 +77,8 @@ impl TextureDesc {
                 "Resolve multisample images before buffer copies".into(),
             ));
         }
-        let bytes = u64::from(self.image.format.texel_bytes());
+        let (block, bytes) = self.image.format.block();
+        let bytes = u64::from(bytes);
         let align = if matches!(
             self.image.format,
             crate::descriptors::Format::Depth16Unorm | crate::descriptors::Format::Depth32Float
@@ -90,8 +92,8 @@ impl TextureDesc {
             total = total
                 .checked_next_multiple_of(align)
                 .ok_or_else(|| GpuError::Contract("Copy footprint overflow".into()))?;
-            let extent = self.shape.extent(self.image.size, mip);
-            let size = extent
+            let [width, height, depth] = self.shape.extent(self.image.size, mip);
+            let size = [width.div_ceil(block), height.div_ceil(block), depth]
                 .into_iter()
                 .chain([self.shape.layers])
                 .try_fold(bytes, |n, v| n.checked_mul(u64::from(v)))
