@@ -1,5 +1,5 @@
 {
-  "format": "glint-replay/1",
+  "format": "glint-replay/2",
   "scene": "levels/glint.scene",
   "seed": 7,
   "chunk": 4,
@@ -4093,7 +4093,10 @@
   "expect": {
     "finishTicks": 2998,
     "falls": 0,
-    "hash": "d31da09a260d91f4afcfd4cc89e437d7f0172a6bd2530419ae21f8c2429169f4",
-    "platform": "macos-aarch64"
+    "orbs": 43,
+    "orbTotal": 43,
+    "hashes": {
+      "macos-aarch64": "d31da09a260d91f4afcfd4cc89e437d7f0172a6bd2530419ae21f8c2429169f4"
+    }
   }
 }

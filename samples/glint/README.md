@@ -16,23 +16,30 @@ the last checkpoint arch. Times: gold 1:00, silver 1:15, bronze 1:40.
 
 ## Play it
 
-On a fresh clone (Windows, PowerShell, from the repository root), one line:
+On a fresh clone (Windows, PowerShell, from the repository root), one line. It needs Rust, the
+.NET 10 SDK and the Vulkan SDK, the engine's own prerequisites (`ara doctor` checks the .NET
+side):
 
 ```powershell
 cargo build --release -p ara -p ara-player -p ara-import-worker -p ara-samples -p ara-shader-cook; dotnet build dotnet\Ara.slnx -c Release; .\target\release\ara-samples fetch glint; .\target\release\ara-samples kits glint; .\target\release\ara-player --game --project samples\glint --windowed
 ```
 
-The crates are the set `samples/README.md` builds for Outpost on Windows; `dotnet build` makes
-the C# host the player loads (it must come from the same commit as the player). `fetch`
+The crates are the set `samples/README.md` builds for Outpost on Windows. **`dotnet build` is
+not optional:** it makes the C# host and compile server every Ara game with scripts needs, and
+they must come from the same commit as the player. Without it nothing starts (`ARA0904: C# SDK
+tools are missing`); with a host from another commit it stops at `ARA0921` (FINDINGS 27). `fetch`
 downloads the one pinned third-party file set Glint uses (the Kenney UI font, CC0);
 `kits` writes the generated, git-ignored files (kit geometry and the synthesised sounds).
-Everything else (scenes, scripts, UI, import settings) is committed. Not run on Windows from
-here; on the Mac `fetch`, `kits`, `build` and the headless replay were run with debug binaries,
-and the windowed player was not opened (a shared machine).
+Everything else (scenes, scripts, UI, import settings) is committed. On Windows (RTX PC,
+release build) the build, `fetch`, `kits` and the headless replay were run by the integration
+thread and the replay passes; on the Mac the same with debug binaries. The windowed player was
+not opened on the Mac (a shared machine).
 
 Controls: WASD roll, Space jump, E back to the last checkpoint (after the goal: roll again),
 Esc pauses. The camera follows the route by itself, so forward on the stick always means
 "along the course".
+
+The tools below need the same two builds (`cargo build` and `dotnet build`) and `kits` first:
 
 ```sh
 ara-samples build glint                                 # re-author everything from the course table
@@ -92,12 +99,16 @@ closed-loop in a headless world through `ara mcp` (`ara_play` start, step, read)
 the inputs, so replaying never reads the world.
 
 `ara-samples glint-replay` starts a headless world (seed 7, paused), steps it with the file's
-inputs and compares three things with the file's `expect` (the hash only on the platform it was
-recorded on, `macos-aarch64`; elsewhere the finish tick and the falls must still match): the run clock at the goal
-(**2996 ticks, 49.93 s**), the falls (0) and the world state hash after the last tick. Every
-run on one machine gives the same numbers; `--record` rewrites `expect`. Changing decoration
-changes the hash but not the finish time, which is how each look pass was checked against the
-gameplay.
+inputs and compares the result with the file's `expect`:
+
+- on every platform: the run clock at the goal (**2998 ticks, 49.97 s**), the falls (0) and the
+  orbs (43 of 43);
+- on a platform that has recorded one: the world state hash after the last tick. `expect.hashes`
+  holds one per platform (`macos-aarch64` so far). Windows passes the first three (run on the
+  RTX PC); `ara-samples glint-replay --record` there adds its hash beside the Mac's.
+
+Every run on one machine gives the same numbers. Changing decoration changes the hash but not
+the result, which is how each look pass was checked against the gameplay.
 
 How determinism is guaranteed:
 

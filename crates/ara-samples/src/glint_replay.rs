@@ -2,14 +2,17 @@
 //!
 //! The list (`samples/glint/replay/*.json`) holds `action`/`value` injections at exact fixed
 //! ticks. The engine steps with `ara_play step`, so a tick is the unit of time: no wall clock,
-//! no frame rate, no device. The run's state hash after the last step, the finish time in
-//! ticks and the number of falls are compared with the file's `expect`; `--record` rewrites
-//! `expect` from the run. The same hash makes two runs on one machine byte-identical; it is
-//! not promised across CPUs or builds (see the sample's README on what could break it).
+//! no frame rate, no device. The finish time in ticks, the falls and the orbs collected are
+//! compared with the file's `expect` on every platform; the state hash after the last step
+//! is compared with the hash recorded for this platform, if there is one. `--record` rewrites
+//! the result and this platform's hash from the run. The same hash makes two runs on one
+//! machine byte-identical; it is not promised across CPUs or builds (see the sample's README
+//! on what could break it).
 use crate::play::Mcp;
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 /// One injected action at a fixed tick, held for `hold` ticks.
@@ -28,20 +31,30 @@ struct Shot {
     name: String,
 }
 
-/// What a faithful replay must produce.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+/// How a run ended: what every platform must reproduce.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
-struct Expect {
+struct Outcome {
     /// Run clock, in fixed ticks, when the goal was reached.
     finish_ticks: u64,
     /// Falls in that run.
     falls: u64,
-    /// The world state hash after the last tick.
-    hash: String,
-    /// Where `hash` was recorded (`os-arch`). The hash is only compared there: floating
-    /// point in the physics solver and in `MathF` differs between platforms and compilers.
+    /// Orbs collected, and how many the course has.
+    orbs: u64,
+    orb_total: u64,
+}
+
+/// What a faithful replay must produce.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct Expect {
+    #[serde(flatten)]
+    outcome: Outcome,
+    /// The world state hash after the last tick, per platform (`os-arch`). A hash is only
+    /// compared on the platform it was recorded on: floating point in the physics solver
+    /// and in `MathF` differs between platforms and compilers.
     #[serde(default)]
-    platform: String,
+    hashes: BTreeMap<String, String>,
 }
 
 /// This machine as the replay names it.
@@ -84,7 +97,7 @@ pub fn run(request: &Request<'_>) -> Result<()> {
     let text = std::fs::read_to_string(request.file)
         .with_context(|| format!("reading {}", request.file.display()))?;
     let mut replay: Replay = serde_json::from_str(&text).context("parsing the replay")?;
-    if replay.format != "glint-replay/1" {
+    if replay.format != "glint-replay/2" {
         bail!("unknown replay format {}", replay.format);
     }
     std::fs::create_dir_all(request.root.join(".ara/samples"))?;
@@ -118,21 +131,22 @@ pub fn run(request: &Request<'_>) -> Result<()> {
         at += group.len();
     }
     run.advance(replay.end_tick)?;
-    let (finish_ticks, falls) = run.finish.context("the replay never reached the goal")?;
-    let got = Expect {
-        finish_ticks,
-        falls,
-        hash: run.hash.clone(),
-        platform: platform(),
-    };
-    let seconds = finish_ticks as f64 / 60.0;
+    let outcome = run.finish.context("the replay never reached the goal")?;
+    let (hash, here) = (run.hash.clone(), platform());
+    let seconds = outcome.finish_ticks as f64 / 60.0;
     run.mcp.play("stop", json!({"world": run.world}))?;
     println!(
-        "finished in {finish_ticks} ticks ({seconds:.2} s), {falls} fall(s), end state hash {}",
-        got.hash
+        "finished in {} ticks ({seconds:.2} s), {} fall(s), {} of {} orbs, end state hash {hash}",
+        outcome.finish_ticks, outcome.falls, outcome.orbs, outcome.orb_total
     );
     if request.record {
-        replay.expect = Some(got);
+        // Other platforms' hashes stay only while they describe the same run.
+        let mut hashes = match replay.expect.take() {
+            Some(old) if old.outcome == outcome => old.hashes,
+            _ => BTreeMap::new(),
+        };
+        hashes.insert(here, hash);
+        replay.expect = Some(Expect { outcome, hashes });
         std::fs::write(
             request.file,
             ara_json::to_canonical_string(&serde_json::to_value(&replay)?),
@@ -140,25 +154,26 @@ pub fn run(request: &Request<'_>) -> Result<()> {
         println!("recorded expect into {}", request.file.display());
         return Ok(());
     }
-    match replay.expect {
-        Some(expect) if expect == got => {
-            println!("replay matches: identical finish time and state hash")
+    let expect = replay
+        .expect
+        .context("the replay has no `expect`; run once with --record")?;
+    if expect.outcome != outcome {
+        bail!(
+            "replay diverged: expected {:?}, got {outcome:?}. The same inputs no longer reach the goal the same way: record again with `samples/glint/replay/autopilot.py`, which plays closed-loop.",
+            expect.outcome
+        );
+    }
+    match expect.hashes.get(&here) {
+        Some(recorded) if *recorded == hash => {
+            println!("replay matches: identical finish time, falls, orbs and state hash")
         }
-        // On another platform the same inputs must still finish at the same tick with the
-        // same falls; only the state hash is this machine's own.
-        Some(expect)
-            if expect.platform != got.platform
-                && (expect.finish_ticks, expect.falls) == (got.finish_ticks, got.falls) =>
-        {
-            println!(
-                "replay matches: identical finish time and falls (the state hash was recorded on {}, this is {}; run --record here to pin this machine's hash)",
-                expect.platform, got.platform
-            )
-        }
-        Some(expect) => bail!(
-            "replay diverged: expected {expect:?}, got {got:?}. If this is another platform than the recording's, the same inputs no longer reach the goal the same way: record again with `samples/glint/replay/autopilot.py`, which plays closed-loop."
+        Some(recorded) => bail!(
+            "replay diverged: same finish time, falls and orbs, but the state hash recorded for {here} is {recorded}. Something that does not change the result changed the world (a scene edit, an engine change): run --record if that was intended."
         ),
-        None => bail!("the replay has no `expect`; run once with --record"),
+        None => println!(
+            "replay matches: identical finish time, falls and orbs (no state hash is recorded for {here}; recorded for {}; run --record here to pin this machine's hash)",
+            expect.hashes.keys().cloned().collect::<Vec<_>>().join(", ")
+        ),
     }
     Ok(())
 }
@@ -169,8 +184,8 @@ struct Run<'a> {
     world: Value,
     tick: u64,
     hash: String,
-    /// `(finish ticks, falls)` once the run state reads finished.
-    finish: Option<(u64, u64)>,
+    /// How the run ended, once the run state reads finished.
+    finish: Option<Outcome>,
     shots: Vec<Shot>,
     out: Option<PathBuf>,
 }
@@ -203,14 +218,17 @@ impl Run<'_> {
         if self.finish.is_none() {
             let read = self.mcp.play(
                 "read",
-                json!({"world": self.world, "paths": ["e_run.GlintRun.state", "e_run.GlintRun.ticks", "e_run.GlintRun.falls"]}),
+                json!({"world": self.world, "paths": ["e_run.GlintRun.state", "e_run.GlintRun.ticks", "e_run.GlintRun.falls", "e_run.GlintRun.orbs", "e_run.GlintRun.orbTotal"]}),
             )?;
             let v = &read["values"];
             if v["e_run.GlintRun.state"].as_u64() == Some(2) {
-                self.finish = Some((
-                    v["e_run.GlintRun.ticks"].as_u64().unwrap_or(0),
-                    v["e_run.GlintRun.falls"].as_u64().unwrap_or(0),
-                ));
+                let field = |name: &str| v[format!("e_run.GlintRun.{name}")].as_u64().unwrap_or(0);
+                self.finish = Some(Outcome {
+                    finish_ticks: field("ticks"),
+                    falls: field("falls"),
+                    orbs: field("orbs"),
+                    orb_total: field("orbTotal"),
+                });
             }
         }
         let due: Vec<Shot> = self

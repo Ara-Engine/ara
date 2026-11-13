@@ -159,6 +159,16 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
     `HeightFog.falloff` has no stated unit in its range error; the capture JSON's pass list
     needs a script to read.
 
+27. **A checkout without the C# tools built could not say so.** *Wanted:* the first run on a
+    fresh Windows checkout to say "run `dotnet build dotnet/Ara.slnx -c Release`". *Happened*
+    (reproduced on the Mac with the tools hidden): `ara play` and `ara capture` do say it
+    (`ARA0904`), but `ara-player --game` printed it once and then one `ARA1106: unknown
+    component` per scripted entity (19 for Outpost), so the last screen was about components;
+    and `ara doctor`, which every such message points to, checked only the .NET 10 install and
+    said OK. With a host built from another commit the stop is `ARA0921: C# rejected the ABI
+    identity`, which names the fix. *Engine:* Ara #164 returns the project's error alone and
+    adds an `Ara C# tools` check to `ara doctor`.
+
 ## Where the engine was bypassed
 
 - **Geometry** is written as glTF by the sample builder's `Kit` (boxes, cylinders, spheres),

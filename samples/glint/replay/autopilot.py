@@ -205,7 +205,7 @@ def main():
                          ("sliders", marks.get("board", 0) + 40), ("bars", marks.get("leave", 0) + 130),
                          ("cannon", marks.get("fire", 0) + 40), ("flight", marks.get("fire", 0) + 150), ("goal", finish + 30)):
             captures.append({"tick": at, "name": name})
-        json.dump({"format": "glint-replay/1", "scene": route["scene"], "seed": 7, "chunk": CHUNK, "endTick": tick,
+        json.dump({"format": "glint-replay/2", "scene": route["scene"], "seed": 7, "chunk": CHUNK, "endTick": tick,
                    "events": events, "captures": captures}, open(args.out, "w"), indent=1)
         print("wrote", args.out)
     finally:
