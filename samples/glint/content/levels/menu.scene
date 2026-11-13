@@ -1371,14 +1371,14 @@
       "name": "Menu vista camera",
       "order": "b21",
       "Transform": {
-        "position": [5.895, 3.2, -7.42]
+        "position": [4.746, 2.6, -6.455]
       }
     },
     "e_gamemenutarget": {
       "name": "Menu vista focus",
       "order": "b22",
       "Transform": {
-        "position": [-55.318, 3.6, 26.974]
+        "position": [-48.996, 4.6, 3.394]
       }
     },
     "e_gate0": {
@@ -1748,6 +1748,17 @@
       },
       "Transform": {
         "position": [-4.213, 0.5, -5.465]
+      }
+    },
+    "e_menucam": {
+      "name": "Menu camera",
+      "order": "b23",
+      "Camera": {
+        "fov": 54
+      },
+      "Transform": {
+        "position": [4.746, 2.6, -6.455],
+        "rotation": [168.52124, 79.40775, -168.71176]
       }
     },
     "e_orb0": {

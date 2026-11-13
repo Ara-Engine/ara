@@ -686,9 +686,31 @@ fn menu(ctx: &Ctx, c: &Course) -> Result<()> {
     let ahead = Quat::from_rotation_y(course::START_HEADING.to_radians()) * Vec3::Z;
     let left = Quat::from_rotation_y(course::START_HEADING.to_radians()) * Vec3::X;
     s.entity("e_menuball", "Ball", json!({"Transform": {"position": round3(c.start - Vec3::Y * 0.1)}, "MeshRenderer": ball_look()}));
-    // The title view: low and to the side of the launch deck, the long straight ahead.
-    s.entity("e_gamemenueye", "Menu vista camera", json!({"Transform": {"position": round3(c.start - ahead * 9.0 + left * 5.0 + Vec3::Y * 2.6)}}));
-    s.entity("e_gamemenutarget", "Menu vista focus", json!({"Transform": {"position": round3(c.start + ahead * 60.0 - left * 8.0 + Vec3::Y * 3.0)}}));
+    // The title view: low, behind and to the left of the ball, looking ahead and to the right,
+    // so the ball and the course sit in the right half and the title has the left.
+    let eye = c.start - ahead * 7.5 + left * 5.0 + Vec3::Y * 2.0;
+    let focus = c.start + ahead * 40.0 - left * 22.0 + Vec3::Y * 4.0;
+    s.entity(
+        "e_gamemenueye",
+        "Menu vista camera",
+        json!({"Transform": {"position": round3(eye)}}),
+    );
+    s.entity(
+        "e_gamemenutarget",
+        "Menu vista focus",
+        json!({"Transform": {"position": round3(focus)}}),
+    );
+    // The same view as a camera, so `ara capture --screen main-menu` frames the title as the
+    // shell does (its backdrop camera sits at the eye, looks at the focus, 54 degrees).
+    s.entity(
+        "e_menucam",
+        "Menu camera",
+        json!({"Transform": {"position": round3(eye)}, "Camera": {"fov": 54}}),
+    );
+    s.commands.push((
+        "transform.lookAt",
+        json!({"entity": "e_menucam", "point": round3(focus)}),
+    ));
     let calls = std::mem::take(&mut s.commands);
     ctx.apply(MENU.0, "Glint: native menu backdrop", calls)
 }

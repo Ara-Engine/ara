@@ -66,11 +66,7 @@ image { flex-shrink:0; }
 .solid { background:#0e2a4c; align-items:center; justify-content:center; gap:14px; }
 #loading-title { font-size:56px; color:#ff6a3a; }
 #loading-progress { font-size:18px; color:#cfe3ff; }
-.shade { position:absolute; left:0px; top:0px; height:100%; background:#0a1a3a40; }
-.s1 { width:52%; }
-.s2 { width:38%; }
-.s3 { width:24%; }
-.s4 { width:12%; }
+.side { position:absolute; left:0px; top:0px; width:44%; height:100%; background:#0a1a3ad8; }
 
 #menu-content { position:absolute; left:84px; top:120px; gap:10px; }
 #eyebrow { font-size:18px; color:#ffd2bf; }
@@ -89,15 +85,16 @@ button:active { color:#ffd2bf; }
 #quit { font-size:30px; color:#dbe8ff; }
 #win-leave { font-size:18px; width:250px; height:56px; border-width:3px; border-color:#ffffff; border-radius:9px; padding:10px; padding-left:82px; }
 
-#lobby-content { position:absolute; left:84px; top:120px; gap:8px; }
+#lobby-content { position:absolute; left:84px; top:92px; gap:8px; }
 #lobby-eyebrow { font-size:22px; color:#ff6a3a; }
-#lobby-title { font-size:110px; padding-bottom:20px; }
-#medals { gap:6px; padding-bottom:34px; }
+#lobby-title { font-size:74px; padding-bottom:16px; }
+#medals { gap:6px; padding-bottom:22px; }
 .medal { gap:16px; }
 .mi { width:52px; height:52px; }
 .medal-name { font-size:24px; width:190px; }
 .medal-time { font-size:28px; color:#ffd2bf; }
 #lobby-buttons { gap:4px; }
+#lobby-leave { font-size:30px; color:#dbe8ff; }
 
 #pause-content { align-items:center; gap:8px; }
 #pause-title { font-size:84px; padding-bottom:20px; }

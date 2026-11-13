@@ -98,11 +98,6 @@ fn markup(medals: [u32; 3]) -> String {
             clock(seconds)
         )
     };
-    let shades = |screen: &str| -> String {
-        (1..=4)
-            .map(|n| format!(r#"<panel id="{screen}-shade-{n}" class="shade s{n}"/>"#))
-            .collect()
-    };
     let medal = |id: &str, name: &str, seconds: u32| {
         format!(
             r#"<panel id="lobby-{id}" class="medal row"><image id="lobby-{id}-icon" class="mi" src="medal_{id}"/><text id="lobby-{id}-name" class="medal-name" text="{name}"/><text id="lobby-{id}-time" class="medal-time" text="{}"/></panel>"#,
@@ -167,12 +162,10 @@ fn markup(medals: [u32; 3]) -> String {
         ),
         r#"</panel>"#.to_owned(),
         format!(
-            r#"<panel id="main-menu" class="screen">{}<panel id="menu-content"><text id="eyebrow" text="A ROLLING COURSE ABOVE THE CLOUDS"/><panel id="logo-box"><text id="logo-shadow" class="logo" text="GLINT"/><text id="logo" class="logo" text="GLINT"/></panel><panel id="title-rule" class="row"><panel id="rule-a"/><panel id="rule-b"/><panel id="rule-c"/></panel><panel id="menu-buttons"><button id="solo" action="solo" text="ROLL"/><button id="quit" action="quit" text="QUIT"/></panel></panel></panel>"#,
-            shades("menu"),
+            r#"<panel id="main-menu" class="screen"><panel id="menu-content"><text id="eyebrow" text="A ROLLING COURSE ABOVE THE CLOUDS"/><panel id="logo-box"><text id="logo-shadow" class="logo" text="GLINT"/><text id="logo" class="logo" text="GLINT"/></panel><panel id="title-rule" class="row"><panel id="rule-a"/><panel id="rule-b"/><panel id="rule-c"/></panel><panel id="menu-buttons"><button id="solo" action="solo" text="ROLL"/><button id="quit" action="quit" text="QUIT"/></panel></panel></panel>"#
         ),
         format!(
-            r#"<panel id="lobby" class="screen">{}<panel id="lobby-content"><text id="lobby-eyebrow" text="COURSE 01"/><text id="lobby-title" text="SKYWARD"/><panel id="medals">{}{}{}</panel><panel id="lobby-buttons"><button id="ready" action="ready" text="START"/><button id="lobby-leave" action="leave" text="BACK"/></panel></panel></panel>"#,
-            shades("lobby"),
+            r#"<panel id="lobby" class="screen"><panel id="lobby-side" class="side"/><panel id="lobby-content"><text id="lobby-eyebrow" text="COURSE 01"/><text id="lobby-title" text="SKYWARD"/><panel id="medals">{}{}{}</panel><panel id="lobby-buttons"><button id="ready" action="ready" text="START"/><button id="lobby-leave" action="leave" text="BACK"/></panel></panel></panel>"#,
             medal("gold", "GOLD", medals[0]),
             medal("silver", "SILVER", medals[1]),
             medal("bronze", "BRONZE", medals[2]),
