@@ -59,6 +59,8 @@ struct Object {
     /// The shared material in use: `material` and whether the mesh has tangents.
     material_slot: u64,
     world: [f32; 16],
+    /// What the engine was last told about its shadow casting (`shadow_change`).
+    casts_shadows: bool,
     /// The posed mesh and joint count of a skinned object.
     skin: Option<(MeshId, usize)>,
 }
@@ -132,6 +134,15 @@ pub(crate) struct Scene {
     meshes: HashMap<u64, (Shared<MeshId>, bool)>,
     materials: HashMap<u64, Shared<MaterialId>>,
     textures: HashMap<(u64, u8), TextureId>,
+    /// Textures uploaded as shipped (block-compressed), and those decoded to RGBA8 by the
+    /// reason the file could not go through as it is (`texture_report`).
+    compressed: u32,
+    decoded: std::collections::BTreeMap<texture::Fallback, u32>,
+    /// Time `texture` has spent turning cooked textures into uploads, on either path
+    /// (decode and mip chain, or passing the blocks through). Glow hosts are not timed.
+    upload_time: std::time::Duration,
+    /// The texture count `log_textures` last printed.
+    logged: u32,
     objects: HashMap<u64, Object>,
     /// Static batches by material key (`batch`).
     batches: HashMap<u64, Batch>,
@@ -587,7 +598,9 @@ impl Scene {
         self.coverage.prune();
         // Each draw's group, and the groups in order of first appearance.
         let mut keyed = Vec::with_capacity(frame.draws.len() + static_draws.len());
-        let mut index: HashMap<(MeshKey, u64), usize> = HashMap::new();
+        // A draw that casts no shadow groups apart from one that does (the flag is the
+        // object's), and never joins a batch, whose members share one object.
+        let mut index: HashMap<(MeshKey, u64, bool), usize> = HashMap::new();
         let mut groups: Vec<Group> = Vec::new();
         let mut singular = 0usize;
         let draws = frame
@@ -613,11 +626,13 @@ impl Scene {
                 };
                 (mesh, material_key(draw, &mut self.coverage))
             });
-            let group = *index.entry((mesh, material)).or_insert_with(|| {
+            let key = (mesh, material, draw.casts_shadows);
+            let group = *index.entry(key).or_insert_with(|| {
                 groups.push(Group {
                     material,
                     // Cut geometry comes from its own upload, so it never joins a batch.
                     mergeable: matches!(mesh, MeshKey::Static(_))
+                        && draw.casts_shadows
                         && !see_through(draw, &mut self.coverage)
                         && cut(draw, &mut self.coverage).is_none(),
                     objects: 0,
@@ -691,6 +706,7 @@ impl Scene {
             self.remove(engine, entity)?;
         }
         self.sync_batches(engine, merged, gaps)?;
+        self.log_textures();
         self.tag(engine, frame)
     }
 
@@ -865,6 +881,8 @@ impl Scene {
                     material,
                     material_slot,
                     world,
+                    // Renderlab spawns an object casting.
+                    casts_shadows: true,
                     skin,
                 },
             );
@@ -876,6 +894,11 @@ impl Scene {
         if object.world != world {
             engine.set_transform(object.id, Mat4::from_cols_array(&world))?;
             object.world = world;
+        }
+        // `MeshRenderer.castShadows` (and the model node's own), at spawn and whenever it
+        // changes: a lamp's glass must not shadow the light inside it.
+        if let Some(casts) = shadow_change(&mut object.casts_shadows, draw.casts_shadows) {
+            engine.set_casts_shadows(object.id, casts)?;
         }
         if let (Some((posed, joints)), Some(range)) = (object.skin, draw.skin.clone()) {
             self.palette.clear();
@@ -1259,6 +1282,11 @@ impl Scene {
                     let glow = (decoded.size, decoded.rgba.as_slice());
                     let packed = texture::with_glow(host, glow, role, channels)?;
                     slot.insert(engine.create_texture(packed)?);
+                    // A glow host is rewritten here, so it cannot go through as shipped.
+                    *self
+                        .decoded
+                        .entry("an emissive map is packed into its spare channels")
+                        .or_default() += 1;
                 }
             }
         }
@@ -1290,10 +1318,90 @@ impl Scene {
         if let Some(id) = self.textures.get(&key) {
             return Ok(*id);
         }
-        let id = engine.create_texture(texture::prepare(&texture.ktx2, role)?)?;
+        let started = std::time::Instant::now();
+        let id = match self.as_shipped(engine, texture, role)? {
+            Some(id) => id,
+            None => engine.create_texture(texture::prepare(&texture.ktx2, role)?)?,
+        };
+        self.upload_time += started.elapsed();
         self.textures.insert(key, id);
         Ok(id)
     }
+
+    /// Uploads the cooked texture's own blocks and levels, with no CPU decode and no mip
+    /// regeneration, where that is possible; `None` sends the caller down the RGBA8 path
+    /// and counts the reason.
+    fn as_shipped(
+        &mut self,
+        engine: &mut Engine,
+        texture: &ModelTexture,
+        role: TextureRole,
+    ) -> Result<Option<TextureId>> {
+        let mut decode = |reason: texture::Fallback| {
+            *self.decoded.entry(reason).or_default() += 1;
+            Ok(None)
+        };
+        if texture::rgba8_only() {
+            return decode("ARA_RENDERLAB_RGBA8_TEXTURES is set");
+        }
+        // A BC5 normal map goes through like the rest: Renderlab rebuilds z in the shader
+        // and builds the variance its specular filter reads from the blocks itself.
+        let data = match texture::compressed(&texture.ktx2, role)? {
+            Ok(data) => data,
+            Err(reason) => return decode(reason),
+        };
+        if !engine.compressed_textures() {
+            return decode("the device does not sample BC textures");
+        }
+        self.compressed += 1;
+        Ok(Some(engine.create_compressed_texture(data)?))
+    }
+
+    /// With `ARA_RENDERLAB_TEXTURE_LOG=1`, prints `texture_report` to stderr whenever the
+    /// counts changed since it last did: one line once a scene has loaded.
+    fn log_textures(&mut self) {
+        static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        let on = *ON.get_or_init(|| {
+            std::env::var_os("ARA_RENDERLAB_TEXTURE_LOG").is_some_and(|v| v == "1")
+        });
+        let total = self.compressed + self.decoded.values().sum::<u32>();
+        if on && total != self.logged {
+            self.logged = total;
+            eprintln!("Ara presentation: {}", self.texture_report());
+        }
+    }
+
+    /// How this scene's textures were uploaded so far: the count as shipped, each reason
+    /// a texture was decoded to RGBA8 with its count, and the time both took.
+    fn texture_report(&self) -> String {
+        let decoded: Vec<String> = self
+            .decoded
+            .iter()
+            .map(|(reason, count)| format!("{count} decoded ({reason})"))
+            .collect();
+        format!(
+            "{} textures uploaded as shipped (BC blocks, the file's own mips); {}; {:.2} s \
+             preparing and uploading them on the render thread",
+            self.compressed,
+            if decoded.is_empty() {
+                "none decoded".to_owned()
+            } else {
+                decoded.join(", ")
+            },
+            self.upload_time.as_secs_f64()
+        )
+    }
+}
+
+/// What the engine must now be told about an object's shadow casting: `Some(wanted)` when
+/// the draw's flag differs from what the engine was `told` last (an object spawns
+/// casting), and `told` then records it; `None` when they agree, so an unchanged flag
+/// costs no call.
+fn shadow_change(told: &mut bool, wanted: bool) -> Option<bool> {
+    (*told != wanted).then(|| {
+        *told = wanted;
+        wanted
+    })
 }
 
 /// Uploads static triangles, with tangents when `wanted` (a normal-mapped material) and
@@ -1464,6 +1572,22 @@ fn skinned_mesh(
 mod tests {
     /// Transforms Renderlab can light draw; a zero or squashed scale, a non-finite one or axes
     /// collapsed onto a plane do not.
+    /// A mesh renderer with `castShadows: false` tells the engine once, when its object is
+    /// spawned (objects spawn casting); an unchanged flag says nothing more; switching it
+    /// back on mid-run, or off again, each tells the engine again.
+    #[test]
+    fn a_draws_shadow_flag_reaches_the_engine_at_spawn_and_on_every_change() {
+        let mut told = true;
+        assert_eq!(shadow_change(&mut told, false), Some(false));
+        assert_eq!(shadow_change(&mut told, false), None);
+        assert_eq!(shadow_change(&mut told, true), Some(true));
+        assert_eq!(shadow_change(&mut told, true), None);
+        assert_eq!(shadow_change(&mut told, false), Some(false));
+        // A renderer that casts, as most do, never produces a call.
+        let mut told = true;
+        assert_eq!(shadow_change(&mut told, true), None);
+    }
+
     #[test]
     fn singular_transforms_are_not_drawn() {
         use glam34::{Mat4, Vec3};

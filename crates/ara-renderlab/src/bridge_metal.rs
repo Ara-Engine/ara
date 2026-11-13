@@ -127,6 +127,9 @@ impl Bridge {
         view: &ExternalView<'_>,
     ) -> Result<ExternalFrame> {
         let frame = view.frame;
+        // The engine is device-free: tell it what this device samples before the scene
+        // uploads textures (block-compressed where it can).
+        self.engine.adopt_device(gpu);
         self.report_unsupported(view);
         // Terrain tiles take at most half the mesh-material groups; entity draws and
         // foliage share the rest.
