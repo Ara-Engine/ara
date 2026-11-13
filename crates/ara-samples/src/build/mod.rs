@@ -5,8 +5,8 @@
 //! typed commands available to agents through the CLI and MCP.
 pub mod anim;
 pub mod atelier;
-pub mod glint;
 mod bounds;
+pub mod glint;
 pub mod hangar;
 pub mod kits;
 mod materials;
