@@ -66,6 +66,9 @@ pub(crate) struct Readback {
     mapped: std::sync::mpsc::Receiver<std::result::Result<(), wgpu::BufferAsyncError>>,
 }
 
+/// Longest a readback is polled for before it is reported lost.
+const READBACK_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+
 impl Readback {
     /// Records the copy of `texture` (of `size`) into a new buffer and submits it.
     pub fn queue(
@@ -118,17 +121,20 @@ impl Readback {
 
     /// The texels, rows top first with no padding, once the copy is done (waiting for it).
     pub fn take(self, device: &wgpu::Device) -> Result<Vec<u8>> {
-        // The common case: the frame finished, so the copy behind it has too.
-        device
-            .poll(wgpu::PollType::Poll)
-            .map_err(|error| anyhow::anyhow!("polling the readback: {error:?}"))?;
-        let reported = match self.mapped.try_recv() {
-            Ok(reported) => reported,
-            Err(_) => {
-                device
-                    .poll(wgpu::PollType::wait_indefinitely())
-                    .map_err(|error| anyhow::anyhow!("waiting for the readback: {error:?}"))?;
-                self.mapped.recv().context("the readback never reported")?
+        // The common case: the frame finished, so the copy behind it has too. Otherwise poll
+        // without waiting: a wait on the device would also wait for the frame recorded after
+        // this one (and hold wgpu's device lock the render thread's submit needs).
+        let started = std::time::Instant::now();
+        let reported = loop {
+            device
+                .poll(wgpu::PollType::Poll)
+                .map_err(|error| anyhow::anyhow!("polling the readback: {error:?}"))?;
+            match self.mapped.try_recv() {
+                Ok(reported) => break reported,
+                Err(_) if started.elapsed() > READBACK_WAIT => {
+                    anyhow::bail!("the readback never reported")
+                }
+                Err(_) => std::thread::yield_now(),
             }
         };
         reported.context("mapping the readback")?;

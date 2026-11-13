@@ -646,7 +646,8 @@ impl Bridge {
         let handoff_ms = started.elapsed().as_secs_f64() * 1000.;
         log_line(|| {
             format!(
-                "bridge_log frame={} begin={:.2} done_after={} in_flight={:.2} handoff={handoff_ms:.2} still_pending={}",
+                "bridge_log thread={:?} frame={} begin={:.2} done_after={} in_flight={:.2} handoff={handoff_ms:.2} still_pending={}",
+                std::thread::current().id(),
                 taken.frame.0,
                 taken.begin_ms,
                 taken.done_after_ms.map_or("none".into(), |ms| format!("{ms:.2}")),
