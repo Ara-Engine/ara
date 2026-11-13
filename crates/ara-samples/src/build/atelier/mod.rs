@@ -37,13 +37,26 @@ const EV100: f32 = 10.0;
 /// sun. `lantern`: its glass at 5000 nits stays under white, and the plate behind it shows
 /// the sunlit paving at about a quarter of it.
 const TEST_EV100: [(&str, f32); 2] = [("shadow", 12.0), ("lantern", 13.0)];
-/// The fixed exposure of clip `name`.
-fn clip_ev100(name: &str) -> f32 {
-    TEST_EV100
-        .iter()
-        .find(|(clip, _)| *clip == name)
-        .map_or(EV100, |(_, ev)| *ev)
-}
+/// The night scene: the same tables and kits after dark, a frame of many shadowed local
+/// lights: 25 of them. Twenty wall lanterns (`kits::night_lanterns` and the courtyard's
+/// own) at `LANTERN_LUMENS` and the room's five lamps, under a dim moon and a near-black
+/// sky.
+pub const NIGHT_SCENE: (&str, &str) = ("levels/atelier_night.scene", "sc_atelier02");
+/// Set so the paving near a lantern sits at mid-grey and the gravel beyond the courtyard
+/// is black: the exposure a game would ship a night at.
+const NIGHT_EV100: f32 = 5.0;
+/// The moon: lux on a surface facing it, colour, and the direction its light travels.
+const MOON_LUX: f32 = 0.25;
+const MOON_COLOR: [f32; 3] = [0.75, 0.85, 1.0];
+const MOON_DIRECTION: Vec3 = Vec3::new(0.3, -0.9, 0.3);
+/// The night sky's scale, cd/m² (the day's gradient, far below the night's exposure).
+const NIGHT_SKY_SCALE_CD: f32 = 0.03;
+/// Each night lantern: a point light of the courtyard lantern's flux, colour and size.
+const LANTERN_LUMENS: f32 = 600.0;
+const LANTERN_COLOR: [f32; 3] = [1.0, 0.78, 0.5];
+const LANTERN_RADIUS: f32 = 0.07;
+const LANTERN_RANGE: f32 = 8.0;
+
 /// The sun: illuminance on a surface facing it, lux, and the direction its light
 /// travels (unit, world space; it shines in through the doorway and the east window).
 const SUN_LUX: f32 = 45_000.0;
@@ -182,12 +195,15 @@ const fn key(t: f32, position: Vec3, target: Vec3, fov: f32, cut: bool) -> Pose 
     }
 }
 
+/// A camera clip: its name, what it shows, and its keys.
+type Clip = (&'static str, &'static str, &'static [Pose]);
+
 /// The comparison clips: a still, a moving stretch, one hard cut, and three test stills
 /// (`glow`: an emitter seen in a near-mirror and in chrome; `shadow`: thin shadows more
 /// than 40 m from the camera; `lantern`: an emitter seen in a near-mirror in daylight).
 /// Positions interpolate linearly and rotations by slerp between keys, at 30 frames a
 /// second.
-const CLIPS: [(&str, &str, &[Pose]); 6] = [
+const CLIPS: [Clip; 6] = [
     (
         "still",
         "Interior from the doorway side: sun patches, sculpture, table, armchair.",
@@ -288,6 +304,95 @@ const CLIPS: [(&str, &str, &[Pose]); 6] = [
     ),
 ];
 
+/// The night scene's clips: a still along the front wall from the east planter (the
+/// lantern beside its reflection in its plate on the right, the doorway and the room's
+/// lamps, the west and far walls' lanterns across the courtyard), a three-second push
+/// toward the doorway, and the day's `lantern` view of the plate.
+const NIGHT_CLIPS: [Clip; 3] = [
+    (
+        "night",
+        "The courtyard at night from its east side, looking west along the front wall: twenty lanterns and the room's lamps.",
+        &[key(
+            0.0,
+            Vec3::new(5.4, 1.75, 3.0),
+            Vec3::new(-3.0, 1.5, 1.2),
+            62.0,
+            false,
+        )],
+    ),
+    (
+        "nightdolly",
+        "A three-second push across the courtyard toward the doorway at night.",
+        &[
+            key(
+                0.0,
+                Vec3::new(0.5, 1.5, 8.0),
+                Vec3::new(0.0, 1.6, 0.0),
+                55.0,
+                false,
+            ),
+            key(
+                3.0,
+                Vec3::new(0.3, 1.5, 4.5),
+                Vec3::new(0.0, 1.6, 0.0),
+                55.0,
+                false,
+            ),
+        ],
+    ),
+    (
+        "nightlantern",
+        "The wall lantern beside its reflection in its plate, at night: the brightest thing in the frame.",
+        &[key(
+            0.0,
+            Vec3::new(4.2, 3.3, 1.9),
+            Vec3::new(3.42, 2.45, 0.43),
+            30.0,
+            false,
+        )],
+    ),
+];
+
+/// One time of day: a scene built from the same tables and kits.
+struct Time {
+    scene: (&'static str, &'static str),
+    summary: &'static str,
+    /// The scene's fixed exposure.
+    ev100: f32,
+    /// The directional light: its name, lux, colour and travel direction.
+    sun: (&'static str, f32, [f32; 3], Vec3),
+    sky_scale_cd: f32,
+    clips: &'static [Clip],
+    /// The clip whose first key is the scene's main camera.
+    main_clip: &'static str,
+    /// Exposure boxes round exterior test cameras: clip and EV100.
+    test_ev100: &'static [(&'static str, f32)],
+    /// The night's extra lanterns: their kit and a light in each.
+    lanterns: bool,
+}
+const DAY: Time = Time {
+    scene: SCENE,
+    summary: "Atelier: studio interior, courtyard and light table",
+    ev100: EV100,
+    sun: ("Sun", SUN_LUX, SUN_COLOR, SUN_DIRECTION),
+    sky_scale_cd: SKY_SCALE_CD,
+    clips: &CLIPS,
+    main_clip: "still",
+    test_ev100: &TEST_EV100,
+    lanterns: false,
+};
+const NIGHT: Time = Time {
+    scene: NIGHT_SCENE,
+    summary: "Atelier at night: twenty wall lanterns and the room's lamps",
+    ev100: NIGHT_EV100,
+    sun: ("Moon", MOON_LUX, MOON_COLOR, MOON_DIRECTION),
+    sky_scale_cd: NIGHT_SKY_SCALE_CD,
+    clips: &NIGHT_CLIPS,
+    main_clip: "night",
+    test_ev100: &[],
+    lanterns: true,
+};
+
 /// A camera looks along -Z: its rotation as a glTF quaternion `[x, y, z, w]`.
 fn look_rotation(position: Vec3, target: Vec3) -> [f32; 4] {
     let forward = (target - position).normalize();
@@ -345,23 +450,55 @@ fn spec() -> Value {
             "coneHalfAnglesDeg": l.cone.map(|(i, o)| [i, o]), "castsShadows": l.shadow,
         })).collect::<Vec<_>>(),
         "engineSideExtras": ["mannequin idle animation", "dust particles in the sun shaft"],
+        "fittingsThatCastNoShadow": {
+            "why": "Each encloses its own light: a fitting that shadowed it would leave the lamp lighting nothing.",
+            "models": ["atelier_lamps (the table lamp's globe, the pendant's shade and bulb, the floor lamp's bulb)",
+                "atelier_lantern_glass (the courtyard wall lantern's glass)",
+                "atelier_night_glass (the night lanterns' glass, night scene only)"],
+        },
+        "night": {
+            "scene": NIGHT_SCENE.0,
+            "note": "The same geometry, materials and six lights, plus the lanterns below; every local light casts shadows.",
+            "exposure": {"mode": "fixed", "ev100": NIGHT_EV100},
+            "sky": {"scaleCdPerM2": NIGHT_SKY_SCALE_CD},
+            "moon": {"illuminanceLux": MOON_LUX, "color": MOON_COLOR,
+                "travelDirection": MOON_DIRECTION.normalize().to_array(), "castsShadows": true},
+            "lanterns": {"type": "point", "lumens": LANTERN_LUMENS, "color": LANTERN_COLOR,
+                "sourceRadius": LANTERN_RADIUS, "range": LANTERN_RANGE, "castsShadows": true,
+                "positions": kits::night_lanterns().into_iter().map(round3).collect::<Vec<_>>(),
+                "also": "the day's Courtyard wall lantern, unchanged"},
+        },
     })
 }
 
-/// The clips as poses over time (plain JSON, 30 fps).
+/// The clips of both scenes as poses over time (plain JSON, 30 fps), each with its scene
+/// and its fixed exposure.
 fn clips() -> Value {
+    let clips: Vec<Value> = [&DAY, &NIGHT]
+        .into_iter()
+        .flat_map(|time| time.clips.iter().map(move |clip| (time, clip)))
+        .map(|(time, (name, note, keys))| {
+            let ev100 = time
+                .test_ev100
+                .iter()
+                .find(|(clip, _)| clip == name)
+                .map_or(time.ev100, |(_, ev)| *ev);
+            json!({
+                "name": name, "note": note, "duration": keys.last().map_or(0.0, |k| k.t),
+                "scene": time.scene.0,
+                "ev100": ev100,
+                "keys": keys.iter().map(|k| json!({
+                    "t": k.t, "position": round3(k.position), "rotation": look_rotation(k.position, k.target),
+                    "lookAt": round3(k.target), "fovYDeg": k.fov, "cut": k.cut,
+                })).collect::<Vec<_>>(),
+            })
+        })
+        .collect();
     json!({
         "handedness": "right", "up": "+Y", "units": "metres", "cameraForward": "-Z (glTF)",
         "fps": 30, "resolution": [1920, 1080],
         "interpolation": "position: linear; rotation: slerp; a key with cut=true ends its segment",
-        "clips": CLIPS.iter().map(|(name, note, keys)| json!({
-            "name": name, "note": note, "duration": keys.last().map_or(0.0, |k| k.t),
-            "ev100": clip_ev100(name),
-            "keys": keys.iter().map(|k| json!({
-                "t": k.t, "position": round3(k.position), "rotation": look_rotation(k.position, k.target),
-                "lookAt": round3(k.target), "fovYDeg": k.fov, "cut": k.cut,
-            })).collect::<Vec<_>>(),
-        })).collect::<Vec<_>>(),
+        "clips": clips,
     })
 }
 
@@ -377,6 +514,13 @@ fn kits_written(root: &Path, lock: &Lock) -> Result<Vec<(String, String)>> {
         ("atelier_shell".into(), kits::shell(root, lock)?),
         ("atelier_furniture".into(), kits::furniture(root, lock)?),
         ("atelier_courtyard".into(), kits::courtyard(root, lock)?),
+        ("atelier_lamps".into(), kits::lamps(root, lock)?),
+        (
+            "atelier_lantern_glass".into(),
+            kits::wall_lantern_glass(root, lock)?,
+        ),
+        ("atelier_night".into(), kits::night(root, lock)?),
+        ("atelier_night_glass".into(), kits::night_glass(root, lock)?),
     ])
 }
 
@@ -415,8 +559,27 @@ pub fn build(ctx: &Ctx) -> Result<()> {
             &format!("as_kit{}", short(&name)),
         )?;
     }
-    ctx.new_document(SCENE.0, "scene", SCENE.1)?;
-    let mut s = Scene::new(&models);
+    for time in [&DAY, &NIGHT] {
+        author(ctx, &models, time)?;
+    }
+    ctx.set_main(SCENE.0, SCENE.1)?;
+    let compare = ctx.root.join("compare");
+    std::fs::create_dir_all(&compare)?;
+    std::fs::write(
+        compare.join("atelier.spec.json"),
+        ara_json::to_canonical_string(&spec()),
+    )?;
+    std::fs::write(
+        compare.join("camera_clips.json"),
+        ara_json::to_canonical_string(&clips()),
+    )?;
+    ctx.check()
+}
+
+/// Authors one time of day's scene from the shared tables.
+fn author(ctx: &Ctx, models: &Models, time: &Time) -> Result<()> {
+    ctx.new_document(time.scene.0, "scene", time.scene.1)?;
+    let mut s = Scene::new(models);
     s.entity(
         "e_env",
         "Gradient sky and fixed exposure",
@@ -425,20 +588,21 @@ pub fn build(ctx: &Ctx) -> Result<()> {
                 "sky": [SKY_ZENITH[0], SKY_ZENITH[1], SKY_ZENITH[2], 1],
                 "horizon": [SKY_HORIZON[0], SKY_HORIZON[1], SKY_HORIZON[2], 1],
                 "ground": [SKY_GROUND[0], SKY_GROUND[1], SKY_GROUND[2], 1],
-                "skyFalloff": SKY_FALLOFF, "intensity": SKY_SCALE_CD, "skyLight": 1,
+                "skyFalloff": SKY_FALLOFF, "intensity": time.sky_scale_cd, "skyLight": 1,
             },
             // One fixed exposure and one display transform: nothing else. AgX because the sunlit
             // floor is about ten times the walls in shade, which Neutral clips to flat white.
             "PostProcessVolume": {"overrides": [
-                {"exposure": "manual", "ev100": EV100},
+                {"exposure": "manual", "ev100": time.ev100},
                 {"module": "toneMapping", "toneMapping": "agxMediumHighContrast"},
             ]},
         }),
     );
     // Each exterior test camera stands in its own box; no other camera comes within 4 m
     // of either.
-    for (clip, ev100) in TEST_EV100 {
-        let camera = CLIPS
+    for &(clip, ev100) in time.test_ev100 {
+        let camera = time
+            .clips
             .iter()
             .find(|(name, ..)| *name == clip)
             .map_or(Vec3::ZERO, |(_, _, keys)| keys[0].position);
@@ -453,13 +617,14 @@ pub fn build(ctx: &Ctx) -> Result<()> {
             }),
         );
     }
+    let (sun, lux, colour, travel) = time.sun;
     s.commands.extend(light(
         "e_sun",
-        "Sun",
+        sun,
         Vec3::new(0.0, 40.0, 30.0),
-        json!({"kind": "directional", "color": [SUN_COLOR[0], SUN_COLOR[1], SUN_COLOR[2], 1],
-            "intensity": SUN_LUX, "sourceAngle": 0.5357}),
-        Some(SUN_DIRECTION),
+        json!({"kind": "directional", "color": [colour[0], colour[1], colour[2], 1],
+            "intensity": lux, "sourceAngle": 0.5357}),
+        Some(travel),
     ));
     for lamp in &LAMPS {
         let direction = lamp.target.map(|t| t - lamp.position);
@@ -492,8 +657,7 @@ pub fn build(ctx: &Ctx) -> Result<()> {
             0.0,
         )
         .at_origin()
-        .decor()
-        .renderer(json!({"emissive": [6000, 6000, 6000]})),
+        .decor(),
     );
     s.prop(
         Prop::new(
@@ -504,9 +668,66 @@ pub fn build(ctx: &Ctx) -> Result<()> {
             0.0,
         )
         .at_origin()
-        .decor()
-        .renderer(json!({"emissive": [5000, 5000, 5000]})),
+        .decor(),
     );
+    // The lamp fittings that enclose their own light (`kits::lamps`, the lantern glass):
+    // they glow, and they must not shadow the light inside them, which is this switch on
+    // the mesh renderer. Renderlab does not honour it yet (FINDINGS 17), so today each of
+    // these lamps lights only the inside of its own fitting.
+    for (id, name, model, nits) in [
+        ("e_lamps", "Lamp shades and bulbs", "atelier_lamps", 6000),
+        (
+            "e_lanternglass",
+            "Wall lantern glass",
+            "atelier_lantern_glass",
+            5000,
+        ),
+    ] {
+        s.prop(
+            Prop::new(id, name, model, Vec3::ZERO, 0.0)
+                .at_origin()
+                .decor()
+                .renderer(json!({"emissive": [nits, nits, nits], "castShadows": false})),
+        );
+    }
+    // The night's extra lanterns: their kit, and a point light at each one's glass.
+    if time.lanterns {
+        s.prop(
+            Prop::new(
+                "e_nightkit",
+                "Night lanterns",
+                "atelier_night",
+                Vec3::ZERO,
+                0.0,
+            )
+            .at_origin()
+            .decor(),
+        );
+        s.prop(
+            Prop::new(
+                "e_nightglass",
+                "Night lantern glass",
+                "atelier_night_glass",
+                Vec3::ZERO,
+                0.0,
+            )
+            .at_origin()
+            .decor()
+            .renderer(json!({"emissive": [5000, 5000, 5000], "castShadows": false})),
+        );
+        for (i, position) in kits::night_lanterns().into_iter().enumerate() {
+            s.commands.extend(light(
+                &format!("e_lnight{i}"),
+                &format!("Night lantern {i}"),
+                position,
+                json!({"kind": "point",
+                    "color": [LANTERN_COLOR[0], LANTERN_COLOR[1], LANTERN_COLOR[2], 1],
+                    "intensity": LANTERN_LUMENS, "units": "lumens", "range": LANTERN_RANGE,
+                    "sourceRadius": LANTERN_RADIUS}),
+                None,
+            ));
+        }
+    }
     // Third-party objects: on the table, the shelf and the bench.
     for (id, name, model, at, yaw, scale) in [
         (
@@ -589,7 +810,7 @@ pub fn build(ctx: &Ctx) -> Result<()> {
         json!({"Transform": {"position": [-1.0, 0.8, -1.6]}, "VisualEffect": {"effect": "dust", "scale": 1.4}}),
     );
     // One camera entity per clip key, so `ara capture --camera` can render each.
-    for (name, _, keys) in CLIPS {
+    for &(name, _, keys) in time.clips {
         for (i, k) in keys.iter().enumerate() {
             let id = format!("e_cam{name}{i}");
             s.entity(
@@ -598,7 +819,7 @@ pub fn build(ctx: &Ctx) -> Result<()> {
                 // The still's first key is the scene's main camera (priority 0); the rest are
                 // preferred last, so an export or a Play of the scene frames the still.
                 json!({"Transform": {"position": round3(k.position)},
-                    "Camera": {"fov": k.fov, "priority": if name == "still" { 0 } else { 10 }}}),
+                    "Camera": {"fov": k.fov, "priority": if name == time.main_clip { 0 } else { 10 }}}),
             );
             s.commands.push((
                 "transform.lookAt",
@@ -607,21 +828,5 @@ pub fn build(ctx: &Ctx) -> Result<()> {
         }
     }
     let calls = std::mem::take(&mut s.commands);
-    ctx.apply(
-        SCENE.0,
-        "Atelier: studio interior, courtyard and light table",
-        calls,
-    )?;
-    ctx.set_main(SCENE.0, SCENE.1)?;
-    let compare = ctx.root.join("compare");
-    std::fs::create_dir_all(&compare)?;
-    std::fs::write(
-        compare.join("atelier.spec.json"),
-        ara_json::to_canonical_string(&spec()),
-    )?;
-    std::fs::write(
-        compare.join("camera_clips.json"),
-        ara_json::to_canonical_string(&clips()),
-    )?;
-    ctx.check()
+    ctx.apply(time.scene.0, time.summary, calls)
 }

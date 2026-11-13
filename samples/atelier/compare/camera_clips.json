@@ -11,6 +11,7 @@
       "name": "still",
       "note": "Interior from the doorway side: sun patches, sculpture, table, armchair.",
       "duration": 0,
+      "scene": "levels/atelier.scene",
       "ev100": 10,
       "keys": [
         {
@@ -27,6 +28,7 @@
       "name": "dolly",
       "note": "A slow push from the courtyard through the doorway toward the table.",
       "duration": 8,
+      "scene": "levels/atelier.scene",
       "ev100": 10,
       "keys": [
         {
@@ -51,6 +53,7 @@
       "name": "cut",
       "note": "A low courtyard pan, a hard cut at 3 s to the chrome sphere.",
       "duration": 6,
+      "scene": "levels/atelier.scene",
       "ev100": 10,
       "keys": [
         {
@@ -91,6 +94,7 @@
       "name": "glow",
       "note": "The table's end, in shade: a glowing globe on a polished nickel tray (roughness 0.07) beside a chrome sphere (0.03).",
       "duration": 0,
+      "scene": "levels/atelier.scene",
       "ev100": 10,
       "keys": [
         {
@@ -107,6 +111,7 @@
       "name": "shadow",
       "note": "From the gravel west of the courtyard: three masts 42 to 44 m away and their shadows on the boundary wall at 50 to 54 m.",
       "duration": 0,
+      "scene": "levels/atelier.scene",
       "ev100": 12,
       "keys": [
         {
@@ -123,7 +128,67 @@
       "name": "lantern",
       "note": "The courtyard wall lantern from above its right: its glowing glass beside its own reflection in the polished nickel plate behind it (roughness 0.07), in daylight.",
       "duration": 0,
+      "scene": "levels/atelier.scene",
       "ev100": 13,
+      "keys": [
+        {
+          "t": 0,
+          "position": [4.2, 3.3, 1.9],
+          "rotation": [-0.22700482606887817, 0.23480570316314697, 0.05649548023939133, 0.9434741735458374],
+          "lookAt": [3.42, 2.45, 0.43],
+          "fovYDeg": 30,
+          "cut": false
+        }
+      ]
+    },
+    {
+      "name": "night",
+      "note": "The courtyard at night from its east side, looking west along the front wall: twenty lanterns and the room's lamps.",
+      "duration": 0,
+      "scene": "levels/atelier_night.scene",
+      "ev100": 5,
+      "keys": [
+        {
+          "t": 0,
+          "position": [5.4, 1.75, 3],
+          "rotation": [-0.011311941780149937, 0.6286110281944275, 0.009144751355051994, 0.7775837779045105],
+          "lookAt": [-3, 1.5, 1.2],
+          "fovYDeg": 62,
+          "cut": false
+        }
+      ]
+    },
+    {
+      "name": "nightdolly",
+      "note": "A three-second push across the courtyard toward the doorway at night.",
+      "duration": 3,
+      "scene": "levels/atelier_night.scene",
+      "ev100": 5,
+      "keys": [
+        {
+          "t": 0,
+          "position": [0.5, 1.5, 8],
+          "rotation": [0.006234429776668549, 0.031203733757138252, -0.00019463602802716196, 0.9994936585426331],
+          "lookAt": [0, 1.6, 0],
+          "fovYDeg": 55,
+          "cut": false
+        },
+        {
+          "t": 3,
+          "position": [0.3, 1.5, 4.5],
+          "rotation": [0.011078322306275368, 0.033275894820690155, -0.0003688680299092084, 0.9993847608566284],
+          "lookAt": [0, 1.6, 0],
+          "fovYDeg": 55,
+          "cut": false
+        }
+      ]
+    },
+    {
+      "name": "nightlantern",
+      "note": "The wall lantern beside its reflection in its plate, at night: the brightest thing in the frame.",
+      "duration": 0,
+      "scene": "levels/atelier_night.scene",
+      "ev100": 5,
       "keys": [
         {
           "t": 0,

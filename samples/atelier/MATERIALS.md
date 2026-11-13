@@ -51,6 +51,39 @@ Per texel from a metallic-roughness texture (factors 1.0), sampled at 256 x 256.
 | Potted plant 01 leaves (alpha mask) | 0.55 | 0.39 | 5% | 0% | 0.00 |
 | Fern 02 (alpha mask) | 0.94 | 0.44 | 0% | 0% | 0.00 |
 
+## The night scene: what it asks of the lights
+
+`levels/atelier_night.scene`, the same geometry and materials after dark. **Not yet a valid
+measure**: until the renderer honours `castShadows: false`, every light below is blocked by
+its own fitting and the frame is lit by glowing glass alone (FINDINGS 17).
+
+| Lights | Count | Kind | Each |
+|---|---|---|---|
+| Wall lanterns: the day's courtyard lantern and its twin on the building's front wall, 18 on posts along the courtyard walls | 20 | point, shadowed | 600 lm, colour 1.0, 0.78, 0.5, source radius 0.07 m, range 8 m |
+| The room's lamps, as by day (pendant, shelf strip, table globe: point; floor lamp, picture light: spot) | 5 | 3 point, 2 spot, shadowed | 120 to 900 lm |
+| Moon | 1 | directional, shadowed | 0.25 lux |
+
+That is **25 shadowed local lights, 23 of them point lights**, about 12,000 lm over a 120 m2
+courtyard, at EV100 5. Ara's `Light` has no shadow switch, so "shadowed" is the renderer's
+automatic choice: every local light within its budget (128), which at 25 is all of them.
+On the path without ray hardware a shadowed point light takes six layers of the local
+shadow atlas where a spot takes one tile, so this scene asks for the six-layer atlas (about
+384 MiB against 64 MiB at today's fixed size, by the renderer unit's inventory).
+
+**Fittings that cast no shadow** (`MeshRenderer.castShadows: false`), in both scenes,
+because each encloses its own light:
+
+| Model | Meshes | Light inside |
+|---|---|---|
+| `atelier_lamps` | the table lamp's globe; the pendant's brass shade and bulb; the floor lamp's bulb | Table lamp glow; Pendant over the table; Floor lamp reading spot |
+| `atelier_lantern_glass` | the courtyard wall lantern's glass | Courtyard wall lantern |
+| `atelier_night_glass` (night only) | the nineteen night lanterns' glass | Night lantern 0 to 18 |
+
+The lanterns' steel frames, the lamps' stems and the pendant's cord still cast shadows. The
+glass and bulbs still glow (5000 and 6000 nits), so once the lamps light the room the glow
+adds to them through the indirect light; the lamp intensities have not been rebalanced for
+that and will be looked at when it can be seen.
+
 ## What this means for a reflection test
 
 - **The floor is not a reflector.** It was polished concrete at roughness 0.36 until the look

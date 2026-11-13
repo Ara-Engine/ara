@@ -112,5 +112,60 @@
   "engineSideExtras": [
     "mannequin idle animation",
     "dust particles in the sun shaft"
-  ]
+  ],
+  "fittingsThatCastNoShadow": {
+    "why": "Each encloses its own light: a fitting that shadowed it would leave the lamp lighting nothing.",
+    "models": [
+      "atelier_lamps (the table lamp's globe, the pendant's shade and bulb, the floor lamp's bulb)",
+      "atelier_lantern_glass (the courtyard wall lantern's glass)",
+      "atelier_night_glass (the night lanterns' glass, night scene only)"
+    ]
+  },
+  "night": {
+    "scene": "levels/atelier_night.scene",
+    "note": "The same geometry, materials and six lights, plus the lanterns below; every local light casts shadows.",
+    "exposure": {
+      "mode": "fixed",
+      "ev100": 5
+    },
+    "sky": {
+      "scaleCdPerM2": 0.029999999329447746
+    },
+    "moon": {
+      "illuminanceLux": 0.25,
+      "color": [0.75, 0.8500000238418579, 1],
+      "travelDirection": [0.30151134729385376, -0.9045339822769165, 0.30151134729385376],
+      "castsShadows": true
+    },
+    "lanterns": {
+      "type": "point",
+      "lumens": 600,
+      "color": [1, 0.7799999713897705, 0.5],
+      "sourceRadius": 0.07000000029802322,
+      "range": 8,
+      "castsShadows": true,
+      "positions": [
+        [-3.3, 2.4, 0.68],
+        [-6.8, 1.995, 1.6],
+        [-6.8, 1.995, 3.2],
+        [-6.8, 1.995, 4.8],
+        [-6.8, 1.995, 6.4],
+        [-6.8, 1.995, 8],
+        [6.8, 1.995, 1.6],
+        [6.8, 1.995, 3.2],
+        [6.8, 1.995, 4.8],
+        [6.8, 1.995, 6.4],
+        [6.8, 1.995, 8],
+        [-5.25, 1.995, 8.8],
+        [-3.75, 1.995, 8.8],
+        [-2.25, 1.995, 8.8],
+        [-0.75, 1.995, 8.8],
+        [0.75, 1.995, 8.8],
+        [2.25, 1.995, 8.8],
+        [3.75, 1.995, 8.8],
+        [5.25, 1.995, 8.8]
+      ],
+      "also": "the day's Courtyard wall lantern, unchanged"
+    }
+  }
 }

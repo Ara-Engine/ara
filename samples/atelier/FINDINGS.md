@@ -62,6 +62,45 @@ No engine code was changed for any of these.
    the mannequin (`Idle_Talking`) in the courtyard, in the dolly and cut clips and out of the
    still.
 
+17. **A lamp whose light sits inside its own fitting lights nothing.** Atelier's lamps are
+    built as lamps are: a point or spot light at the centre of a glowing bulb, globe or
+    lantern glass (and, for the pendant, inside its shade). The fitting's mesh blocks every
+    shadow ray to the light, so the light reaches only the inside of its own fitting. The
+    switch every engine has for this, a fitting that casts no shadow, exists in Ara
+    (`MeshRenderer.castShadows`) and **the Renderlab path ignores it** (the bridge never
+    reads it; Renderlab has no per-object equivalent). Measured on the night scene
+    (`levels/atelier_night.scene`, 25 local lights, M5 Pro, 1280 x 720, main `f134c989f`):
+    - With every emissive surface switched off at run time the frame is black: mean 0.2 of
+      255 ([`preview/defects/night_emissives_off.jpg`](preview/defects/night_emissives_off.jpg)).
+      With the lights' shadow rays off as well (`RENDERLAB_LOCAL_RAY_BUDGET=0`) the same
+      frame is smoothly lit by the 20 lanterns, mean 6.9
+      ([`preview/defects/night_emissives_off_unshadowed.jpg`](preview/defects/night_emissives_off_unshadowed.jpg)).
+      So all the light in the night still comes from the glowing glass through the
+      indirect cache, which is why its paving and walls are covered in hand-sized blotches
+      that 60 held frames do not settle.
+    - The lights still pay for their shadow rays: 41.4 ms of shading with them, 15.8 ms
+      with the budget at 0. That is 25.6 ms, about 1 ms a light, for lights that light
+      nothing.
+    - All 25 are shadowed, none dropped: the default frame is pixel-identical to
+      `RENDERLAB_LOCAL_RAY_BUDGET=all`, and budgets of 13 and 4 change 5.6% and 9.3% of its
+      pixels by more than 8 levels.
+    - The chrome sphere is pure black at night and the lantern's polished backplate shows no
+      lantern, for the same reason; with shadows off both show the lights.
+    - **The day scene has the same fault and has had it since it was built**: its pendant,
+      floor lamp, table globe and wall lantern contribute almost nothing; the room is lit by
+      sun, sky and glowing bulbs. An engine that honours the switch, or imports the lights
+      without the fittings' shadows, lights the room with its lamps.
+    The content is now what it should be: the fittings are their own models with
+    `castShadows: false` (`MATERIALS.md` lists them). The picture does not change until the
+    renderer has a per-object "casts no shadow" and the bridge passes the flag.
+18. **A see-through material that glows cannot be drawn on the Mac.** Making the lantern
+    glass an alpha-blended emitter fails every capture of the scene with `ARA7300 ... a
+    transparent material's program with Parameters is not assembled`: Renderlab's ara-gpu
+    port gives a pane the standard program only, and the bridge's emissive program declares
+    `Parameters`. The whole frame is refused, not just the material. Mac port; PC not
+    checked (the bridge has a path for it, a pane that glows everywhere, so the wgpu engine
+    may draw it).
+
 ## P2: friction
 
 5. **A scene cannot hold an HDRI.** HDRI skies are expressible only in capture look files, so
@@ -174,6 +213,16 @@ their cameras.
   above and to the right with its own exposure (EV100 13, the box `e_lanternev`). At the
   room's exposure the plate is a pale square on the wall in the dolly's first frame and
   the courtyard pan.
+- **The night scene** (`levels/atelier_night.scene`), built from the same tables and kits:
+  the day's geometry and six lamps, nineteen more lanterns (a twin left of the doorway and
+  eighteen on posts along the courtyard walls), a 0.25 lux moon, a near-black sky and
+  EV100 5. Three clips: `night`, `nightdolly`, `nightlantern`. **Its lights are blocked by
+  their fittings until `castShadows` is honoured (item 17), so its picture and its cost are
+  a record of that defect, not yet a measure of a light-heavy frame.**
+- **Lamp fittings are their own models.** The bulbs, the table globe, the pendant's shade
+  and the lanterns' glass left the furniture and courtyard models for `atelier_lamps`,
+  `atelier_lantern_glass` and `atelier_night_glass`, whose mesh renderers carry
+  `castShadows: false`. Nothing moved and the stills are unchanged.
 - **The wall lantern glows now.** Its glass sat inside a solid steel block of the frame's
   outer size, so nothing of it showed: a dark box on the wall in the dolly's first frame
   and the courtyard pan. The frame is four corner bars with the cap, foot and two bands it

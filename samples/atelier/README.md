@@ -16,7 +16,11 @@ ara-samples build atelier
 ara capture --root samples/atelier --scene levels/atelier.scene --camera e_camstill0 --ticks 90
 ```
 
-Camera entities: `e_camstill0`, `e_camdolly0`/`1`, `e_camcut0`..`3`, `e_camglow0`, `e_camshadow0`, `e_camlantern0` (one per clip key).
+Two scenes from the same tables and kits: `levels/atelier.scene` (day, the comparison scene
+and the project's main scene) and `levels/atelier_night.scene` (night: 25 shadowed local
+lights; see `MATERIALS.md` and FINDINGS 17 before measuring anything on it).
+
+Camera entities: `e_camstill0`, `e_camdolly0`/`1`, `e_camcut0`..`3`, `e_camglow0`, `e_camshadow0`, `e_camlantern0` (one per clip key); in the night scene `e_camnight0`, `e_camnightdolly0`/`1`, `e_camnightlantern0`.
 Export notes (what the Unity/Unreal export carries and cannot): [`compare/EXPORT.md`](compare/EXPORT.md). `preview/` holds the current stills (JPEG, replaced as the scene changes).
 
 ## Conventions
@@ -43,6 +47,11 @@ direction the light moves, not where it comes from.
 | Sun | 45,000 lux on a surface facing it, colour (1.0, 0.91, 0.76), travel direction (-0.45, -0.438, -0.78) (about 26 deg elevation), angular diameter 0.5357 deg, casts shadows |
 
 ## Local lights
+
+Each lamp's fitting (bulb, globe, shade, lantern glass) is its own model with
+`castShadows: false`, because it encloses the lamp's light (`MATERIALS.md`); an importer
+must carry that flag or the lamps light nothing. The night scene adds nineteen lanterns
+(`atelier.spec.json`, `night`).
 
 All in lumens, all spheres with an explicit source radius (Ara's default of 0 is an ideal point; the two tube lights were made spheres because Renderlab cannot draw tubes).
 Spots: cone half-angles in degrees. "Shadow" is the intended choice; Ara's `Light` has no
@@ -106,6 +115,14 @@ between keys, a key with `cut: true` ends its segment.
 | `glow` | 1 frame | test still at the table's end, in shade (1.85, 1.3, -5.7 looking at 0.8, 0.8, -6.13, 34 deg): the glowing globe on the nickel tray beside the small chrome sphere, so one emitter is seen directly, in a near-mirror (roughness 0.07) and in chrome (0.03) |
 | `shadow` | 1 frame | test still from the gravel west of the courtyard (-8.5, 1.29, 6.0 looking at -17.5, 5.0, -44.0, 26 deg): three masts 42 to 44 m from the camera, whose shadows cross the gravel and climb the boundary wall 50 to 54 m away as stripes 0.46, 0.23 and 0.12 m wide; exposed at EV100 12 |
 | `lantern` | 1 frame | test still of the courtyard wall lantern from above its right (4.2, 3.3, 1.9 looking at 3.42, 2.45, 0.43, 30 deg): its glowing glass beside its own reflection in the nickel plate behind it, in daylight; exposed at EV100 13 |
+
+Night scene clips (`scene` in `camera_clips.json` says which scene a clip belongs to):
+
+| Clip | Length | What |
+|---|---|---|
+| `night` | 1 frame | the courtyard from its east side, looking west along the front wall (5.4, 1.75, 3.0 looking at -3.0, 1.5, 1.2, 62 deg): the wall lantern beside its backplate, the doorway and the room's lamps, the west and far walls' lanterns; EV100 5 |
+| `nightdolly` | 3 s | a push across the courtyard toward the doorway (0.5, 1.5, 8.0 to 0.3, 1.5, 4.5, looking at 0, 1.6, 0, 55 deg) |
+| `nightlantern` | 1 frame | the day's `lantern` view at night |
 
 ## Engine-side extras (do not export)
 

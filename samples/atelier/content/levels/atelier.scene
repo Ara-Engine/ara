@@ -7,7 +7,7 @@
   "records": {
     "e_camcut0": {
       "name": "Camera cut 0",
-      "order": "aZ",
+      "order": "ab",
       "Camera": {
         "fov": 46,
         "priority": 10
@@ -19,7 +19,7 @@
     },
     "e_camcut1": {
       "name": "Camera cut 1",
-      "order": "aa",
+      "order": "ac",
       "Camera": {
         "fov": 46,
         "priority": 10
@@ -31,7 +31,7 @@
     },
     "e_camcut2": {
       "name": "Camera cut 2",
-      "order": "ab",
+      "order": "ad",
       "Camera": {
         "fov": 40,
         "priority": 10
@@ -43,7 +43,7 @@
     },
     "e_camcut3": {
       "name": "Camera cut 3",
-      "order": "ac",
+      "order": "ae",
       "Camera": {
         "fov": 40,
         "priority": 10
@@ -55,7 +55,7 @@
     },
     "e_camdolly0": {
       "name": "Camera dolly 0",
-      "order": "aX",
+      "order": "aZ",
       "Camera": {
         "fov": 50,
         "priority": 10
@@ -67,7 +67,7 @@
     },
     "e_camdolly1": {
       "name": "Camera dolly 1",
-      "order": "aY",
+      "order": "aa",
       "Camera": {
         "fov": 50,
         "priority": 10
@@ -79,7 +79,7 @@
     },
     "e_camglow0": {
       "name": "Camera glow 0",
-      "order": "ad",
+      "order": "af",
       "Camera": {
         "fov": 34,
         "priority": 10
@@ -91,7 +91,7 @@
     },
     "e_camlantern0": {
       "name": "Camera lantern 0",
-      "order": "af",
+      "order": "ah",
       "Camera": {
         "fov": 30,
         "priority": 10
@@ -103,7 +103,7 @@
     },
     "e_camprop": {
       "name": "Antique camera",
-      "order": "aD",
+      "order": "aF",
       "MeshRenderer": {
         "model": "@third_party/khronos_antique_camera/AntiqueCamera.gltf#as_khronosantiquecamera"
       },
@@ -115,7 +115,7 @@
     },
     "e_camshadow0": {
       "name": "Camera shadow 0",
-      "order": "ae",
+      "order": "ag",
       "Camera": {
         "fov": 26,
         "priority": 10
@@ -127,7 +127,7 @@
     },
     "e_camstill0": {
       "name": "Camera still 0",
-      "order": "aW",
+      "order": "aY",
       "Camera": {
         "fov": 46
       },
@@ -140,14 +140,13 @@
       "name": "Courtyard dressing",
       "order": "aC",
       "MeshRenderer": {
-        "model": "@kit/atelier_courtyard.gltf#as_kitateliercourtyard",
-        "emissive": [5000, 5000, 5000]
+        "model": "@kit/atelier_courtyard.gltf#as_kitateliercourtyard"
       },
       "Transform": {}
     },
     "e_dust": {
       "name": "Dust motes in the sun shaft",
-      "order": "aV",
+      "order": "aX",
       "Transform": {
         "position": [-1, 0.8, -1.6]
       },
@@ -182,14 +181,13 @@
       "name": "Furniture",
       "order": "aB",
       "MeshRenderer": {
-        "model": "@kit/atelier_furniture.gltf#as_kitatelierfurniture",
-        "emissive": [6000, 6000, 6000]
+        "model": "@kit/atelier_furniture.gltf#as_kitatelierfurniture"
       },
       "Transform": {}
     },
     "e_helmet": {
       "name": "Flight helmet",
-      "order": "aE",
+      "order": "aG",
       "MeshRenderer": {
         "model": "@third_party/khronos_flight_helmet/FlightHelmet.gltf#as_khronosflighthelmet"
       },
@@ -199,9 +197,19 @@
         "scale": [0.9, 0.9, 0.9]
       }
     },
+    "e_lamps": {
+      "name": "Lamp shades and bulbs",
+      "order": "aD",
+      "MeshRenderer": {
+        "model": "@kit/atelier_lamps.gltf#as_kitatelierlamps",
+        "emissive": [6000, 6000, 6000],
+        "castShadows": false
+      },
+      "Transform": {}
+    },
     "e_lantern": {
       "name": "Lantern",
-      "order": "aG",
+      "order": "aI",
       "MeshRenderer": {
         "model": "@third_party/lantern_01/Lantern_01_2k.gltf#as_lantern01"
       },
@@ -228,6 +236,16 @@
         "position": [4.2, 3.3, 1.9],
         "scale": [2, 2, 2]
       }
+    },
+    "e_lanternglass": {
+      "name": "Wall lantern glass",
+      "order": "aE",
+      "MeshRenderer": {
+        "model": "@kit/atelier_lantern_glass.gltf#as_kitatelierlanternglass",
+        "emissive": [5000, 5000, 5000],
+        "castShadows": false
+      },
+      "Transform": {}
     },
     "e_lcup": {
       "name": "Table lamp glow",
@@ -317,7 +335,7 @@
     },
     "e_mannequin": {
       "name": "Mannequin (idle)",
-      "order": "aU",
+      "order": "aW",
       "Animator": {
         "idle": "Idle_Talking"
       },
@@ -336,7 +354,7 @@
     },
     "e_plant0": {
       "name": "Plant",
-      "order": "aH",
+      "order": "aJ",
       "MeshRenderer": {
         "model": "@third_party/shrub_04/shrub_04_1k.gltf#as_shrub04"
       },
@@ -346,7 +364,7 @@
     },
     "e_plant1": {
       "name": "Plant",
-      "order": "aI",
+      "order": "aK",
       "MeshRenderer": {
         "model": "@third_party/fern_02/fern_02_1k.gltf#as_fern02"
       },
@@ -357,7 +375,7 @@
     },
     "e_plant10": {
       "name": "Plant",
-      "order": "aR",
+      "order": "aT",
       "MeshRenderer": {
         "model": "@third_party/potted_plant_01/potted_plant_01_1k.gltf#as_pottedplant01"
       },
@@ -369,7 +387,7 @@
     },
     "e_plant11": {
       "name": "Plant",
-      "order": "aS",
+      "order": "aU",
       "MeshRenderer": {
         "model": "@third_party/potted_plant_02/potted_plant_02_1k.gltf#as_pottedplant02"
       },
@@ -380,7 +398,7 @@
     },
     "e_plant12": {
       "name": "Plant",
-      "order": "aT",
+      "order": "aV",
       "MeshRenderer": {
         "model": "@third_party/potted_plant_01/potted_plant_01_1k.gltf#as_pottedplant01"
       },
@@ -391,7 +409,7 @@
     },
     "e_plant2": {
       "name": "Plant",
-      "order": "aJ",
+      "order": "aL",
       "MeshRenderer": {
         "model": "@third_party/shrub_04/shrub_04_1k.gltf#as_shrub04"
       },
@@ -403,7 +421,7 @@
     },
     "e_plant3": {
       "name": "Plant",
-      "order": "aK",
+      "order": "aM",
       "MeshRenderer": {
         "model": "@third_party/fern_02/fern_02_1k.gltf#as_fern02"
       },
@@ -414,7 +432,7 @@
     },
     "e_plant4": {
       "name": "Plant",
-      "order": "aL",
+      "order": "aN",
       "MeshRenderer": {
         "model": "@third_party/fern_02/fern_02_1k.gltf#as_fern02"
       },
@@ -425,7 +443,7 @@
     },
     "e_plant5": {
       "name": "Plant",
-      "order": "aM",
+      "order": "aO",
       "MeshRenderer": {
         "model": "@third_party/shrub_04/shrub_04_1k.gltf#as_shrub04"
       },
@@ -436,7 +454,7 @@
     },
     "e_plant6": {
       "name": "Plant",
-      "order": "aN",
+      "order": "aP",
       "MeshRenderer": {
         "model": "@third_party/potted_plant_01/potted_plant_01_1k.gltf#as_pottedplant01"
       },
@@ -447,7 +465,7 @@
     },
     "e_plant7": {
       "name": "Plant",
-      "order": "aO",
+      "order": "aQ",
       "MeshRenderer": {
         "model": "@third_party/potted_plant_02/potted_plant_02_1k.gltf#as_pottedplant02"
       },
@@ -458,7 +476,7 @@
     },
     "e_plant8": {
       "name": "Plant",
-      "order": "aP",
+      "order": "aR",
       "MeshRenderer": {
         "model": "@third_party/shrub_04/shrub_04_1k.gltf#as_shrub04"
       },
@@ -470,7 +488,7 @@
     },
     "e_plant9": {
       "name": "Plant",
-      "order": "aQ",
+      "order": "aS",
       "MeshRenderer": {
         "model": "@third_party/fern_02/fern_02_1k.gltf#as_fern02"
       },
@@ -482,7 +500,7 @@
     },
     "e_radio": {
       "name": "Radio",
-      "order": "aF",
+      "order": "aH",
       "MeshRenderer": {
         "model": "@third_party/vintage_radio_transceiver/vintage_radio_transceiver_2k.gltf#as_vintageradiotransceiver"
       },

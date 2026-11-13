@@ -262,10 +262,40 @@ pub const TABLE: Vec3 = Vec3::new(0.2, 0.0, -6.0);
 /// The table lamp's glowing globe, from `TABLE`: it rests on the nickel tray.
 pub const GLOBE: Vec3 = Vec3::new(0.45, 0.877, -0.03);
 const GLOBE_RADIUS: f32 = 0.1;
+/// The floor lamp's foot on the floor.
+const FLOOR_LAMP: Vec3 = Vec3::new(-3.4, 0.0, -5.7);
+
+/// The room's lamp fittings that enclose their own light: the table lamp's glowing globe,
+/// the pendant's brass shade and bulb, and the floor lamp's bulb. Their own model, because
+/// a fitting must not shadow the light inside it and that is a switch on the mesh renderer
+/// (`castShadows: false`), not on a part of a model.
+pub fn lamps(root: &Path, lock: &Lock) -> Result<String> {
+    const BRASS: usize = 0;
+    const BULB: usize = 1;
+    let mut k = Kit::new(vec![
+        Material::flat("brushed brass", [0.93, 0.72, 0.36], 0.28, 1.0),
+        Material::emitter("warm bulb", [1.0, 0.8, 0.55]),
+    ]);
+    let v = Vec3::new;
+    let t = TABLE;
+    k.sphere(BULB, t + GLOBE, GLOBE_RADIUS, 32, Vec2::ONE);
+    k.cylinder(
+        BRASS,
+        0.22,
+        0.22,
+        32,
+        Mat4::from_translation(v(t.x, 2.45, t.z)),
+        Vec2::ONE,
+    );
+    k.sphere(BULB, v(t.x, 2.5, t.z), 0.1, 24, Vec2::ONE);
+    k.sphere(BULB, FLOOR_LAMP + v(0.0, 1.7, 0.0), 0.09, 24, Vec2::ONE);
+    k.write(root, lock, "atelier_lamps")
+}
 
 /// The furniture and objects of the room: sculpture on its plinth, the table with
-/// glass, the glow group (globe, nickel tray, chrome sphere), the armchair, bookshelf,
-/// lamps, rug and the painting.
+/// glass, the nickel tray and chrome sphere of the glow group, the armchair, bookshelf,
+/// the lamps' stems and cord (their glowing parts and the pendant's shade are `lamps`), rug
+/// and the painting.
 pub fn furniture(root: &Path, lock: &Lock) -> Result<String> {
     const OAK: usize = 0;
     const WALNUT: usize = 1;
@@ -275,7 +305,6 @@ pub fn furniture(root: &Path, lock: &Lock) -> Result<String> {
     const CHROME: usize = 5;
     const MARBLE: usize = 6;
     const GLASS: usize = 7;
-    const BULB: usize = 8;
     const RUG: usize = 9;
     const BOOKS: usize = 10;
     const TERRACOTTA_BOOK: usize = 13;
@@ -289,7 +318,8 @@ pub fn furniture(root: &Path, lock: &Lock) -> Result<String> {
         Material::flat("chrome", [0.95, 0.95, 0.95], 0.03, 1.0),
         Material::flat("black stone plinth", [0.04, 0.04, 0.045], 0.4, 0.0),
         Material::glass("clear glass", [0.9, 0.97, 1.0], 0.16),
-        Material::emitter("warm bulb", [1.0, 0.8, 0.55]),
+        // Index 8 was the bulbs' emitter, now in `lamps`; kept so the indices below hold.
+        Material::flat("unused", [0.5, 0.5, 0.5], 1.0, 0.0),
         Material::flat("oatmeal wool rug", [0.66, 0.6, 0.5], 1.0, 0.0),
         Material::flat("book cream", [0.78, 0.74, 0.64], 0.75, 0.0),
         Material::flat("book charcoal", [0.12, 0.12, 0.13], 0.7, 0.0),
@@ -336,19 +366,9 @@ pub fn furniture(root: &Path, lock: &Lock) -> Result<String> {
         t + v(0.605, 0.771, -0.13),
         v(0.65, 0.012, 0.54),
     );
-    k.sphere(BULB, t + GLOBE, GLOBE_RADIUS, 32, Vec2::ONE);
     k.sphere(CHROME, t + v(0.47, 0.852, -0.29), 0.075, 32, Vec2::ONE);
-    // Pendant over the table: cord, brass shade, bulb.
+    // Pendant over the table: its cord. The shade and bulb are in `lamps`.
     post(&mut k, STEEL, v(t.x, 2.7, t.z), 0.006, 1.3);
-    k.cylinder(
-        BRASS,
-        0.22,
-        0.22,
-        32,
-        Mat4::from_translation(v(t.x, 2.45, t.z)),
-        Vec2::ONE,
-    );
-    k.sphere(BULB, v(t.x, 2.5, t.z), 0.1, 24, Vec2::ONE);
     // Armchair in leather on dark oak legs.
     let a = v(-2.85, 0.0, -7.1);
     let yaw = 35.0;
@@ -371,11 +391,10 @@ pub fn furniture(root: &Path, lock: &Lock) -> Result<String> {
         let p = at(dx, 0.0, dz);
         post(&mut k, OAK, p, 0.03, 0.3);
     }
-    // Floor lamp beside the chair: brass stem, base, emissive shade.
-    let l = v(-3.4, 0.0, -5.7);
+    // Floor lamp beside the chair: brass stem and base. Its bulb is in `lamps`.
+    let l = FLOOR_LAMP;
     post(&mut k, BRASS, l, 0.16, 0.03);
     post(&mut k, BRASS, l, 0.012, 1.55);
-    k.sphere(BULB, l + v(0.0, 1.7, 0.0), 0.09, 24, Vec2::ONE);
     // Bookshelf on the back wall: frame, shelves and books.
     let b = v(-2.4, 0.0, -8.75);
     for x in [-1.0, 1.0] {
@@ -462,19 +481,92 @@ pub fn furniture(root: &Path, lock: &Lock) -> Result<String> {
     k.write(root, lock, "atelier_furniture")
 }
 
-/// Courtyard dressing: a bench, weathered-steel planters and the wall lantern.
+/// A lantern's frame round its centre `c`: four corner bars (not a box: a solid frame
+/// round the glass hid it completely), a cap, a foot and two bands.
+fn lantern_frame(k: &mut Kit, steel: usize, c: Vec3) {
+    let v = Vec3::new;
+    for (dx, dz) in [(-0.09, -0.09), (0.09, -0.09), (-0.09, 0.09), (0.09, 0.09)] {
+        block(k, steel, c + v(dx, 0.0, dz), v(0.02, 0.34, 0.02));
+    }
+    block(k, steel, c + v(0.0, 0.18, 0.0), v(0.24, 0.03, 0.24));
+    block(k, steel, c + v(0.0, -0.18, 0.0), v(0.22, 0.03, 0.22));
+    for y in [-0.08, 0.08] {
+        block(k, steel, c + v(0.0, y, 0.0), v(0.2, 0.012, 0.2));
+    }
+}
+/// The glowing glass of the lanterns at `centres`, as its own model (`name`): the glass
+/// encloses the lantern's light, so its mesh renderer must not cast shadows (`lamps`).
+fn lantern_glass(root: &Path, lock: &Lock, name: &str, centres: &[Vec3]) -> Result<String> {
+    let mut k = Kit::new(vec![Material::emitter("lantern glass", [1.0, 0.78, 0.5])]);
+    for c in centres {
+        block(&mut k, 0, *c, Vec3::new(0.17, 0.3, 0.17));
+    }
+    k.write(root, lock, name)
+}
+/// The centre of the courtyard wall lantern's glass, where its light is.
+pub const WALL_LANTERN: Vec3 = Vec3::new(3.3, 2.4, 0.68);
+/// The courtyard wall lantern's glass.
+pub fn wall_lantern_glass(root: &Path, lock: &Lock) -> Result<String> {
+    lantern_glass(root, lock, "atelier_lantern_glass", &[WALL_LANTERN])
+}
+/// The night lanterns' glass.
+pub fn night_glass(root: &Path, lock: &Lock) -> Result<String> {
+    lantern_glass(root, lock, "atelier_night_glass", &night_lanterns())
+}
+
+/// The night scene's extra lanterns, by the centre of each one's glass (where its light
+/// is): the wall lantern's twin left of the doorway, then eighteen on posts along the
+/// tops of the courtyard walls (five west, five east, eight on the far wall).
+pub fn night_lanterns() -> Vec<Vec3> {
+    let v = Vec3::new;
+    // Wall top 1.3, a 0.5 m post, then the body's foot.
+    let y = 1.3 + 0.5 + 0.195;
+    let sides = [1.6, 3.2, 4.8, 6.4, 8.0];
+    std::iter::once(v(-3.3, 2.4, 0.68))
+        .chain(sides.iter().map(|z| v(-6.8, y, *z)))
+        .chain(sides.iter().map(|z| v(6.8, y, *z)))
+        .chain((0..8).map(|i| v(-5.25 + 1.5 * i as f32, y, 8.8)))
+        .collect()
+}
+
+/// The night scene's extra lanterns (`night_lanterns`) without their glass
+/// (`night_glass`): the courtyard wall lantern's frame, the first on a bracket on the
+/// front wall, the rest on posts.
+pub fn night(root: &Path, lock: &Lock) -> Result<String> {
+    const STEEL: usize = 0;
+    let mut k = Kit::new(vec![Material::flat(
+        "black steel",
+        [0.05, 0.05, 0.055],
+        0.42,
+        1.0,
+    )]);
+    let v = Vec3::new;
+    for (i, c) in night_lanterns().into_iter().enumerate() {
+        if i == 0 {
+            // As the courtyard's: an arm from the wall and a bracket behind the body.
+            block(&mut k, STEEL, c + v(0.0, 0.0, -0.184), v(0.03, 0.03, 0.128));
+            block(&mut k, STEEL, c + v(0.0, 0.0, -0.1), v(0.04, 0.5, 0.04));
+        } else {
+            post(&mut k, STEEL, v(c.x, 1.3, c.z), 0.02, 0.5);
+        }
+        lantern_frame(&mut k, STEEL, c);
+    }
+    k.write(root, lock, "atelier_night")
+}
+
+/// Courtyard dressing: a bench, weathered-steel planters and the wall lantern's frame.
 pub fn courtyard(root: &Path, lock: &Lock) -> Result<String> {
     const OAK: usize = 0;
     const STONE: usize = 1;
     const STEEL: usize = 2;
-    const LANTERN: usize = 3;
     const SOIL: usize = 4;
     const NICKEL: usize = 5;
     let mut k = Kit::new(vec![
         Material::flat("teak", [0.4, 0.25, 0.12], 0.6, 0.0),
         Material::flat("weathered steel", [0.13, 0.055, 0.03], 0.85, 0.0),
         Material::flat("black steel", [0.05, 0.05, 0.055], 0.42, 1.0),
-        Material::emitter("lantern glass", [1.0, 0.78, 0.5]),
+        // Index 3 was the lantern's glass, now `wall_lantern_glass`; kept so the indices hold.
+        Material::flat("unused", [0.5, 0.5, 0.5], 1.0, 0.0),
         Material::flat("dark soil", [0.1, 0.07, 0.05], 1.0, 0.0),
         // The furniture's near-mirror, for the lantern's backplate.
         Material::flat("polished nickel", [0.72, 0.7, 0.66], 0.07, 1.0),
@@ -503,7 +595,8 @@ pub fn courtyard(root: &Path, lock: &Lock) -> Result<String> {
         block(&mut k, STONE, v(x, 0.3, z), v(w, 0.6, d));
         block(&mut k, SOIL, v(x, 0.605, z), v(w - 0.08, 0.02, d - 0.08));
     }
-    // Wall lantern right of the doorway: backplate, arm, bracket, frame and glowing glass.
+    // Wall lantern right of the doorway: backplate, arm, bracket and frame. Its glowing
+    // glass is `wall_lantern_glass`.
     let l = v(3.3, 2.4, 0.5);
     // A polished plate on the wall behind it, set to its right and a little high so the
     // `lantern` camera, above and to the right, sees the lantern's reflection beside the
@@ -511,21 +604,6 @@ pub fn courtyard(root: &Path, lock: &Lock) -> Result<String> {
     block(&mut k, NICKEL, v(3.42, 2.45, 0.426), v(0.6, 0.6, 0.012));
     block(&mut k, STEEL, l + v(0.0, 0.0, -0.004), v(0.03, 0.03, 0.128));
     block(&mut k, STEEL, l + v(0.0, 0.0, 0.08), v(0.04, 0.5, 0.04));
-    // Four corner bars, not a box: a solid frame round the glass hid it completely.
-    for (dx, dz) in [(-0.09, -0.09), (0.09, -0.09), (-0.09, 0.09), (0.09, 0.09)] {
-        block(
-            &mut k,
-            STEEL,
-            l + v(dx, 0.0, 0.18 + dz),
-            v(0.02, 0.34, 0.02),
-        );
-    }
-    block(&mut k, LANTERN, l + v(0.0, 0.0, 0.18), v(0.17, 0.3, 0.17));
-    // Cap and foot of the lantern, and two steel bands round the glass.
-    block(&mut k, STEEL, l + v(0.0, 0.18, 0.18), v(0.24, 0.03, 0.24));
-    block(&mut k, STEEL, l + v(0.0, -0.18, 0.18), v(0.22, 0.03, 0.22));
-    for y in [-0.08, 0.08] {
-        block(&mut k, STEEL, l + v(0.0, y, 0.18), v(0.2, 0.012, 0.2));
-    }
+    lantern_frame(&mut k, STEEL, WALL_LANTERN);
     k.write(root, lock, "atelier_courtyard")
 }
