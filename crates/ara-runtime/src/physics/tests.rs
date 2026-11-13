@@ -85,6 +85,59 @@ fn center_moves_the_rotated_shape_without_moving_the_body_origin() {
 }
 
 #[test]
+fn bodies_have_a_resting_velocity_before_the_first_tick() {
+    let mut world = World::new();
+    let transform = Transform::default();
+    let body = RigidBody {
+        motion: MotionType::Dynamic,
+        ..Default::default()
+    };
+    let built = world
+        .spawn((
+            Identity("e_ball".into()),
+            transform,
+            body,
+            Collider::default(),
+        ))
+        .id();
+    install(
+        &mut world,
+        &PhysicsConfig::default(),
+        &[(built, Pose::from_transform(&transform))],
+    )
+    .unwrap();
+    // No tick has run: the mirror is there, at rest, as a script's first read expects.
+    assert_eq!(world.get::<Velocity>(built), Some(&Velocity::default()));
+    // A body streamed in after the build is adopted the same way.
+    let streamed = world
+        .spawn((
+            Identity("e_late".into()),
+            transform,
+            body,
+            Collider::default(),
+        ))
+        .id();
+    adopt(&mut world);
+    assert_eq!(world.get::<Velocity>(streamed), Some(&Velocity::default()));
+    // An authored velocity is kept.
+    let moving = Velocity {
+        linear: [1., 0., 0.],
+        ..Default::default()
+    };
+    let thrown = world
+        .spawn((
+            Identity("e_thrown".into()),
+            transform,
+            body,
+            Collider::default(),
+            moving,
+        ))
+        .id();
+    adopt(&mut world);
+    assert_eq!(world.get::<Velocity>(thrown), Some(&moving));
+}
+
+#[test]
 fn automatic_ids_reserve_explicit_values_and_survive_insertion_order_and_adoption() {
     fn actors(reverse: bool) -> BTreeMap<String, u64> {
         let mut world = World::new();
