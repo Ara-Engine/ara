@@ -184,6 +184,12 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
     none). The mixer can be checked without a device: `ara-samples glint-replay --audio <wav>`
     renders three seconds at the end of the run and fails on silence (master bus peak
     -13.1 dBFS on the Mac). The one-shot sounds are still unverified (item 10).
+    *When the line prints for Glint:* not at the title. The shell opens a menu device only
+    for a UI click sound, and Glint has none (item 20: the click must be an Ogg), so nothing
+    is opened and, before this follow-up, nothing was said. `audio (play)` prints when a run
+    starts (ROLL, then START): the device opens with the world, not with the window. A
+    windowed start left on the title is silent for as long as it sits there. The shell now
+    says so in one line.
 
 29. **A respawn is a camera cut, and on the untraced path a cut is followed by slow frames.**
     Reported by the integration thread on the RTX: after a history cut the untraced path
@@ -257,6 +263,18 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
     ball is slow or in the air.
   - The cannon's carriage moves only while it loads and fires; the ball only when rolled.
   - The HUD clock redraws while a run is on.
+- **The goal is the dearest view, and it is a sum, not one thing.** The results view at the
+  goal costs about a third more than the rest of the course on both paths (RTX, 1080p, 300
+  held frames, before the great ring: 13.5 ms traced and 20.8 untraced against medians of 8.8
+  and 15.0; M5, 720p, 60 held frames, with the ring: 32.1 and 32.4 ms against about 24).
+  Removing one thing at a time on the M5 (traced path only, one run each, same binary):
+  the goal's lit surfaces made unlit (floor rings, halo band, spire bands, beacon, the ring's
+  inner band): 27.7 ms, 4.5 less; the mirror floor made matte and the chrome portal casing
+  painted: 29.2, 3.0 less; the great ring removed: 30.2, 2.0 less (most of that is its lit
+  band, so it overlaps the first). No single one brings the view to the course's level. It is
+  the one place where the level's brightest emitters, its only mirror floor and the whole
+  course in the background are in one frame. Not changed: it is where the run ends and it is
+  meant to be the richest view.
 - **A still is already the frozen case.** `ara capture` and `ara_play capture` do not tick the
   world: with a world stepped to tick 30, a capture left the tick at 30 and an orb's transform
   unchanged (checked on the Mac). So the replay stills measure a level in which none of the
