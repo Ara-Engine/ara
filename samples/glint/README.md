@@ -70,7 +70,7 @@ Physical units, one fixed exposure, no auto-exposure. The same numbers are in
 | | |
 |---|---|
 | Exposure | fixed **EV100 13.5**, Khronos PBR Neutral, bloom 0.16 |
-| Sun | 95,000 lux, colour (1.0, 0.84, 0.64), 20 degrees up, light travels (-0.163, -0.342, -0.926): from ahead and the left of the start, from behind after the turn |
+| Sun | 95,000 lux, colour (1.0, 0.85, 0.66), 20 degrees up, light travels (-0.163, -0.342, -0.926): from ahead and the left of the start, from behind after the turn |
 | Sky | zenith (0.04, 0.17, 0.62), horizon (0.62, 0.8, 1.0), a warm horizon glow, 7,000 cd/m2 scale |
 | Haze | height fog, density 0.012 at the cloud deck (61 m under the start), scale height 15 m: thick over the cloud, light at the course |
 | Checkpoint lights (3) | point, 90,000 lm, radius 0.3 m, range 16 m, coral |

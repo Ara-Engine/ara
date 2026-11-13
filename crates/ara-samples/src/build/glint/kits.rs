@@ -819,7 +819,7 @@ pub fn goal(root: &Path, lock: &Lock) -> Result<String> {
 /// rolling in a few broad billows (`seed` moves them, so the banks differ). One closed surface
 /// with its own normals: no facets and no creases where billows meet.
 pub fn cloud(root: &Path, lock: &Lock, seed: u32) -> Result<String> {
-    let mut k = Kit::new(vec![Material::flat("cloud", [0.93, 0.95, 1.0], 1.0, 0.0)]);
+    let mut k = Kit::new(vec![Material::flat("cloud", [0.95, 0.95, 0.95], 1.0, 0.0)]);
     let s = seed as f32 * 1.7;
     k.blob(0, Vec3::ZERO, 44, |d| {
         let billow = 0.2 * (3.0 * d.x + s).sin() * (2.6 * d.z + 0.4 * s).sin()
@@ -867,6 +867,134 @@ pub fn trail(root: &Path, lock: &Lock) -> Result<String> {
         }
     }
     k.write(root, lock, "glint_trail")
+}
+
+/// The great arch over the banked turn, on its own origin at deck level (its plane is local
+/// XY, the route passes through along Z): a half ring 21 m in radius with a lit inner band,
+/// standing on two pylons. The largest thing between the start and the cannon, so the far
+/// half of the route reads from the launch deck.
+pub fn span(root: &Path, lock: &Lock) -> Result<String> {
+    const PAINT: usize = 0;
+    const NAVY: usize = 3;
+    const LIT: usize = 4;
+    let mut k = Kit::new(vec![
+        paint(),
+        coral(),
+        cool("pylon band"),
+        navy(),
+        lit("arch light"),
+    ]);
+    let v = Vec3::new;
+    let radius = 21.0;
+    // The ring's centre sits 3 m under the deck, so its feet are below the route.
+    let frame = Mat4::from_translation(v(0.0, -3.0, 0.0));
+    ring(
+        &mut k,
+        PAINT,
+        frame,
+        radius,
+        Vec2::new(1.3, 1.8),
+        64,
+        0.0,
+        PI,
+    );
+    ring(
+        &mut k,
+        LIT,
+        frame,
+        radius - 0.72,
+        Vec2::new(0.1, 0.7),
+        64,
+        0.0,
+        PI,
+    );
+    ring(
+        &mut k,
+        1,
+        frame,
+        radius + 0.72,
+        Vec2::new(0.12, 1.2),
+        64,
+        0.0,
+        PI,
+    );
+    for side in [-1.0f32, 1.0] {
+        let foot = v(side * radius, -3.0, 0.0);
+        oriented(
+            &mut k,
+            NAVY,
+            foot - v(0.0, 0.6, 0.0),
+            v(1.5, 0.6, 1.6),
+            Quat::IDENTITY,
+        );
+        pylon(&mut k, foot - v(0.0, 1.2, 0.0), 1.3);
+    }
+    k.write(root, lock, "glint_span")
+}
+
+/// The cannon's gantry, on its own origin on the cannon deck (local +Z is the shot): two
+/// leaning legs outside the deck's edges meeting 30 m up under a lit ring that frames the
+/// shot, with a crossbeam and a beacon mast.
+pub fn gantry(root: &Path, lock: &Lock) -> Result<String> {
+    const PAINT: usize = 0;
+    const CORAL: usize = 1;
+    const NAVY: usize = 3;
+    const LIT: usize = 4;
+    let mut k = Kit::new(vec![
+        paint(),
+        coral(),
+        cool("pylon band"),
+        navy(),
+        lit("gantry light"),
+    ]);
+    let v = Vec3::new;
+    let (spread, top, height) = (8.4f32, 2.6f32, 30.0f32);
+    for side in [-1.0f32, 1.0] {
+        let foot = v(side * spread, -0.8, 0.0);
+        let head = v(side * top, height, 0.0);
+        let lean = Quat::from_rotation_arc(Vec3::Y, (head - foot).normalize());
+        k.frustum(
+            PAINT,
+            1.1,
+            0.55,
+            (head - foot).length(),
+            24,
+            Mat4::from_rotation_translation(lean, foot),
+        );
+        oriented(&mut k, NAVY, foot, v(1.5, 0.5, 1.5), Quat::IDENTITY);
+        pylon(&mut k, foot - v(0.0, 0.5, 0.0), 1.1);
+        // A lit strip up the inside of each leg.
+        let mid = (foot + head) * 0.5 - v(side * 0.62, 0.0, 0.0);
+        oriented(
+            &mut k,
+            LIT,
+            mid,
+            v(0.06, (head - foot).length() * 0.42, 0.14),
+            lean,
+        );
+    }
+    oriented(
+        &mut k,
+        CORAL,
+        v(0.0, 17.0, 0.0),
+        v(4.9, 0.35, 0.45),
+        Quat::IDENTITY,
+    );
+    let crown = Mat4::from_translation(v(0.0, height + 3.4, 0.0));
+    ring(
+        &mut k,
+        PAINT,
+        crown,
+        4.2,
+        Vec2::new(0.55, 0.9),
+        48,
+        0.0,
+        TAU,
+    );
+    ring(&mut k, LIT, crown, 3.9, Vec2::new(0.1, 0.5), 48, 0.0, TAU);
+    column(&mut k, PAINT, v(0.0, height + 7.6, 0.0), 0.22, 9.0, 12);
+    column(&mut k, LIT, v(0.0, height + 16.6, 0.0), 0.4, 1.2, 12);
+    k.write(root, lock, "glint_gantry")
 }
 
 /// A far island: a pale deck on stepped rock, three towers with lit bands and a halo.

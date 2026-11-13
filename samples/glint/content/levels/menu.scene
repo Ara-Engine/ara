@@ -7,7 +7,7 @@
   "records": {
     "e_b1m": {
       "name": "Spinner bar",
-      "order": "b1x",
+      "order": "b1z",
       "MeshRenderer": {
         "model": "@kit/glint_bar.gltf#as_kitglintbar"
       },
@@ -18,7 +18,7 @@
     },
     "e_b2m": {
       "name": "Spinner bar",
-      "order": "b1y",
+      "order": "b20",
       "MeshRenderer": {
         "model": "@kit/glint_bar.gltf#as_kitglintbar"
       },
@@ -29,7 +29,7 @@
     },
     "e_b3m": {
       "name": "Spinner bar",
-      "order": "b1z",
+      "order": "b21",
       "MeshRenderer": {
         "model": "@kit/glint_bar.gltf#as_kitglintbar"
       },
@@ -52,7 +52,7 @@
     },
     "e_cirrus0": {
       "name": "High cloud",
-      "order": "b1a",
+      "order": "b1c",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -64,7 +64,7 @@
     },
     "e_cirrus1": {
       "name": "High cloud",
-      "order": "b1b",
+      "order": "b1d",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -76,7 +76,7 @@
     },
     "e_cirrus2": {
       "name": "High cloud",
-      "order": "b1c",
+      "order": "b1e",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -88,7 +88,7 @@
     },
     "e_cirrus3": {
       "name": "High cloud",
-      "order": "b1d",
+      "order": "b1f",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -100,7 +100,7 @@
     },
     "e_cirrus4": {
       "name": "High cloud",
-      "order": "b1e",
+      "order": "b1g",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -112,7 +112,7 @@
     },
     "e_cirrus5": {
       "name": "High cloud",
-      "order": "b1f",
+      "order": "b1h",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -124,7 +124,7 @@
     },
     "e_cirrus6": {
       "name": "High cloud",
-      "order": "b1g",
+      "order": "b1i",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -136,7 +136,7 @@
     },
     "e_cirrus7": {
       "name": "High cloud",
-      "order": "b1h",
+      "order": "b1j",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -148,7 +148,7 @@
     },
     "e_cirrus8": {
       "name": "High cloud",
-      "order": "b1i",
+      "order": "b1k",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -160,7 +160,7 @@
     },
     "e_cirrus9": {
       "name": "High cloud",
-      "order": "b1j",
+      "order": "b1l",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -172,7 +172,7 @@
     },
     "e_cloud0": {
       "name": "Cloud bank",
-      "order": "b02",
+      "order": "b04",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -184,7 +184,7 @@
     },
     "e_cloud1": {
       "name": "Cloud bank",
-      "order": "b03",
+      "order": "b05",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -196,7 +196,7 @@
     },
     "e_cloud10": {
       "name": "Cloud bank",
-      "order": "b0C",
+      "order": "b0E",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -208,7 +208,7 @@
     },
     "e_cloud11": {
       "name": "Cloud bank",
-      "order": "b0D",
+      "order": "b0F",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -220,7 +220,7 @@
     },
     "e_cloud12": {
       "name": "Cloud bank",
-      "order": "b0E",
+      "order": "b0G",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -232,7 +232,7 @@
     },
     "e_cloud13": {
       "name": "Cloud bank",
-      "order": "b0F",
+      "order": "b0H",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -244,7 +244,7 @@
     },
     "e_cloud14": {
       "name": "Cloud bank",
-      "order": "b0G",
+      "order": "b0I",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -256,7 +256,7 @@
     },
     "e_cloud15": {
       "name": "Cloud bank",
-      "order": "b0H",
+      "order": "b0J",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -268,7 +268,7 @@
     },
     "e_cloud16": {
       "name": "Cloud bank",
-      "order": "b0I",
+      "order": "b0K",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -280,7 +280,7 @@
     },
     "e_cloud17": {
       "name": "Cloud bank",
-      "order": "b0J",
+      "order": "b0L",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -292,7 +292,7 @@
     },
     "e_cloud18": {
       "name": "Cloud bank",
-      "order": "b0K",
+      "order": "b0M",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -304,7 +304,7 @@
     },
     "e_cloud19": {
       "name": "Cloud bank",
-      "order": "b0L",
+      "order": "b0N",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -316,7 +316,7 @@
     },
     "e_cloud2": {
       "name": "Cloud bank",
-      "order": "b04",
+      "order": "b06",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -328,7 +328,7 @@
     },
     "e_cloud20": {
       "name": "Cloud bank",
-      "order": "b0M",
+      "order": "b0O",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -340,7 +340,7 @@
     },
     "e_cloud21": {
       "name": "Cloud bank",
-      "order": "b0N",
+      "order": "b0P",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -352,7 +352,7 @@
     },
     "e_cloud22": {
       "name": "Cloud bank",
-      "order": "b0O",
+      "order": "b0Q",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -364,7 +364,7 @@
     },
     "e_cloud23": {
       "name": "Cloud bank",
-      "order": "b0P",
+      "order": "b0R",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -376,7 +376,7 @@
     },
     "e_cloud24": {
       "name": "Cloud bank",
-      "order": "b0Q",
+      "order": "b0S",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -388,7 +388,7 @@
     },
     "e_cloud25": {
       "name": "Cloud bank",
-      "order": "b0R",
+      "order": "b0T",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -400,7 +400,7 @@
     },
     "e_cloud26": {
       "name": "Cloud bank",
-      "order": "b0S",
+      "order": "b0U",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -412,7 +412,7 @@
     },
     "e_cloud27": {
       "name": "Cloud bank",
-      "order": "b0T",
+      "order": "b0V",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -424,7 +424,7 @@
     },
     "e_cloud28": {
       "name": "Cloud bank",
-      "order": "b0U",
+      "order": "b0W",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -436,7 +436,7 @@
     },
     "e_cloud29": {
       "name": "Cloud bank",
-      "order": "b0V",
+      "order": "b0X",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -448,7 +448,7 @@
     },
     "e_cloud3": {
       "name": "Cloud bank",
-      "order": "b05",
+      "order": "b07",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -460,7 +460,7 @@
     },
     "e_cloud30": {
       "name": "Cloud bank",
-      "order": "b0W",
+      "order": "b0Y",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -472,7 +472,7 @@
     },
     "e_cloud31": {
       "name": "Cloud bank",
-      "order": "b0X",
+      "order": "b0Z",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -484,7 +484,7 @@
     },
     "e_cloud32": {
       "name": "Cloud bank",
-      "order": "b0Y",
+      "order": "b0a",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -496,7 +496,7 @@
     },
     "e_cloud33": {
       "name": "Cloud bank",
-      "order": "b0Z",
+      "order": "b0b",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -508,7 +508,7 @@
     },
     "e_cloud34": {
       "name": "Cloud bank",
-      "order": "b0a",
+      "order": "b0c",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -520,7 +520,7 @@
     },
     "e_cloud35": {
       "name": "Cloud bank",
-      "order": "b0b",
+      "order": "b0d",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -532,7 +532,7 @@
     },
     "e_cloud36": {
       "name": "Cloud bank",
-      "order": "b0c",
+      "order": "b0e",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -544,7 +544,7 @@
     },
     "e_cloud37": {
       "name": "Cloud bank",
-      "order": "b0d",
+      "order": "b0f",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -556,7 +556,7 @@
     },
     "e_cloud38": {
       "name": "Cloud bank",
-      "order": "b0e",
+      "order": "b0g",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -568,7 +568,7 @@
     },
     "e_cloud39": {
       "name": "Cloud bank",
-      "order": "b0f",
+      "order": "b0h",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -580,7 +580,7 @@
     },
     "e_cloud4": {
       "name": "Cloud bank",
-      "order": "b06",
+      "order": "b08",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -592,7 +592,7 @@
     },
     "e_cloud40": {
       "name": "Cloud bank",
-      "order": "b0g",
+      "order": "b0i",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -604,7 +604,7 @@
     },
     "e_cloud41": {
       "name": "Cloud bank",
-      "order": "b0h",
+      "order": "b0j",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -616,7 +616,7 @@
     },
     "e_cloud42": {
       "name": "Cloud bank",
-      "order": "b0i",
+      "order": "b0k",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -628,7 +628,7 @@
     },
     "e_cloud43": {
       "name": "Cloud bank",
-      "order": "b0j",
+      "order": "b0l",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -640,7 +640,7 @@
     },
     "e_cloud44": {
       "name": "Cloud bank",
-      "order": "b0k",
+      "order": "b0m",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -652,7 +652,7 @@
     },
     "e_cloud45": {
       "name": "Cloud bank",
-      "order": "b0l",
+      "order": "b0n",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -664,7 +664,7 @@
     },
     "e_cloud46": {
       "name": "Cloud bank",
-      "order": "b0m",
+      "order": "b0o",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -676,7 +676,7 @@
     },
     "e_cloud47": {
       "name": "Cloud bank",
-      "order": "b0n",
+      "order": "b0p",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -688,7 +688,7 @@
     },
     "e_cloud48": {
       "name": "Cloud bank",
-      "order": "b0o",
+      "order": "b0q",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -700,7 +700,7 @@
     },
     "e_cloud49": {
       "name": "Cloud bank",
-      "order": "b0p",
+      "order": "b0r",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -712,7 +712,7 @@
     },
     "e_cloud5": {
       "name": "Cloud bank",
-      "order": "b07",
+      "order": "b09",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -724,7 +724,7 @@
     },
     "e_cloud50": {
       "name": "Cloud bank",
-      "order": "b0q",
+      "order": "b0s",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -736,7 +736,7 @@
     },
     "e_cloud51": {
       "name": "Cloud bank",
-      "order": "b0r",
+      "order": "b0t",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -748,7 +748,7 @@
     },
     "e_cloud52": {
       "name": "Cloud bank",
-      "order": "b0s",
+      "order": "b0u",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -760,7 +760,7 @@
     },
     "e_cloud53": {
       "name": "Cloud bank",
-      "order": "b0t",
+      "order": "b0v",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -772,7 +772,7 @@
     },
     "e_cloud54": {
       "name": "Cloud bank",
-      "order": "b0u",
+      "order": "b0w",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -784,7 +784,7 @@
     },
     "e_cloud55": {
       "name": "Cloud bank",
-      "order": "b0v",
+      "order": "b0x",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -796,7 +796,7 @@
     },
     "e_cloud56": {
       "name": "Cloud bank",
-      "order": "b0w",
+      "order": "b0y",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -808,7 +808,7 @@
     },
     "e_cloud57": {
       "name": "Cloud bank",
-      "order": "b0x",
+      "order": "b0z",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -820,7 +820,7 @@
     },
     "e_cloud58": {
       "name": "Cloud bank",
-      "order": "b0y",
+      "order": "b10",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -832,7 +832,7 @@
     },
     "e_cloud59": {
       "name": "Cloud bank",
-      "order": "b0z",
+      "order": "b11",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -844,7 +844,7 @@
     },
     "e_cloud6": {
       "name": "Cloud bank",
-      "order": "b08",
+      "order": "b0A",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -856,7 +856,7 @@
     },
     "e_cloud60": {
       "name": "Cloud bank",
-      "order": "b10",
+      "order": "b12",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -868,7 +868,7 @@
     },
     "e_cloud61": {
       "name": "Cloud bank",
-      "order": "b11",
+      "order": "b13",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -880,7 +880,7 @@
     },
     "e_cloud62": {
       "name": "Cloud bank",
-      "order": "b12",
+      "order": "b14",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -892,7 +892,7 @@
     },
     "e_cloud63": {
       "name": "Cloud bank",
-      "order": "b13",
+      "order": "b15",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -904,7 +904,7 @@
     },
     "e_cloud64": {
       "name": "Cloud bank",
-      "order": "b14",
+      "order": "b16",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -916,7 +916,7 @@
     },
     "e_cloud65": {
       "name": "Cloud bank",
-      "order": "b15",
+      "order": "b17",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -928,7 +928,7 @@
     },
     "e_cloud66": {
       "name": "Cloud bank",
-      "order": "b16",
+      "order": "b18",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -940,7 +940,7 @@
     },
     "e_cloud67": {
       "name": "Cloud bank",
-      "order": "b17",
+      "order": "b19",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -952,7 +952,7 @@
     },
     "e_cloud68": {
       "name": "Cloud bank",
-      "order": "b18",
+      "order": "b1A",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -964,7 +964,7 @@
     },
     "e_cloud69": {
       "name": "Cloud bank",
-      "order": "b19",
+      "order": "b1B",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -976,7 +976,7 @@
     },
     "e_cloud7": {
       "name": "Cloud bank",
-      "order": "b09",
+      "order": "b0B",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -988,7 +988,7 @@
     },
     "e_cloud70": {
       "name": "Cloud bank",
-      "order": "b1A",
+      "order": "b1C",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -1000,7 +1000,7 @@
     },
     "e_cloud71": {
       "name": "Cloud bank",
-      "order": "b1B",
+      "order": "b1D",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -1012,7 +1012,7 @@
     },
     "e_cloud72": {
       "name": "Cloud bank",
-      "order": "b1C",
+      "order": "b1E",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -1024,7 +1024,7 @@
     },
     "e_cloud73": {
       "name": "Cloud bank",
-      "order": "b1D",
+      "order": "b1F",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -1036,7 +1036,7 @@
     },
     "e_cloud74": {
       "name": "Cloud bank",
-      "order": "b1E",
+      "order": "b1G",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -1048,7 +1048,7 @@
     },
     "e_cloud75": {
       "name": "Cloud bank",
-      "order": "b1F",
+      "order": "b1H",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -1060,7 +1060,7 @@
     },
     "e_cloud76": {
       "name": "Cloud bank",
-      "order": "b1G",
+      "order": "b1I",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -1072,7 +1072,7 @@
     },
     "e_cloud77": {
       "name": "Cloud bank",
-      "order": "b1H",
+      "order": "b1J",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -1084,7 +1084,7 @@
     },
     "e_cloud78": {
       "name": "Cloud bank",
-      "order": "b1I",
+      "order": "b1K",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -1096,7 +1096,7 @@
     },
     "e_cloud79": {
       "name": "Cloud bank",
-      "order": "b1J",
+      "order": "b1L",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -1108,7 +1108,7 @@
     },
     "e_cloud8": {
       "name": "Cloud bank",
-      "order": "b0A",
+      "order": "b0C",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -1120,7 +1120,7 @@
     },
     "e_cloud80": {
       "name": "Cloud bank",
-      "order": "b1K",
+      "order": "b1M",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -1132,7 +1132,7 @@
     },
     "e_cloud81": {
       "name": "Cloud bank",
-      "order": "b1L",
+      "order": "b1N",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -1144,7 +1144,7 @@
     },
     "e_cloud82": {
       "name": "Cloud bank",
-      "order": "b1M",
+      "order": "b1O",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -1156,7 +1156,7 @@
     },
     "e_cloud83": {
       "name": "Cloud bank",
-      "order": "b1N",
+      "order": "b1P",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -1168,7 +1168,7 @@
     },
     "e_cloud84": {
       "name": "Cloud bank",
-      "order": "b1O",
+      "order": "b1Q",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -1180,7 +1180,7 @@
     },
     "e_cloud85": {
       "name": "Cloud bank",
-      "order": "b1P",
+      "order": "b1R",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -1192,7 +1192,7 @@
     },
     "e_cloud86": {
       "name": "Cloud bank",
-      "order": "b1Q",
+      "order": "b1S",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -1204,7 +1204,7 @@
     },
     "e_cloud87": {
       "name": "Cloud bank",
-      "order": "b1R",
+      "order": "b1T",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -1216,7 +1216,7 @@
     },
     "e_cloud88": {
       "name": "Cloud bank",
-      "order": "b1S",
+      "order": "b1U",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -1228,7 +1228,7 @@
     },
     "e_cloud89": {
       "name": "Cloud bank",
-      "order": "b1T",
+      "order": "b1V",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -1240,7 +1240,7 @@
     },
     "e_cloud9": {
       "name": "Cloud bank",
-      "order": "b0B",
+      "order": "b0D",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -1252,7 +1252,7 @@
     },
     "e_cloud90": {
       "name": "Cloud bank",
-      "order": "b1U",
+      "order": "b1W",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -1264,7 +1264,7 @@
     },
     "e_cloud91": {
       "name": "Cloud bank",
-      "order": "b1V",
+      "order": "b1X",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -1276,7 +1276,7 @@
     },
     "e_cloud92": {
       "name": "Cloud bank",
-      "order": "b1W",
+      "order": "b1Y",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -1288,7 +1288,7 @@
     },
     "e_cloud93": {
       "name": "Cloud bank",
-      "order": "b1X",
+      "order": "b1Z",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -1300,7 +1300,7 @@
     },
     "e_cloud94": {
       "name": "Cloud bank",
-      "order": "b1Y",
+      "order": "b1a",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -1312,7 +1312,7 @@
     },
     "e_cloud95": {
       "name": "Cloud bank",
-      "order": "b1Z",
+      "order": "b1b",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -1369,16 +1369,28 @@
     },
     "e_gamemenueye": {
       "name": "Menu vista camera",
-      "order": "b21",
+      "order": "b23",
       "Transform": {
         "position": [4.746, 2.6, -6.455]
       }
     },
     "e_gamemenutarget": {
       "name": "Menu vista focus",
-      "order": "b22",
+      "order": "b24",
       "Transform": {
         "position": [-48.996, 4.6, 3.394]
+      }
+    },
+    "e_gantry": {
+      "name": "Cannon gantry",
+      "order": "b03",
+      "MeshRenderer": {
+        "model": "@kit/glint_gantry.gltf#as_kitglintgantry",
+        "emissive": [50000, 50000, 50000]
+      },
+      "Transform": {
+        "position": [-311.954, -0.73, 93.368],
+        "rotation": [0, -110.00006866455078, 0]
       }
     },
     "e_gate0": {
@@ -1522,7 +1534,7 @@
     },
     "e_isle0": {
       "name": "Island",
-      "order": "b1k",
+      "order": "b1m",
       "MeshRenderer": {
         "model": "@kit/glint_isle.gltf#as_kitglintisle",
         "emissive": [40000, 40000, 40000]
@@ -1535,7 +1547,7 @@
     },
     "e_isle1": {
       "name": "Island",
-      "order": "b1l",
+      "order": "b1n",
       "MeshRenderer": {
         "model": "@kit/glint_isle.gltf#as_kitglintisle",
         "emissive": [40000, 40000, 40000]
@@ -1548,7 +1560,7 @@
     },
     "e_isle10": {
       "name": "Island",
-      "order": "b1u",
+      "order": "b1w",
       "MeshRenderer": {
         "model": "@kit/glint_isle.gltf#as_kitglintisle",
         "emissive": [40000, 40000, 40000]
@@ -1561,7 +1573,7 @@
     },
     "e_isle2": {
       "name": "Island",
-      "order": "b1m",
+      "order": "b1o",
       "MeshRenderer": {
         "model": "@kit/glint_isle.gltf#as_kitglintisle",
         "emissive": [40000, 40000, 40000]
@@ -1574,7 +1586,7 @@
     },
     "e_isle3": {
       "name": "Island",
-      "order": "b1n",
+      "order": "b1p",
       "MeshRenderer": {
         "model": "@kit/glint_isle.gltf#as_kitglintisle",
         "emissive": [40000, 40000, 40000]
@@ -1587,7 +1599,7 @@
     },
     "e_isle4": {
       "name": "Island",
-      "order": "b1o",
+      "order": "b1q",
       "MeshRenderer": {
         "model": "@kit/glint_isle.gltf#as_kitglintisle",
         "emissive": [40000, 40000, 40000]
@@ -1600,7 +1612,7 @@
     },
     "e_isle5": {
       "name": "Island",
-      "order": "b1p",
+      "order": "b1r",
       "MeshRenderer": {
         "model": "@kit/glint_isle.gltf#as_kitglintisle",
         "emissive": [40000, 40000, 40000]
@@ -1613,7 +1625,7 @@
     },
     "e_isle6": {
       "name": "Island",
-      "order": "b1q",
+      "order": "b1s",
       "MeshRenderer": {
         "model": "@kit/glint_isle.gltf#as_kitglintisle",
         "emissive": [40000, 40000, 40000]
@@ -1626,7 +1638,7 @@
     },
     "e_isle7": {
       "name": "Island",
-      "order": "b1r",
+      "order": "b1t",
       "MeshRenderer": {
         "model": "@kit/glint_isle.gltf#as_kitglintisle",
         "emissive": [40000, 40000, 40000]
@@ -1639,7 +1651,7 @@
     },
     "e_isle8": {
       "name": "Island",
-      "order": "b1s",
+      "order": "b1u",
       "MeshRenderer": {
         "model": "@kit/glint_isle.gltf#as_kitglintisle",
         "emissive": [40000, 40000, 40000]
@@ -1652,7 +1664,7 @@
     },
     "e_isle9": {
       "name": "Island",
-      "order": "b1t",
+      "order": "b1v",
       "MeshRenderer": {
         "model": "@kit/glint_isle.gltf#as_kitglintisle",
         "emissive": [40000, 40000, 40000]
@@ -1717,7 +1729,7 @@
     },
     "e_m1m": {
       "name": "Moving platform",
-      "order": "b1v",
+      "order": "b1x",
       "MeshRenderer": {
         "model": "@kit/glint_mover.gltf#as_kitglintmover"
       },
@@ -1728,7 +1740,7 @@
     },
     "e_m2m": {
       "name": "Moving platform",
-      "order": "b1w",
+      "order": "b1y",
       "MeshRenderer": {
         "model": "@kit/glint_mover.gltf#as_kitglintmover"
       },
@@ -1739,7 +1751,7 @@
     },
     "e_menuball": {
       "name": "Ball",
-      "order": "b20",
+      "order": "b22",
       "MeshRenderer": {
         "shape": "sphere",
         "color": [0.97, 0.97, 0.98, 1],
@@ -1752,7 +1764,7 @@
     },
     "e_menucam": {
       "name": "Menu camera",
-      "order": "b23",
+      "order": "b25",
       "Camera": {
         "fov": 54
       },
@@ -2234,12 +2246,24 @@
         "position": [-65.426, -0.422, 45.899]
       }
     },
+    "e_span": {
+      "name": "Great arch",
+      "order": "b02",
+      "MeshRenderer": {
+        "model": "@kit/glint_span.gltf#as_kitglintspan",
+        "emissive": [50000, 50000, 50000]
+      },
+      "Transform": {
+        "position": [-181.093, -3.529, 137.859],
+        "rotation": [0, -82.14288330078125, 0]
+      }
+    },
     "e_sun": {
       "name": "Sun",
       "order": "a1",
       "Light": {
         "kind": "directional",
-        "color": [1, 0.88, 0.72, 1],
+        "color": [1, 0.85, 0.66, 1],
         "intensity": 95000
       },
       "Transform": {

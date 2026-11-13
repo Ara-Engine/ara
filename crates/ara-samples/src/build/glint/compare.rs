@@ -56,7 +56,7 @@ fn spec(environment: &Value, fog: &Value, lights: &[Value], emissive: &Value) ->
         .collect();
     json!({
         "exposure": {"ev100": EV100, "auto": false, "toneMapper": "Khronos PBR Neutral", "bloom": 0.16},
-        "sun": {"illuminanceLux": 95_000, "color": [1.0, 0.88, 0.72], "travels": round3(SUN), "angularDiameterDeg": 0.5357,
+        "sun": {"illuminanceLux": 95_000, "color": [1.0, 0.85, 0.66], "travels": round3(SUN), "angularDiameterDeg": 0.5357,
             "note": "20 degrees above the horizon; shadows on"},
         "environment": environment,
         "fog": fog,

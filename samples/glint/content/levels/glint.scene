@@ -7,7 +7,7 @@
   "records": {
     "e_b1": {
       "name": "Spinner bar",
-      "order": "b2n",
+      "order": "b2p",
       "Collider": {
         "halfExtents": [3.200000047683716, 0.1599999964237213, 0.1599999964237213]
       },
@@ -26,7 +26,7 @@
     },
     "e_b18": {
       "name": "Banked turn",
-      "order": "b29",
+      "order": "b2B",
       "Collider": {
         "halfExtents": [3.5, 0.4000000059604645, 1.0890854597091675]
       },
@@ -41,7 +41,7 @@
     },
     "e_b2": {
       "name": "Spinner bar",
-      "order": "b2o",
+      "order": "b2q",
       "Collider": {
         "halfExtents": [3.200000047683716, 0.1599999964237213, 0.1599999964237213]
       },
@@ -62,7 +62,7 @@
     },
     "e_b20": {
       "name": "Banked turn",
-      "order": "b2A",
+      "order": "b2C",
       "Collider": {
         "halfExtents": [3.5, 0.4000000059604645, 1.0890854597091675]
       },
@@ -77,7 +77,7 @@
     },
     "e_b22": {
       "name": "Banked turn",
-      "order": "b2B",
+      "order": "b2D",
       "Collider": {
         "halfExtents": [3.5, 0.4000000059604645, 1.0890854597091675]
       },
@@ -92,7 +92,7 @@
     },
     "e_b24": {
       "name": "Banked turn",
-      "order": "b2C",
+      "order": "b2E",
       "Collider": {
         "halfExtents": [3.5, 0.4000000059604645, 1.0890854597091675]
       },
@@ -107,7 +107,7 @@
     },
     "e_b26": {
       "name": "Banked turn",
-      "order": "b2D",
+      "order": "b2F",
       "Collider": {
         "halfExtents": [3.5, 0.4000000059604645, 1.0890854597091675]
       },
@@ -122,7 +122,7 @@
     },
     "e_b28": {
       "name": "Banked turn",
-      "order": "b2E",
+      "order": "b2G",
       "Collider": {
         "halfExtents": [3.5, 0.4000000059604645, 1.0890854597091675]
       },
@@ -137,7 +137,7 @@
     },
     "e_b3": {
       "name": "Spinner bar",
-      "order": "b2p",
+      "order": "b2r",
       "Collider": {
         "halfExtents": [3.200000047683716, 0.1599999964237213, 0.1599999964237213]
       },
@@ -158,7 +158,7 @@
     },
     "e_b30": {
       "name": "Banked turn",
-      "order": "b2F",
+      "order": "b2H",
       "Collider": {
         "halfExtents": [3.5, 0.4000000059604645, 1.0890854597091675]
       },
@@ -173,7 +173,7 @@
     },
     "e_b32": {
       "name": "Banked turn",
-      "order": "b2G",
+      "order": "b2I",
       "Collider": {
         "halfExtents": [3.5, 0.4000000059604645, 1.0890854597091675]
       },
@@ -188,7 +188,7 @@
     },
     "e_b34": {
       "name": "Banked turn",
-      "order": "b2H",
+      "order": "b2J",
       "Collider": {
         "halfExtents": [3.5, 0.4000000059604645, 1.0890854597091675]
       },
@@ -203,7 +203,7 @@
     },
     "e_b36": {
       "name": "Banked turn",
-      "order": "b2I",
+      "order": "b2K",
       "Collider": {
         "halfExtents": [3.5, 0.4000000059604645, 1.0890854597091675]
       },
@@ -218,7 +218,7 @@
     },
     "e_b38": {
       "name": "Banked turn",
-      "order": "b2J",
+      "order": "b2L",
       "Collider": {
         "halfExtents": [3.5, 0.4000000059604645, 1.0890854597091675]
       },
@@ -233,7 +233,7 @@
     },
     "e_b40": {
       "name": "Banked turn",
-      "order": "b2K",
+      "order": "b2M",
       "Collider": {
         "halfExtents": [3.5, 0.4000000059604645, 1.0890854597091675]
       },
@@ -248,7 +248,7 @@
     },
     "e_b42": {
       "name": "Banked turn",
-      "order": "b2L",
+      "order": "b2N",
       "Collider": {
         "halfExtents": [3.5, 0.4000000059604645, 1.0890854597091675]
       },
@@ -263,7 +263,7 @@
     },
     "e_b44": {
       "name": "Banked turn",
-      "order": "b2M",
+      "order": "b2O",
       "Collider": {
         "halfExtents": [3.5, 0.4000000059604645, 1.0890854597091675]
       },
@@ -278,7 +278,7 @@
     },
     "e_ball": {
       "name": "Ball",
-      "order": "b3R",
+      "order": "b3T",
       "Ball": {
         "spawn": [-4.213244438171387, 0.6000000238418579, -5.4646687507629395]
       },
@@ -307,7 +307,7 @@
     },
     "e_camcannon": {
       "name": "Cannon view",
-      "order": "b3g",
+      "order": "b3i",
       "Camera": {
         "fov": 60,
         "priority": 10
@@ -319,7 +319,7 @@
     },
     "e_camera": {
       "name": "Camera",
-      "order": "b3c",
+      "order": "b3e",
       "AudioListener": {},
       "Camera": {
         "fov": 56
@@ -343,7 +343,7 @@
     },
     "e_camgoal": {
       "name": "Goal view",
-      "order": "b3h",
+      "order": "b3j",
       "Camera": {
         "fov": 60,
         "priority": 10
@@ -355,7 +355,7 @@
     },
     "e_camover": {
       "name": "Overview",
-      "order": "b3d",
+      "order": "b3f",
       "Camera": {
         "fov": 62,
         "priority": 10
@@ -367,7 +367,7 @@
     },
     "e_camsliders": {
       "name": "Slider view",
-      "order": "b3f",
+      "order": "b3h",
       "Camera": {
         "fov": 60,
         "priority": 10
@@ -379,7 +379,7 @@
     },
     "e_camturn": {
       "name": "Turn view",
-      "order": "b3e",
+      "order": "b3g",
       "Camera": {
         "fov": 60,
         "priority": 10
@@ -409,7 +409,7 @@
     },
     "e_cirrus0": {
       "name": "High cloud",
-      "order": "b1a",
+      "order": "b1c",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -421,7 +421,7 @@
     },
     "e_cirrus1": {
       "name": "High cloud",
-      "order": "b1b",
+      "order": "b1d",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -433,7 +433,7 @@
     },
     "e_cirrus2": {
       "name": "High cloud",
-      "order": "b1c",
+      "order": "b1e",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -445,7 +445,7 @@
     },
     "e_cirrus3": {
       "name": "High cloud",
-      "order": "b1d",
+      "order": "b1f",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -457,7 +457,7 @@
     },
     "e_cirrus4": {
       "name": "High cloud",
-      "order": "b1e",
+      "order": "b1g",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -469,7 +469,7 @@
     },
     "e_cirrus5": {
       "name": "High cloud",
-      "order": "b1f",
+      "order": "b1h",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -481,7 +481,7 @@
     },
     "e_cirrus6": {
       "name": "High cloud",
-      "order": "b1g",
+      "order": "b1i",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -493,7 +493,7 @@
     },
     "e_cirrus7": {
       "name": "High cloud",
-      "order": "b1h",
+      "order": "b1j",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -505,7 +505,7 @@
     },
     "e_cirrus8": {
       "name": "High cloud",
-      "order": "b1i",
+      "order": "b1k",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -517,7 +517,7 @@
     },
     "e_cirrus9": {
       "name": "High cloud",
-      "order": "b1j",
+      "order": "b1l",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -529,7 +529,7 @@
     },
     "e_cloud0": {
       "name": "Cloud bank",
-      "order": "b02",
+      "order": "b04",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -541,7 +541,7 @@
     },
     "e_cloud1": {
       "name": "Cloud bank",
-      "order": "b03",
+      "order": "b05",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -553,7 +553,7 @@
     },
     "e_cloud10": {
       "name": "Cloud bank",
-      "order": "b0C",
+      "order": "b0E",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -565,7 +565,7 @@
     },
     "e_cloud11": {
       "name": "Cloud bank",
-      "order": "b0D",
+      "order": "b0F",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -577,7 +577,7 @@
     },
     "e_cloud12": {
       "name": "Cloud bank",
-      "order": "b0E",
+      "order": "b0G",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -589,7 +589,7 @@
     },
     "e_cloud13": {
       "name": "Cloud bank",
-      "order": "b0F",
+      "order": "b0H",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -601,7 +601,7 @@
     },
     "e_cloud14": {
       "name": "Cloud bank",
-      "order": "b0G",
+      "order": "b0I",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -613,7 +613,7 @@
     },
     "e_cloud15": {
       "name": "Cloud bank",
-      "order": "b0H",
+      "order": "b0J",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -625,7 +625,7 @@
     },
     "e_cloud16": {
       "name": "Cloud bank",
-      "order": "b0I",
+      "order": "b0K",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -637,7 +637,7 @@
     },
     "e_cloud17": {
       "name": "Cloud bank",
-      "order": "b0J",
+      "order": "b0L",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -649,7 +649,7 @@
     },
     "e_cloud18": {
       "name": "Cloud bank",
-      "order": "b0K",
+      "order": "b0M",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -661,7 +661,7 @@
     },
     "e_cloud19": {
       "name": "Cloud bank",
-      "order": "b0L",
+      "order": "b0N",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -673,7 +673,7 @@
     },
     "e_cloud2": {
       "name": "Cloud bank",
-      "order": "b04",
+      "order": "b06",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -685,7 +685,7 @@
     },
     "e_cloud20": {
       "name": "Cloud bank",
-      "order": "b0M",
+      "order": "b0O",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -697,7 +697,7 @@
     },
     "e_cloud21": {
       "name": "Cloud bank",
-      "order": "b0N",
+      "order": "b0P",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -709,7 +709,7 @@
     },
     "e_cloud22": {
       "name": "Cloud bank",
-      "order": "b0O",
+      "order": "b0Q",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -721,7 +721,7 @@
     },
     "e_cloud23": {
       "name": "Cloud bank",
-      "order": "b0P",
+      "order": "b0R",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -733,7 +733,7 @@
     },
     "e_cloud24": {
       "name": "Cloud bank",
-      "order": "b0Q",
+      "order": "b0S",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -745,7 +745,7 @@
     },
     "e_cloud25": {
       "name": "Cloud bank",
-      "order": "b0R",
+      "order": "b0T",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -757,7 +757,7 @@
     },
     "e_cloud26": {
       "name": "Cloud bank",
-      "order": "b0S",
+      "order": "b0U",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -769,7 +769,7 @@
     },
     "e_cloud27": {
       "name": "Cloud bank",
-      "order": "b0T",
+      "order": "b0V",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -781,7 +781,7 @@
     },
     "e_cloud28": {
       "name": "Cloud bank",
-      "order": "b0U",
+      "order": "b0W",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -793,7 +793,7 @@
     },
     "e_cloud29": {
       "name": "Cloud bank",
-      "order": "b0V",
+      "order": "b0X",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -805,7 +805,7 @@
     },
     "e_cloud3": {
       "name": "Cloud bank",
-      "order": "b05",
+      "order": "b07",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -817,7 +817,7 @@
     },
     "e_cloud30": {
       "name": "Cloud bank",
-      "order": "b0W",
+      "order": "b0Y",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -829,7 +829,7 @@
     },
     "e_cloud31": {
       "name": "Cloud bank",
-      "order": "b0X",
+      "order": "b0Z",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -841,7 +841,7 @@
     },
     "e_cloud32": {
       "name": "Cloud bank",
-      "order": "b0Y",
+      "order": "b0a",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -853,7 +853,7 @@
     },
     "e_cloud33": {
       "name": "Cloud bank",
-      "order": "b0Z",
+      "order": "b0b",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -865,7 +865,7 @@
     },
     "e_cloud34": {
       "name": "Cloud bank",
-      "order": "b0a",
+      "order": "b0c",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -877,7 +877,7 @@
     },
     "e_cloud35": {
       "name": "Cloud bank",
-      "order": "b0b",
+      "order": "b0d",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -889,7 +889,7 @@
     },
     "e_cloud36": {
       "name": "Cloud bank",
-      "order": "b0c",
+      "order": "b0e",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -901,7 +901,7 @@
     },
     "e_cloud37": {
       "name": "Cloud bank",
-      "order": "b0d",
+      "order": "b0f",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -913,7 +913,7 @@
     },
     "e_cloud38": {
       "name": "Cloud bank",
-      "order": "b0e",
+      "order": "b0g",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -925,7 +925,7 @@
     },
     "e_cloud39": {
       "name": "Cloud bank",
-      "order": "b0f",
+      "order": "b0h",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -937,7 +937,7 @@
     },
     "e_cloud4": {
       "name": "Cloud bank",
-      "order": "b06",
+      "order": "b08",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -949,7 +949,7 @@
     },
     "e_cloud40": {
       "name": "Cloud bank",
-      "order": "b0g",
+      "order": "b0i",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -961,7 +961,7 @@
     },
     "e_cloud41": {
       "name": "Cloud bank",
-      "order": "b0h",
+      "order": "b0j",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -973,7 +973,7 @@
     },
     "e_cloud42": {
       "name": "Cloud bank",
-      "order": "b0i",
+      "order": "b0k",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -985,7 +985,7 @@
     },
     "e_cloud43": {
       "name": "Cloud bank",
-      "order": "b0j",
+      "order": "b0l",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -997,7 +997,7 @@
     },
     "e_cloud44": {
       "name": "Cloud bank",
-      "order": "b0k",
+      "order": "b0m",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -1009,7 +1009,7 @@
     },
     "e_cloud45": {
       "name": "Cloud bank",
-      "order": "b0l",
+      "order": "b0n",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -1021,7 +1021,7 @@
     },
     "e_cloud46": {
       "name": "Cloud bank",
-      "order": "b0m",
+      "order": "b0o",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -1033,7 +1033,7 @@
     },
     "e_cloud47": {
       "name": "Cloud bank",
-      "order": "b0n",
+      "order": "b0p",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -1045,7 +1045,7 @@
     },
     "e_cloud48": {
       "name": "Cloud bank",
-      "order": "b0o",
+      "order": "b0q",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -1057,7 +1057,7 @@
     },
     "e_cloud49": {
       "name": "Cloud bank",
-      "order": "b0p",
+      "order": "b0r",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -1069,7 +1069,7 @@
     },
     "e_cloud5": {
       "name": "Cloud bank",
-      "order": "b07",
+      "order": "b09",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -1081,7 +1081,7 @@
     },
     "e_cloud50": {
       "name": "Cloud bank",
-      "order": "b0q",
+      "order": "b0s",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -1093,7 +1093,7 @@
     },
     "e_cloud51": {
       "name": "Cloud bank",
-      "order": "b0r",
+      "order": "b0t",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -1105,7 +1105,7 @@
     },
     "e_cloud52": {
       "name": "Cloud bank",
-      "order": "b0s",
+      "order": "b0u",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -1117,7 +1117,7 @@
     },
     "e_cloud53": {
       "name": "Cloud bank",
-      "order": "b0t",
+      "order": "b0v",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -1129,7 +1129,7 @@
     },
     "e_cloud54": {
       "name": "Cloud bank",
-      "order": "b0u",
+      "order": "b0w",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -1141,7 +1141,7 @@
     },
     "e_cloud55": {
       "name": "Cloud bank",
-      "order": "b0v",
+      "order": "b0x",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -1153,7 +1153,7 @@
     },
     "e_cloud56": {
       "name": "Cloud bank",
-      "order": "b0w",
+      "order": "b0y",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -1165,7 +1165,7 @@
     },
     "e_cloud57": {
       "name": "Cloud bank",
-      "order": "b0x",
+      "order": "b0z",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -1177,7 +1177,7 @@
     },
     "e_cloud58": {
       "name": "Cloud bank",
-      "order": "b0y",
+      "order": "b10",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -1189,7 +1189,7 @@
     },
     "e_cloud59": {
       "name": "Cloud bank",
-      "order": "b0z",
+      "order": "b11",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -1201,7 +1201,7 @@
     },
     "e_cloud6": {
       "name": "Cloud bank",
-      "order": "b08",
+      "order": "b0A",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -1213,7 +1213,7 @@
     },
     "e_cloud60": {
       "name": "Cloud bank",
-      "order": "b10",
+      "order": "b12",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -1225,7 +1225,7 @@
     },
     "e_cloud61": {
       "name": "Cloud bank",
-      "order": "b11",
+      "order": "b13",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -1237,7 +1237,7 @@
     },
     "e_cloud62": {
       "name": "Cloud bank",
-      "order": "b12",
+      "order": "b14",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -1249,7 +1249,7 @@
     },
     "e_cloud63": {
       "name": "Cloud bank",
-      "order": "b13",
+      "order": "b15",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -1261,7 +1261,7 @@
     },
     "e_cloud64": {
       "name": "Cloud bank",
-      "order": "b14",
+      "order": "b16",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -1273,7 +1273,7 @@
     },
     "e_cloud65": {
       "name": "Cloud bank",
-      "order": "b15",
+      "order": "b17",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -1285,7 +1285,7 @@
     },
     "e_cloud66": {
       "name": "Cloud bank",
-      "order": "b16",
+      "order": "b18",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -1297,7 +1297,7 @@
     },
     "e_cloud67": {
       "name": "Cloud bank",
-      "order": "b17",
+      "order": "b19",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -1309,7 +1309,7 @@
     },
     "e_cloud68": {
       "name": "Cloud bank",
-      "order": "b18",
+      "order": "b1A",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -1321,7 +1321,7 @@
     },
     "e_cloud69": {
       "name": "Cloud bank",
-      "order": "b19",
+      "order": "b1B",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -1333,7 +1333,7 @@
     },
     "e_cloud7": {
       "name": "Cloud bank",
-      "order": "b09",
+      "order": "b0B",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -1345,7 +1345,7 @@
     },
     "e_cloud70": {
       "name": "Cloud bank",
-      "order": "b1A",
+      "order": "b1C",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -1357,7 +1357,7 @@
     },
     "e_cloud71": {
       "name": "Cloud bank",
-      "order": "b1B",
+      "order": "b1D",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -1369,7 +1369,7 @@
     },
     "e_cloud72": {
       "name": "Cloud bank",
-      "order": "b1C",
+      "order": "b1E",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -1381,7 +1381,7 @@
     },
     "e_cloud73": {
       "name": "Cloud bank",
-      "order": "b1D",
+      "order": "b1F",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -1393,7 +1393,7 @@
     },
     "e_cloud74": {
       "name": "Cloud bank",
-      "order": "b1E",
+      "order": "b1G",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -1405,7 +1405,7 @@
     },
     "e_cloud75": {
       "name": "Cloud bank",
-      "order": "b1F",
+      "order": "b1H",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -1417,7 +1417,7 @@
     },
     "e_cloud76": {
       "name": "Cloud bank",
-      "order": "b1G",
+      "order": "b1I",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -1429,7 +1429,7 @@
     },
     "e_cloud77": {
       "name": "Cloud bank",
-      "order": "b1H",
+      "order": "b1J",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -1441,7 +1441,7 @@
     },
     "e_cloud78": {
       "name": "Cloud bank",
-      "order": "b1I",
+      "order": "b1K",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -1453,7 +1453,7 @@
     },
     "e_cloud79": {
       "name": "Cloud bank",
-      "order": "b1J",
+      "order": "b1L",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -1465,7 +1465,7 @@
     },
     "e_cloud8": {
       "name": "Cloud bank",
-      "order": "b0A",
+      "order": "b0C",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -1477,7 +1477,7 @@
     },
     "e_cloud80": {
       "name": "Cloud bank",
-      "order": "b1K",
+      "order": "b1M",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -1489,7 +1489,7 @@
     },
     "e_cloud81": {
       "name": "Cloud bank",
-      "order": "b1L",
+      "order": "b1N",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -1501,7 +1501,7 @@
     },
     "e_cloud82": {
       "name": "Cloud bank",
-      "order": "b1M",
+      "order": "b1O",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -1513,7 +1513,7 @@
     },
     "e_cloud83": {
       "name": "Cloud bank",
-      "order": "b1N",
+      "order": "b1P",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -1525,7 +1525,7 @@
     },
     "e_cloud84": {
       "name": "Cloud bank",
-      "order": "b1O",
+      "order": "b1Q",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -1537,7 +1537,7 @@
     },
     "e_cloud85": {
       "name": "Cloud bank",
-      "order": "b1P",
+      "order": "b1R",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -1549,7 +1549,7 @@
     },
     "e_cloud86": {
       "name": "Cloud bank",
-      "order": "b1Q",
+      "order": "b1S",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -1561,7 +1561,7 @@
     },
     "e_cloud87": {
       "name": "Cloud bank",
-      "order": "b1R",
+      "order": "b1T",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -1573,7 +1573,7 @@
     },
     "e_cloud88": {
       "name": "Cloud bank",
-      "order": "b1S",
+      "order": "b1U",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -1585,7 +1585,7 @@
     },
     "e_cloud89": {
       "name": "Cloud bank",
-      "order": "b1T",
+      "order": "b1V",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -1597,7 +1597,7 @@
     },
     "e_cloud9": {
       "name": "Cloud bank",
-      "order": "b0B",
+      "order": "b0D",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -1609,7 +1609,7 @@
     },
     "e_cloud90": {
       "name": "Cloud bank",
-      "order": "b1U",
+      "order": "b1W",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -1621,7 +1621,7 @@
     },
     "e_cloud91": {
       "name": "Cloud bank",
-      "order": "b1V",
+      "order": "b1X",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -1633,7 +1633,7 @@
     },
     "e_cloud92": {
       "name": "Cloud bank",
-      "order": "b1W",
+      "order": "b1Y",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -1645,7 +1645,7 @@
     },
     "e_cloud93": {
       "name": "Cloud bank",
-      "order": "b1X",
+      "order": "b1Z",
       "MeshRenderer": {
         "model": "@kit/glint_cloud0.gltf#as_kitglintcloud0"
       },
@@ -1657,7 +1657,7 @@
     },
     "e_cloud94": {
       "name": "Cloud bank",
-      "order": "b1Y",
+      "order": "b1a",
       "MeshRenderer": {
         "model": "@kit/glint_cloud1.gltf#as_kitglintcloud1"
       },
@@ -1669,7 +1669,7 @@
     },
     "e_cloud95": {
       "name": "Cloud bank",
-      "order": "b1Z",
+      "order": "b1b",
       "MeshRenderer": {
         "model": "@kit/glint_cloud2.gltf#as_kitglintcloud2"
       },
@@ -1726,7 +1726,7 @@
     },
     "e_fx": {
       "name": "Ball sparks and roll",
-      "order": "b3S",
+      "order": "b3U",
       "AudioSource": {
         "clip": "@audio/roll.wav#as_glintroll",
         "bus": "sfx",
@@ -1747,6 +1747,18 @@
         "effect": "sparks",
         "scale": 0.8,
         "intensity": 0
+      }
+    },
+    "e_gantry": {
+      "name": "Cannon gantry",
+      "order": "b03",
+      "MeshRenderer": {
+        "model": "@kit/glint_gantry.gltf#as_kitglintgantry",
+        "emissive": [50000, 50000, 50000]
+      },
+      "Transform": {
+        "position": [-311.954, -0.73, 93.368],
+        "rotation": [0, -110.00006866455078, 0]
       }
     },
     "e_gate0": {
@@ -1904,7 +1916,7 @@
     },
     "e_isle0": {
       "name": "Island",
-      "order": "b1k",
+      "order": "b1m",
       "MeshRenderer": {
         "model": "@kit/glint_isle.gltf#as_kitglintisle",
         "emissive": [40000, 40000, 40000]
@@ -1917,7 +1929,7 @@
     },
     "e_isle1": {
       "name": "Island",
-      "order": "b1l",
+      "order": "b1n",
       "MeshRenderer": {
         "model": "@kit/glint_isle.gltf#as_kitglintisle",
         "emissive": [40000, 40000, 40000]
@@ -1930,7 +1942,7 @@
     },
     "e_isle10": {
       "name": "Island",
-      "order": "b1u",
+      "order": "b1w",
       "MeshRenderer": {
         "model": "@kit/glint_isle.gltf#as_kitglintisle",
         "emissive": [40000, 40000, 40000]
@@ -1943,7 +1955,7 @@
     },
     "e_isle2": {
       "name": "Island",
-      "order": "b1m",
+      "order": "b1o",
       "MeshRenderer": {
         "model": "@kit/glint_isle.gltf#as_kitglintisle",
         "emissive": [40000, 40000, 40000]
@@ -1956,7 +1968,7 @@
     },
     "e_isle3": {
       "name": "Island",
-      "order": "b1n",
+      "order": "b1p",
       "MeshRenderer": {
         "model": "@kit/glint_isle.gltf#as_kitglintisle",
         "emissive": [40000, 40000, 40000]
@@ -1969,7 +1981,7 @@
     },
     "e_isle4": {
       "name": "Island",
-      "order": "b1o",
+      "order": "b1q",
       "MeshRenderer": {
         "model": "@kit/glint_isle.gltf#as_kitglintisle",
         "emissive": [40000, 40000, 40000]
@@ -1982,7 +1994,7 @@
     },
     "e_isle5": {
       "name": "Island",
-      "order": "b1p",
+      "order": "b1r",
       "MeshRenderer": {
         "model": "@kit/glint_isle.gltf#as_kitglintisle",
         "emissive": [40000, 40000, 40000]
@@ -1995,7 +2007,7 @@
     },
     "e_isle6": {
       "name": "Island",
-      "order": "b1q",
+      "order": "b1s",
       "MeshRenderer": {
         "model": "@kit/glint_isle.gltf#as_kitglintisle",
         "emissive": [40000, 40000, 40000]
@@ -2008,7 +2020,7 @@
     },
     "e_isle7": {
       "name": "Island",
-      "order": "b1r",
+      "order": "b1t",
       "MeshRenderer": {
         "model": "@kit/glint_isle.gltf#as_kitglintisle",
         "emissive": [40000, 40000, 40000]
@@ -2021,7 +2033,7 @@
     },
     "e_isle8": {
       "name": "Island",
-      "order": "b1s",
+      "order": "b1u",
       "MeshRenderer": {
         "model": "@kit/glint_isle.gltf#as_kitglintisle",
         "emissive": [40000, 40000, 40000]
@@ -2034,7 +2046,7 @@
     },
     "e_isle9": {
       "name": "Island",
-      "order": "b1t",
+      "order": "b1v",
       "MeshRenderer": {
         "model": "@kit/glint_isle.gltf#as_kitglintisle",
         "emissive": [40000, 40000, 40000]
@@ -2099,7 +2111,7 @@
     },
     "e_m1": {
       "name": "Moving platform",
-      "order": "b2l",
+      "order": "b2n",
       "Collider": {
         "halfExtents": [2.200000047683716, 0.4000000059604645, 2.200000047683716]
       },
@@ -2124,7 +2136,7 @@
     },
     "e_m2": {
       "name": "Moving platform",
-      "order": "b2m",
+      "order": "b2o",
       "Collider": {
         "halfExtents": [2.200000047683716, 0.4000000059604645, 2.200000047683716]
       },
@@ -2150,7 +2162,7 @@
     },
     "e_music": {
       "name": "Music",
-      "order": "b3b",
+      "order": "b3d",
       "MusicSource": {
         "music": "@audio/glint.music#mu_glint"
       }
@@ -2973,7 +2985,7 @@
     },
     "e_p1": {
       "name": "Launch deck",
-      "order": "b1v",
+      "order": "b1x",
       "Collider": {
         "halfExtents": [6, 0.4000000059604645, 9]
       },
@@ -2988,7 +3000,7 @@
     },
     "e_p10": {
       "name": "Landing deck",
-      "order": "b21",
+      "order": "b23",
       "Collider": {
         "halfExtents": [4.5, 0.4000000059604645, 9]
       },
@@ -3003,7 +3015,7 @@
     },
     "e_p11": {
       "name": "Climb",
-      "order": "b22",
+      "order": "b24",
       "Collider": {
         "halfExtents": [2.5, 0.4000000059604645, 14]
       },
@@ -3018,7 +3030,7 @@
     },
     "e_p12": {
       "name": "Split pad",
-      "order": "b23",
+      "order": "b25",
       "Collider": {
         "halfExtents": [5, 0.4000000059604645, 4]
       },
@@ -3033,7 +3045,7 @@
     },
     "e_p13": {
       "name": "Detour out",
-      "order": "b24",
+      "order": "b26",
       "Collider": {
         "halfExtents": [2, 0.4000000059604645, 6.900000095367432]
       },
@@ -3048,7 +3060,7 @@
     },
     "e_p14": {
       "name": "Detour",
-      "order": "b25",
+      "order": "b27",
       "Collider": {
         "halfExtents": [2, 0.4000000059604645, 6.5]
       },
@@ -3063,7 +3075,7 @@
     },
     "e_p15": {
       "name": "Detour back",
-      "order": "b26",
+      "order": "b28",
       "Collider": {
         "halfExtents": [2, 0.4000000059604645, 6.900000095367432]
       },
@@ -3078,7 +3090,7 @@
     },
     "e_p16": {
       "name": "Beam",
-      "order": "b27",
+      "order": "b29",
       "Collider": {
         "halfExtents": [0.800000011920929, 0.4000000059604645, 16]
       },
@@ -3093,7 +3105,7 @@
     },
     "e_p17": {
       "name": "Rejoin pad",
-      "order": "b28",
+      "order": "b2A",
       "Collider": {
         "halfExtents": [5, 0.4000000059604645, 4]
       },
@@ -3108,7 +3120,7 @@
     },
     "e_p46": {
       "name": "Checkpoint pad 2",
-      "order": "b2N",
+      "order": "b2P",
       "Collider": {
         "halfExtents": [5, 0.4000000059604645, 6]
       },
@@ -3123,7 +3135,7 @@
     },
     "e_p47": {
       "name": "Landing pad",
-      "order": "b2O",
+      "order": "b2Q",
       "Collider": {
         "halfExtents": [4.5, 0.4000000059604645, 4.5]
       },
@@ -3138,7 +3150,7 @@
     },
     "e_p48": {
       "name": "Spinner deck",
-      "order": "b2P",
+      "order": "b2R",
       "Collider": {
         "halfExtents": [4, 0.4000000059604645, 22]
       },
@@ -3153,7 +3165,7 @@
     },
     "e_p49": {
       "name": "Checkpoint pad 3",
-      "order": "b2Q",
+      "order": "b2S",
       "Collider": {
         "halfExtents": [5, 0.4000000059604645, 5]
       },
@@ -3168,7 +3180,7 @@
     },
     "e_p5": {
       "name": "Wide straight",
-      "order": "b1w",
+      "order": "b1y",
       "Collider": {
         "halfExtents": [4, 0.4000000059604645, 20]
       },
@@ -3183,7 +3195,7 @@
     },
     "e_p50": {
       "name": "Tower ramp",
-      "order": "b2R",
+      "order": "b2T",
       "Collider": {
         "halfExtents": [2.5, 0.4000000059604645, 10]
       },
@@ -3198,7 +3210,7 @@
     },
     "e_p51": {
       "name": "Cannon deck",
-      "order": "b2S",
+      "order": "b2U",
       "Collider": {
         "halfExtents": [7, 0.4000000059604645, 8]
       },
@@ -3213,7 +3225,7 @@
     },
     "e_p52": {
       "name": "Goal plaza",
-      "order": "b2T",
+      "order": "b2V",
       "Collider": {
         "halfExtents": [13, 0.4000000059604645, 13]
       },
@@ -3228,7 +3240,7 @@
     },
     "e_p6": {
       "name": "Checkpoint pad 1",
-      "order": "b1x",
+      "order": "b1z",
       "Collider": {
         "halfExtents": [5, 0.4000000059604645, 6]
       },
@@ -3243,7 +3255,7 @@
     },
     "e_p7": {
       "name": "Descent",
-      "order": "b1y",
+      "order": "b20",
       "Collider": {
         "halfExtents": [3, 0.4000000059604645, 15]
       },
@@ -3258,7 +3270,7 @@
     },
     "e_p8": {
       "name": "Run-up",
-      "order": "b1z",
+      "order": "b21",
       "Collider": {
         "halfExtents": [3, 0.4000000059604645, 4]
       },
@@ -3273,7 +3285,7 @@
     },
     "e_p9": {
       "name": "Kicker",
-      "order": "b20",
+      "order": "b22",
       "Collider": {
         "halfExtents": [3, 0.4000000059604645, 3.5]
       },
@@ -3288,7 +3300,7 @@
     },
     "e_run": {
       "name": "Run",
-      "order": "b3i",
+      "order": "b3k",
       "GlintRun": {
         "orbTotal": 43,
         "start": [-4.213244438171387, 0.6000000238418579, -5.4646687507629395]
@@ -3296,7 +3308,7 @@
     },
     "e_sndfall": {
       "name": "Sound pin",
-      "order": "b3Z",
+      "order": "b3b",
       "AudioSource": {
         "clip": "@audio/fall.wav#as_glintfall",
         "bus": "sfx",
@@ -3306,7 +3318,7 @@
     },
     "e_sndfinish": {
       "name": "Sound pin",
-      "order": "b3a",
+      "order": "b3c",
       "AudioSource": {
         "clip": "@audio/finish.wav#as_glintfinish",
         "bus": "sfx",
@@ -3316,7 +3328,7 @@
     },
     "e_sndfire": {
       "name": "Sound pin",
-      "order": "b3Y",
+      "order": "b3a",
       "AudioSource": {
         "clip": "@audio/fire.wav#as_glintfire",
         "bus": "sfx",
@@ -3326,7 +3338,7 @@
     },
     "e_sndgate": {
       "name": "Sound pin",
-      "order": "b3W",
+      "order": "b3Y",
       "AudioSource": {
         "clip": "@audio/gate.wav#as_glintgate",
         "bus": "sfx",
@@ -3336,7 +3348,7 @@
     },
     "e_sndjump": {
       "name": "Sound pin",
-      "order": "b3T",
+      "order": "b3V",
       "AudioSource": {
         "clip": "@audio/jump.wav#as_glintjump",
         "bus": "sfx",
@@ -3346,7 +3358,7 @@
     },
     "e_sndland": {
       "name": "Sound pin",
-      "order": "b3U",
+      "order": "b3W",
       "AudioSource": {
         "clip": "@audio/land.wav#as_glintland",
         "bus": "sfx",
@@ -3356,7 +3368,7 @@
     },
     "e_sndload": {
       "name": "Sound pin",
-      "order": "b3X",
+      "order": "b3Z",
       "AudioSource": {
         "clip": "@audio/load.wav#as_glintload",
         "bus": "sfx",
@@ -3366,7 +3378,7 @@
     },
     "e_sndorb": {
       "name": "Sound pin",
-      "order": "b3V",
+      "order": "b3X",
       "AudioSource": {
         "clip": "@audio/orb.wav#as_glintorb",
         "bus": "sfx",
@@ -3374,12 +3386,24 @@
         "spatial": false
       }
     },
+    "e_span": {
+      "name": "Great arch",
+      "order": "b02",
+      "MeshRenderer": {
+        "model": "@kit/glint_span.gltf#as_kitglintspan",
+        "emissive": [50000, 50000, 50000]
+      },
+      "Transform": {
+        "position": [-181.093, -3.529, 137.859],
+        "rotation": [0, -82.14288330078125, 0]
+      }
+    },
     "e_sun": {
       "name": "Sun",
       "order": "a1",
       "Light": {
         "kind": "directional",
-        "color": [1, 0.88, 0.72, 1],
+        "color": [1, 0.85, 0.66, 1],
         "intensity": 95000
       },
       "Transform": {
@@ -3411,7 +3435,7 @@
     },
     "e_w19": {
       "name": "Glass rail",
-      "order": "b2X",
+      "order": "b2Z",
       "Collider": {
         "halfExtents": [0.05999999865889549, 0.44999998807907104, 1.0890854597091675]
       },
@@ -3423,7 +3447,7 @@
     },
     "e_w2": {
       "name": "Glass rail",
-      "order": "b2U",
+      "order": "b2W",
       "Collider": {
         "halfExtents": [6, 0.5, 0.05999999865889549]
       },
@@ -3435,7 +3459,7 @@
     },
     "e_w21": {
       "name": "Glass rail",
-      "order": "b2Y",
+      "order": "b2a",
       "Collider": {
         "halfExtents": [0.05999999865889549, 0.44999998807907104, 1.0890854597091675]
       },
@@ -3447,7 +3471,7 @@
     },
     "e_w23": {
       "name": "Glass rail",
-      "order": "b2Z",
+      "order": "b2b",
       "Collider": {
         "halfExtents": [0.05999999865889549, 0.44999998807907104, 1.0890854597091675]
       },
@@ -3459,7 +3483,7 @@
     },
     "e_w25": {
       "name": "Glass rail",
-      "order": "b2a",
+      "order": "b2c",
       "Collider": {
         "halfExtents": [0.05999999865889549, 0.44999998807907104, 1.0890854597091675]
       },
@@ -3471,7 +3495,7 @@
     },
     "e_w27": {
       "name": "Glass rail",
-      "order": "b2b",
+      "order": "b2d",
       "Collider": {
         "halfExtents": [0.05999999865889549, 0.44999998807907104, 1.0890854597091675]
       },
@@ -3483,7 +3507,7 @@
     },
     "e_w29": {
       "name": "Glass rail",
-      "order": "b2c",
+      "order": "b2e",
       "Collider": {
         "halfExtents": [0.05999999865889549, 0.44999998807907104, 1.0890854597091675]
       },
@@ -3495,7 +3519,7 @@
     },
     "e_w3": {
       "name": "Glass rail",
-      "order": "b2V",
+      "order": "b2X",
       "Collider": {
         "halfExtents": [0.05999999865889549, 0.5, 9]
       },
@@ -3507,7 +3531,7 @@
     },
     "e_w31": {
       "name": "Glass rail",
-      "order": "b2d",
+      "order": "b2f",
       "Collider": {
         "halfExtents": [0.05999999865889549, 0.44999998807907104, 1.0890854597091675]
       },
@@ -3519,7 +3543,7 @@
     },
     "e_w33": {
       "name": "Glass rail",
-      "order": "b2e",
+      "order": "b2g",
       "Collider": {
         "halfExtents": [0.05999999865889549, 0.44999998807907104, 1.0890854597091675]
       },
@@ -3531,7 +3555,7 @@
     },
     "e_w35": {
       "name": "Glass rail",
-      "order": "b2f",
+      "order": "b2h",
       "Collider": {
         "halfExtents": [0.05999999865889549, 0.44999998807907104, 1.0890854597091675]
       },
@@ -3543,7 +3567,7 @@
     },
     "e_w37": {
       "name": "Glass rail",
-      "order": "b2g",
+      "order": "b2i",
       "Collider": {
         "halfExtents": [0.05999999865889549, 0.44999998807907104, 1.0890854597091675]
       },
@@ -3555,7 +3579,7 @@
     },
     "e_w39": {
       "name": "Glass rail",
-      "order": "b2h",
+      "order": "b2j",
       "Collider": {
         "halfExtents": [0.05999999865889549, 0.44999998807907104, 1.0890854597091675]
       },
@@ -3567,7 +3591,7 @@
     },
     "e_w4": {
       "name": "Glass rail",
-      "order": "b2W",
+      "order": "b2Y",
       "Collider": {
         "halfExtents": [0.05999999865889549, 0.5, 9]
       },
@@ -3579,7 +3603,7 @@
     },
     "e_w41": {
       "name": "Glass rail",
-      "order": "b2i",
+      "order": "b2k",
       "Collider": {
         "halfExtents": [0.05999999865889549, 0.44999998807907104, 1.0890854597091675]
       },
@@ -3591,7 +3615,7 @@
     },
     "e_w43": {
       "name": "Glass rail",
-      "order": "b2j",
+      "order": "b2l",
       "Collider": {
         "halfExtents": [0.05999999865889549, 0.44999998807907104, 1.0890854597091675]
       },
@@ -3603,7 +3627,7 @@
     },
     "e_w45": {
       "name": "Glass rail",
-      "order": "b2k",
+      "order": "b2m",
       "Collider": {
         "halfExtents": [0.05999999865889549, 0.44999998807907104, 1.0890854597091675]
       },
@@ -3615,7 +3639,7 @@
     },
     "e_wp00": {
       "name": "Waypoint",
-      "order": "b2q",
+      "order": "b2s",
       "Transform": {
         "position": [0, 0, -9]
       },
@@ -3623,7 +3647,7 @@
     },
     "e_wp01": {
       "name": "Waypoint",
-      "order": "b2r",
+      "order": "b2t",
       "Transform": {
         "position": [-13.789, 0, 2.57]
       },
@@ -3633,7 +3657,7 @@
     },
     "e_wp02": {
       "name": "Waypoint",
-      "order": "b2s",
+      "order": "b2u",
       "Transform": {
         "position": [-44.431, 0, 28.282]
       },
@@ -3643,7 +3667,7 @@
     },
     "e_wp03": {
       "name": "Waypoint",
-      "order": "b2t",
+      "order": "b2v",
       "Transform": {
         "position": [-49.027, 0, 32.138]
       },
@@ -3653,7 +3677,7 @@
     },
     "e_wp04": {
       "name": "Waypoint",
-      "order": "b2u",
+      "order": "b2w",
       "Transform": {
         "position": [-58.219, 0, 39.852]
       },
@@ -3663,7 +3687,7 @@
     },
     "e_wp05": {
       "name": "Waypoint",
-      "order": "b2v",
+      "order": "b2x",
       "Transform": {
         "position": [-80.977, -4.175, 58.948]
       },
@@ -3673,7 +3697,7 @@
     },
     "e_wp06": {
       "name": "Waypoint",
-      "order": "b2w",
+      "order": "b2y",
       "Transform": {
         "position": [-87.105, -4.175, 64.09]
       },
@@ -3683,7 +3707,7 @@
     },
     "e_wp07": {
       "name": "Waypoint",
-      "order": "b2x",
+      "order": "b2z",
       "Transform": {
         "position": [-92.351, -2.72, 68.491]
       },
@@ -3693,7 +3717,7 @@
     },
     "e_wp08": {
       "name": "Waypoint",
-      "order": "b2y",
+      "order": "b30",
       "Transform": {
         "position": [-96.181, -6.675, 71.705]
       },
@@ -3703,7 +3727,7 @@
     },
     "e_wp09": {
       "name": "Waypoint",
-      "order": "b2z",
+      "order": "b31",
       "Transform": {
         "position": [-109.97, -6.675, 83.275]
       },
@@ -3713,7 +3737,7 @@
     },
     "e_wp10": {
       "name": "Waypoint",
-      "order": "b30",
+      "order": "b32",
       "Transform": {
         "position": [-131.21, -2.778, 101.098]
       },
@@ -3723,7 +3747,7 @@
     },
     "e_wp11": {
       "name": "Waypoint",
-      "order": "b31",
+      "order": "b33",
       "Transform": {
         "position": [-137.338, -2.778, 106.241]
       },
@@ -3733,7 +3757,7 @@
     },
     "e_wp12": {
       "name": "Waypoint",
-      "order": "b32",
+      "order": "b34",
       "Transform": {
         "position": [-161.852, -2.778, 126.81]
       },
@@ -3743,7 +3767,7 @@
     },
     "e_wp13": {
       "name": "Waypoint",
-      "order": "b33",
+      "order": "b35",
       "Transform": {
         "position": [-167.98, -2.778, 131.952]
       },
@@ -3753,7 +3777,7 @@
     },
     "e_wp14": {
       "name": "Waypoint",
-      "order": "b34",
+      "order": "b36",
       "Transform": {
         "position": [-169.514, -2.88, 133.144]
       },
@@ -3763,7 +3787,7 @@
     },
     "e_wp15": {
       "name": "Waypoint",
-      "order": "b35",
+      "order": "b37",
       "Transform": {
         "position": [-171.132, -2.982, 134.218]
       },
@@ -3773,7 +3797,7 @@
     },
     "e_wp16": {
       "name": "Waypoint",
-      "order": "b36",
+      "order": "b38",
       "Transform": {
         "position": [-172.826, -3.084, 135.168]
       },
@@ -3783,7 +3807,7 @@
     },
     "e_wp17": {
       "name": "Waypoint",
-      "order": "b37",
+      "order": "b39",
       "Transform": {
         "position": [-174.586, -3.185, 135.989]
       },
@@ -3793,7 +3817,7 @@
     },
     "e_wp18": {
       "name": "Waypoint",
-      "order": "b38",
+      "order": "b3A",
       "Transform": {
         "position": [-176.402, -3.287, 136.676]
       },
@@ -3803,7 +3827,7 @@
     },
     "e_wp19": {
       "name": "Waypoint",
-      "order": "b39",
+      "order": "b3B",
       "Transform": {
         "position": [-178.265, -3.389, 137.225]
       },
@@ -3813,7 +3837,7 @@
     },
     "e_wp20": {
       "name": "Waypoint",
-      "order": "b3A",
+      "order": "b3C",
       "Transform": {
         "position": [-180.164, -3.491, 137.633]
       },
@@ -3823,7 +3847,7 @@
     },
     "e_wp21": {
       "name": "Waypoint",
-      "order": "b3B",
+      "order": "b3D",
       "Transform": {
         "position": [-182.088, -3.593, 137.899]
       },
@@ -3833,7 +3857,7 @@
     },
     "e_wp22": {
       "name": "Waypoint",
-      "order": "b3C",
+      "order": "b3E",
       "Transform": {
         "position": [-184.026, -3.694, 138.02]
       },
@@ -3843,7 +3867,7 @@
     },
     "e_wp23": {
       "name": "Waypoint",
-      "order": "b3D",
+      "order": "b3F",
       "Transform": {
         "position": [-185.968, -3.796, 137.996]
       },
@@ -3853,7 +3877,7 @@
     },
     "e_wp24": {
       "name": "Waypoint",
-      "order": "b3E",
+      "order": "b3G",
       "Transform": {
         "position": [-187.903, -3.898, 137.827]
       },
@@ -3863,7 +3887,7 @@
     },
     "e_wp25": {
       "name": "Waypoint",
-      "order": "b3F",
+      "order": "b3H",
       "Transform": {
         "position": [-189.82, -4, 137.513]
       },
@@ -3873,7 +3897,7 @@
     },
     "e_wp26": {
       "name": "Waypoint",
-      "order": "b3G",
+      "order": "b3I",
       "Transform": {
         "position": [-191.708, -4.102, 137.057]
       },
@@ -3883,7 +3907,7 @@
     },
     "e_wp27": {
       "name": "Waypoint",
-      "order": "b3H",
+      "order": "b3J",
       "Transform": {
         "position": [-193.556, -4.203, 136.462]
       },
@@ -3893,7 +3917,7 @@
     },
     "e_wp28": {
       "name": "Waypoint",
-      "order": "b3I",
+      "order": "b3K",
       "Transform": {
         "position": [-204.832, -4.203, 132.358]
       },
@@ -3903,7 +3927,7 @@
     },
     "e_wp29": {
       "name": "Waypoint",
-      "order": "b3J",
+      "order": "b3L",
       "Transform": {
         "position": [-225.788, -4.203, 124.731]
       },
@@ -3913,7 +3937,7 @@
     },
     "e_wp30": {
       "name": "Waypoint",
-      "order": "b3K",
+      "order": "b3M",
       "Transform": {
         "position": [-234.245, -4.203, 121.652]
       },
@@ -3923,7 +3947,7 @@
     },
     "e_wp31": {
       "name": "Waypoint",
-      "order": "b3L",
+      "order": "b3N",
       "Transform": {
         "position": [-275.591, -4.203, 106.603]
       },
@@ -3933,7 +3957,7 @@
     },
     "e_wp32": {
       "name": "Waypoint",
-      "order": "b3M",
+      "order": "b3O",
       "Transform": {
         "position": [-284.988, -4.203, 103.183]
       },
@@ -3943,7 +3967,7 @@
     },
     "e_wp33": {
       "name": "Waypoint",
-      "order": "b3N",
+      "order": "b3P",
       "Transform": {
         "position": [-303.497, -0.73, 96.447]
       },
@@ -3953,7 +3977,7 @@
     },
     "e_wp34": {
       "name": "Waypoint",
-      "order": "b3O",
+      "order": "b3Q",
       "Transform": {
         "position": [-318.532, -0.73, 90.974]
       },
@@ -3963,7 +3987,7 @@
     },
     "e_wp35": {
       "name": "Waypoint",
-      "order": "b3P",
+      "order": "b3R",
       "Transform": {
         "position": [-393.707, -10.73, 63.613]
       },
@@ -3973,7 +3997,7 @@
     },
     "e_wp36": {
       "name": "Waypoint",
-      "order": "b3Q",
+      "order": "b3S",
       "Transform": {
         "position": [-405.923, -10.73, 59.166]
       },

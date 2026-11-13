@@ -97,6 +97,8 @@ fn kits_written(root: &Path, lock: &Lock, c: &Course) -> Result<Vec<(&'static st
         ("glint_cloud1", kits::cloud(root, lock, 1)?),
         ("glint_cloud2", kits::cloud(root, lock, 2)?),
         ("glint_trail", kits::trail(root, lock)?),
+        ("glint_span", kits::span(root, lock)?),
+        ("glint_gantry", kits::gantry(root, lock)?),
         ("glint_isle", kits::isle(root, lock)?),
         ("glint_sun", kits::sun(root, lock)?),
     ])
@@ -236,7 +238,7 @@ fn art(s: &mut Scene, c: &Course, play: bool) {
         "e_sun",
         "Sun",
         Vec3::new(0.0, 60.0, 30.0),
-        json!({"kind": "directional", "color": [1.0, 0.88, 0.72, 1], "intensity": 95_000, "sourceAngle": 0.5357}),
+        json!({"kind": "directional", "color": [1.0, 0.85, 0.66, 1], "intensity": 95_000, "sourceAngle": 0.5357}),
         Some(SUN),
     ));
     // The sun's disc, far along its direction (the sky has no disc of its own). It must not
@@ -355,6 +357,35 @@ fn art(s: &mut Scene, c: &Course, play: bool) {
         }
         s.entity(&format!("e_orb{i}"), "Orb", components);
     }
+    // Two landmarks on the far half, large enough to read from the launch deck: the great arch
+    // over the middle of the banked turn and the gantry over the cannon.
+    let bank: Vec<&course::Piece> = c
+        .pieces
+        .iter()
+        .filter(|p| p.kind == course::Kind::Bank)
+        .collect();
+    let middle = bank[bank.len() / 2];
+    let across = middle.rot * Vec3::Z;
+    decor(
+        s,
+        "e_span",
+        "Great arch",
+        "glint_span",
+        middle.center + Vec3::Y * middle.half.y,
+        [0.0, across.x.atan2(across.z).to_degrees(), 0.0],
+        Vec3::ONE,
+        LIT_SET,
+    );
+    decor(
+        s,
+        "e_gantry",
+        "Cannon gantry",
+        "glint_gantry",
+        cannon.breech - Vec3::Y * 0.5,
+        [0.0, cannon.heading, 0.0],
+        Vec3::ONE,
+        LIT_SET,
+    );
     // The cloud deck: banks spread on a spiral around the course, flattened, each a little
     // different; a few high, thin ones far off.
     let banks = 96u32;
