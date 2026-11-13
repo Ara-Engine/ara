@@ -41,11 +41,15 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
    the ball tests itself against them each tick (`Course.Resting`); the course is limited to
    boxes. *Smallest change:* `Physics.Raycast(origin, direction, distance)`
    returning entity, point and normal, and a per-tick contact list on a body.
-3. **A kinematic platform does not carry what rests on it.** *Wanted:* a moving platform.
-   *Happened:* a body moved by writing its transform slides out from under the ball.
-   *Workaround:* the controller adds the platform's analytic velocity while the ball rests on
-   it (`Course.MoverVelocity`). *Smallest change:* give kinematic bodies a velocity (derive it
-   from the transform change each tick) so friction carries riders.
+3. **Withdrawn: a kinematic platform does carry what rests on it.** These notes said a body
+   moved by writing its transform slides out from under a rider and has no velocity to read.
+   Both were wrong. The write becomes a kinematic target, physics moves the body with a real
+   velocity, mirrors it into `Velocity`, and friction carries a resting box (pinned by the test
+   in **#157**). What dropped the ball was this sample's own controller, which sets the ball's
+   velocity every tick and so cancelled what friction gave it. The controller now steers
+   relative to the `Velocity` of whatever the ball rests on, and its analytic copy of the
+   slider's motion is gone. Lesson kept here on purpose: the gap was assumed from a symptom
+   and never tested against the engine.
 4. **Free flight is damped and a scene cannot say otherwise.** *Wanted:* a cannon shot that
    lands where the ballistic solution says. *Happened:* the ball lost about 5 percent of its
    horizontal speed a second and landed 10 m short of a 97 m shot; `RigidBody` has no damping
@@ -136,7 +140,14 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
     `Ara.Runtime`), so the cannon's arc repeats 9.81 in the build and in C#.
 23. **`FollowCamera` has no "follow the route" mode.** A script turns its yaw toward a
     polyline of waypoint entities (`CourseCamera`); spline or path components would do this.
-24. **Small ones:** `ara_play read` takes `paths`, `status` takes no world, `events` takes no
+24. **A script that writes one Euler component of a physics body's rotation gets the wrong
+    rotation.** Physics writes a kinematic body's pose back to `Transform` as Euler angles, and
+    past 90 degrees of yaw those are (180, 180 - yaw, 180). The spinner bars wrote only
+    `Rotation.Y`, so each bar swung back and forth instead of turning, with a velocity spike at
+    each flip (-64 rad/s read for one tick). Fixed by writing the whole vector. *Smallest
+    change:* keep the authored Euler triple when the pose physics hands back is the pose the
+    script asked for, or give `Transform` a yaw setter.
+25. **Small ones:** `ara_play read` takes `paths`, `status` takes no world, `events` takes no
     limit (each rejected with a good message); entity ids must be `prefix_base32`;
     `HeightFog.falloff` has no stated unit in its range error; the capture JSON's pass list
     needs a script to read.
