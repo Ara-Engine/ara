@@ -33,6 +33,9 @@ image { flex-shrink:0; }
 #key-roll-box { padding-left:6px; padding-right:18px; }
 #key-jump-box { padding-left:6px; padding-right:18px; }
 #key-retry-box { padding-left:6px; }
+#key-roll-a { left:7px; }
+#key-jump-a { left:7px; }
+#key-retry-a { left:7px; }
 
 .fade { position:absolute; left:0px; top:0px; width:100%; height:100%; }
 .full { background:#060b16ff; }
@@ -40,7 +43,8 @@ image { flex-shrink:0; }
 .light { background:#060b1655; }
 
 .scrim { position:absolute; left:0px; top:0px; width:100%; height:100%; background:#0a1a3ab4; align-items:center; justify-content:center; }
-#win-content { align-items:center; gap:6px; }
+#win-content { position:absolute; left:0px; top:0px; width:44%; height:100%; align-items:center; justify-content:center; gap:6px; }
+#win-frame { position:absolute; right:26px; top:36px; width:52%; height:90%; border-width:4px; border-color:#ffffff; border-radius:12px; }
 #medal-box { width:132px; height:132px; }
 .wm { position:absolute; left:0px; top:0px; width:132px; height:132px; }
 #win-medal { font-size:22px; color:#ffd2bf; }
@@ -55,11 +59,11 @@ image { flex-shrink:0; }
 .tt { font-size:18px; color:#dbe8ff; }
 .tiermark { width:96px; height:4px; background:#ff5a24; }
 #splits { gap:5px; padding-top:12px; }
-.split { gap:14px; width:480px; justify-content:space-between; }
+.split { gap:14px; width:440px; justify-content:space-between; }
 .si { width:26px; height:26px; }
 .st { font-size:17px; color:#dbe8ff; }
-#again { gap:26px; padding-top:18px; }
-.action { gap:10px; border-width:3px; border-color:#ffffff; border-radius:9px; padding:10px; width:250px; height:56px; justify-content:center; }
+#again { gap:20px; padding-top:18px; }
+.action { gap:10px; border-width:3px; border-color:#ffffff; border-radius:9px; padding:10px; width:236px; height:56px; justify-content:center; }
 .actionlabel { font-size:18px; color:#ffffff; }
 
 .screen { position:absolute; left:0px; top:0px; width:100%; height:100%; }
@@ -83,7 +87,7 @@ button:hover { color:#ff5a24; }
 button:focus { color:#ff5a24; }
 button:active { color:#ffd2bf; }
 #quit { font-size:30px; color:#dbe8ff; }
-#win-leave { font-size:18px; width:250px; height:56px; border-width:3px; border-color:#ffffff; border-radius:9px; padding:10px; padding-left:82px; }
+#win-leave { font-size:18px; width:236px; height:56px; border-width:3px; border-color:#ffffff; border-radius:9px; padding:10px; padding-left:75px; }
 
 #lobby-content { position:absolute; left:84px; top:92px; gap:8px; }
 #lobby-eyebrow { font-size:22px; color:#ff6a3a; }

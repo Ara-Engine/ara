@@ -215,6 +215,8 @@ public sealed partial class GlintRun : Behaviour
                 Finished = true;
                 FinishTick = tick.Frame;
                 Feedback().FinishTick = tick.Frame;
+                Feedback().Finished = true;
+                control.Done = true;
                 BestTicks = BestTicks == 0 ? Ticks : Math.Min(BestTicks, Ticks);
                 Medal = Ticks <= GoldTicks ? 3 : Ticks <= SilverTicks ? 2 : Ticks <= BronzeTicks ? 1 : 0;
                 IsGold = Medal == 3;
@@ -248,6 +250,7 @@ public sealed partial class GlintRun : Behaviour
     {
         State = 0;
         Finished = false;
+        Feedback().Finished = false;
         IsGold = IsSilver = IsBronze = false;
         Medal = 0;
         Ticks = 0;
@@ -255,6 +258,7 @@ public sealed partial class GlintRun : Behaviour
         Split1 = Split2 = Split3 = 0;
         ref var control = ref World.Get<Ball>(ball);
         control.Checkpoint = 0;
+        control.Done = false;
         control.Falls = 0;
         control.Held = false;
         control.Flying = false;

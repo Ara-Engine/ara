@@ -203,7 +203,7 @@ def main():
         jump = marks.get("jump", 0)
         for name, at in (("descent", jump + 330), ("kicker", jump + 425), ("split", jump + 745), ("beam", jump + 900), ("turn", jump + 1170),
                          ("sliders", marks.get("board", 0) + 40), ("bars", marks.get("leave", 0) + 130),
-                         ("cannon", marks.get("fire", 0) + 40), ("flight", marks.get("fire", 0) + 150), ("goal", finish + 30)):
+                         ("cannon", marks.get("fire", 0) + 40), ("flight", marks.get("fire", 0) + 150), ("goal", finish + 170)):
             captures.append({"tick": at, "name": name})
         json.dump({"format": "glint-replay/2", "scene": route["scene"], "seed": 7, "chunk": CHUNK, "endTick": tick,
                    "events": events, "captures": captures}, open(args.out, "w"), indent=1)

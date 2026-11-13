@@ -912,21 +912,21 @@ pub fn goal(root: &Path, lock: &Lock) -> Result<String> {
     k.write(root, lock, "glint_goal")
 }
 
-/// A cloud bank: one smooth lump about 60 m across and 22 m tall, flat underneath, its top
-/// rolling in a few broad billows (`seed` moves them, so the banks differ). One closed surface
-/// with its own normals: no facets and no creases where billows meet.
+/// A cloud bank: one smooth swell about 60 m across and 19 m tall, flat underneath, its top
+/// rising in two or three broad billows (`seed` moves them, so the banks differ). One closed
+/// surface with its own normals: no facets and no creases. Finely meshed, because the scene
+/// scales it several times over and a low sun on coarse triangles sparkles.
 pub fn cloud(root: &Path, lock: &Lock, seed: u32) -> Result<String> {
     let mut k = Kit::new(vec![Material::flat("cloud", [0.95, 0.95, 0.95], 1.0, 0.0)]);
     let s = seed as f32 * 1.7;
-    k.blob(0, Vec3::ZERO, 44, |d| {
-        let billow = 0.2 * (3.0 * d.x + s).sin() * (2.6 * d.z + 0.4 * s).sin()
-            + 0.13 * (5.2 * d.x + 2.0 * d.z + 1.3 * s).sin()
-            + 0.09 * (7.0 * d.z - 3.0 * d.x + 0.7 * s).cos()
-            + 0.05 * (11.0 * d.x + 0.3 * s).sin() * (9.0 * d.z + s).cos();
+    k.blob(0, Vec3::ZERO, 80, |d| {
+        // Low frequencies only: anything finer reads as lumps from across the course.
+        let billow = 0.22 * (2.2 * d.x + s).sin() * (1.9 * d.z + 0.4 * s).sin()
+            + 0.11 * (3.4 * d.x + 1.6 * d.z + 1.3 * s).sin();
         // Billows only on top; the underside is a shallow, smooth dish.
         let top = d.y.max(0.0);
         let radius = 30.0 * (1.0 + billow * (0.35 + 0.65 * top));
-        let height = if d.y >= 0.0 { 0.62 } else { 0.18 };
+        let height = if d.y >= 0.0 { 0.55 } else { 0.14 };
         Vec3::new(d.x * radius, d.y * radius * height, d.z * radius)
     });
     k.write(root, lock, &format!("glint_cloud{seed}"))

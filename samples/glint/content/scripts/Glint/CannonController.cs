@@ -61,12 +61,9 @@ public sealed partial class CannonController : Behaviour
                 }
                 break;
             case 2:
-                // In flight until the ball is back on a surface. The shot follows the solved arc
-                // exactly: the velocity is set from the time since firing, so the physics
-                // engine's own damping (not exposed to scenes) cannot shorten it.
-                if (control.Grounded) { cannon.State = 0; break; }
-                var time = (tick.Frame - cannon.FireTick) * tick.Dt;
-                World.Get<Velocity>(ball).Linear = cannon.Launch - new Vector3(0, Course.Gravity * time, 0);
+                // In flight until the ball is back on a surface. The ball has no damping, so
+                // physics alone carries it along the solved arc.
+                if (control.Grounded) cannon.State = 0;
                 break;
         }
     }

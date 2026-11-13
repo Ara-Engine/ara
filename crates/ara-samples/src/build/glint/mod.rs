@@ -386,13 +386,13 @@ fn art(s: &mut Scene, c: &Course, play: bool) {
         Vec3::ONE,
         LIT_SET,
     );
-    // The cloud deck: banks spread on a spiral around the course, flattened, each a little
-    // different; a few high, thin ones far off.
-    let banks = 96u32;
+    // The cloud deck: a few dozen very wide banks spread on a spiral around the course, each
+    // a little different, with the haze showing between them; a few high ones far off.
+    let banks = 58u32;
     for i in 0..banks {
-        let radius = 760.0 * ((i as f32 + 0.5) / banks as f32).sqrt();
+        let radius = 800.0 * ((i as f32 + 0.5) / banks as f32).sqrt();
         let angle = i as f32 * 2.399_963;
-        let size = 1.7 + scatter(i, 1) * 2.0;
+        let size = 2.9 + scatter(i, 1) * 2.6;
         let at = centre + Vec3::new(angle.cos() * radius, 0.0, angle.sin() * radius);
         decor(
             s,
@@ -404,7 +404,7 @@ fn art(s: &mut Scene, c: &Course, play: bool) {
             // Wide and low: the tops stay within about 20 m of the deck's level.
             Vec3::new(
                 size,
-                0.6 + scatter(i, 4) * 0.6,
+                1.0 + scatter(i, 4) * 0.8,
                 size * (0.8 + scatter(i, 5) * 0.5),
             ),
             0.0,
@@ -422,7 +422,7 @@ fn art(s: &mut Scene, c: &Course, play: bool) {
     let mut high = 0;
     for i in 0..24u32 {
         let angle = i as f32 * 0.628 + 0.3;
-        let radius = 620.0 + scatter(i, 6) * 420.0;
+        let radius = 780.0 + scatter(i, 6) * 360.0;
         let size = 1.6 + scatter(i, 7) * 1.8;
         let at = centre
             + Vec3::new(
@@ -430,7 +430,7 @@ fn art(s: &mut Scene, c: &Course, play: bool) {
                 70.0 + scatter(i, 8) * 120.0,
                 angle.sin() * radius,
             );
-        if high >= 10 || shades(at, 50.0 * size) {
+        if high >= 4 || shades(at, 70.0 * size) {
             continue;
         }
         decor(
@@ -440,7 +440,7 @@ fn art(s: &mut Scene, c: &Course, play: bool) {
             ["glint_cloud0", "glint_cloud1", "glint_cloud2"][i as usize % 3],
             at,
             [0.0, scatter(i, 9) * 360.0, 0.0],
-            Vec3::new(size * 1.2, size * 0.8, size),
+            Vec3::new(size * 1.7, size * 1.1, size * 1.3),
             0.0,
         );
         high += 1;
@@ -626,7 +626,8 @@ fn game(ctx: &Ctx, c: &Course) -> Result<()> {
         json!({
             "Transform": {"position": c.start.to_array()},
             "MeshRenderer": ball_look(),
-            "RigidBody": {"motion": "dynamic", "continuous": true, "allowSleep": false},
+            // No damping: a jump and the cannon's shot follow their ballistic arcs.
+            "RigidBody": {"motion": "dynamic", "continuous": true, "allowSleep": false, "linearDamping": 0.0},
             "Collider": {"kind": "sphere", "radius": 0.5, "friction": 0.8},
             "PlayerControl": {"camera": "e_camera"},
             "Ball": {"spawn": c.start.to_array()},

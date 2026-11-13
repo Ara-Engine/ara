@@ -64,8 +64,8 @@ public sealed partial class BallController : Behaviour
         var yaw = camera.IsNull ? 0f : World.Read<FollowCamera>(camera).Yaw * (MathF.PI / 180f);
         var forward = new Vector3(MathF.Sin(yaw), 0, MathF.Cos(yaw));
         var right = new Vector3(-MathF.Cos(yaw), 0, MathF.Sin(yaw));
-        // No steering during the cannon's shot: the arc is the cannon's.
-        var wish = ball.Flying ? Vector3.Zero : forward * stick.Y + right * stick.X;
+        // No steering during the cannon's shot (the arc is the cannon's) or after the goal.
+        var wish = ball.Flying || ball.Done ? Vector3.Zero : forward * stick.Y + right * stick.X;
         if (wish.LengthSquared() > 1f) wish = Vector3.Normalize(wish);
 
         // What the ball rests on may be moving: a kinematic body's Velocity is how fast physics
@@ -87,13 +87,14 @@ public sealed partial class BallController : Behaviour
         }
         else if (grounded)
         {
-            var slow = Resistance * step;
+            // A finished ball brakes three times as hard: it stops on the goal plaza.
+            var slow = Resistance * (ball.Done ? 3f : 1f) * step;
             along = along.Length() > slow ? along - Vector3.Normalize(along) * slow : Vector3.Zero;
         }
         var velocity = along + across + carry;
 
         var jump = Input.Button(ball.Player, "Jump");
-        if (jump && !ball.JumpHeld && ball.CoyoteTicks > 0)
+        if (jump && !ball.JumpHeld && ball.CoyoteTicks > 0 && !ball.Done)
         {
             velocity.Y = JumpSpeed;
             ball.CoyoteTicks = 0;

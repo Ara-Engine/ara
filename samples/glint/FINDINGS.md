@@ -54,9 +54,10 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
 4. **Free flight is damped and a scene cannot say otherwise.** *Wanted:* a cannon shot that
    lands where the ballistic solution says. *Happened:* the ball lost about 5 percent of its
    horizontal speed a second and landed 10 m short of a 97 m shot; `RigidBody` has no damping
-   field. *Workaround:* the cannon sets the velocity from the time since firing each tick.
-   *Smallest change:* `RigidBody.linearDamping` and `angularDamping`, defaulting to what the
-   physics engine uses now. **Engine PR: #155.**
+   field. *Workaround, now removed:* the cannon set the velocity from the time since firing
+   each tick. *Smallest change:* `RigidBody.linearDamping` and `angularDamping`, defaulting to
+   what the physics engine uses now. **Engine PR: #155, merged.** The ball is authored with
+   `linearDamping` 0 and the shot flies on physics alone; the replay finishes at the same tick.
 5. **`castShadows: false` does not stop a mesh shading the scene on the traced path.**
    *Wanted:* a sun disc (the sky draws none): a lit sphere far along the sun's direction.
    *Happened:* the 52 m sphere put a 300 m long ellipse of the course in shadow, with

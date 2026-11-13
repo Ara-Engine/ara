@@ -35,7 +35,8 @@ release build) the build, `fetch`, `kits` and the headless replay were run by th
 thread and the replay passes; on the Mac the same with debug binaries. The windowed player was
 not opened on the Mac (a shared machine).
 
-Controls: WASD roll, Space jump, E back to the last checkpoint (after the goal: roll again),
+Controls: WASD roll, Space jump, E back to the last checkpoint (after the goal: roll again; the
+finished ball takes no steering and brakes to rest while the camera rises over the course),
 Esc pauses. The camera follows the route by itself, so forward on the stick always means
 "along the course".
 
@@ -134,17 +135,17 @@ What could break it:
 
 ## Cost (M5 Pro, 1280 x 720, Renderlab traced path; the Mac loaded by other work)
 
-Binaries built from Ara main `5addb1cd2` (pipelined present on). Each view captured three
-times, interleaved with the others; the three runs agree within 0.3 ms and the median is
+Binaries built from Ara main `ef734a9fb` (pipelined present on). Each view captured three
+times, interleaved with the others; two of the three runs agree within 0.1 ms (one run of the start view and one of the turn read 44 to 46 ms: the first capture after the build, and a 24 ms indirect-cache spike) and the median is
 given. The Mac GPU thread measures the branch head separately.
 
 | View | GPU ms | Shading | Indirect cache | Before the glass bridge, studs and chrome |
 |---|---|---|---|---|
-| Start (follow camera) | 24.6 | 15.6 | 1.7 | 24.0 |
-| Glass bridge | 28.5 | 19.2 | 1.7 | (new view) |
-| Turn | 21.3 | 14.0 | 1.7 | 20.8 |
-| Cannon | 17.6 | 10.7 | 1.5 | 16.6 |
-| Goal | 19.2 | 12.2 | 1.5 | 18.4 |
+| Start (follow camera) | 25.1 | 16.1 | 1.7 | 24.0 |
+| Glass bridge | 28.4 | 19.0 | 1.7 | (new view) |
+| Turn | 21.7 | 14.4 | 1.7 | 20.8 |
+| Cannon | 17.2 | 10.3 | 1.5 | 16.6 |
+| Goal | 18.5 | 11.4 | 1.5 | 18.4 |
 
 The last column is one run each on the main before (`5b1f8807b`), so the differences of 0.5 to
 1.0 ms are at the edge of what one run shows; the view that looks down through the glass
@@ -163,7 +164,9 @@ What moved it, round by round (same views, same binary):
   17 to 26 ms.
 - Renderlab 360a0179 (weak glossy reflectors trace fewer rays): 16 to 24 ms.
 - A glass bridge the ball lands on, lit studs on every kerb, a chrome cannon barrel and a mirror
-  casing on the goal portal: the table above.
+  casing on the goal portal: 18 to 29 ms.
+- 58 wide cloud banks of 25,600 triangles each instead of 96 of 7,700, and pylons that taper
+  out toward the cloud: the table above, within 0.7 ms of the round before in every view.
 
 Glossy surface on screen is small by design (the inlay, the pad discs, the ball, the goal's
 floor); the start view has the most, a 6 m polished disc under the camera, and it is the

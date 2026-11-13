@@ -125,6 +125,9 @@ public partial struct Ball
     [Replicate] public bool Held;
     /// <summary>In the air after a shot: the controller steers it only a little.</summary>
     [Replicate] public bool Flying;
+    /// <summary>The run is finished: no steering or jumping, and the ball brakes to rest, so
+    /// nothing after the goal can change the result.</summary>
+    [Replicate] public bool Done;
     /// <summary>Ticks left in which a jump still counts after rolling off an edge.</summary>
     public int CoyoteTicks;
     /// <summary>Jump button on the previous tick, for press detection and replay.</summary>
@@ -154,4 +157,6 @@ public partial struct RunFeedback
     [Replicate] public ulong FallTick;
     /// <summary>Tick the run finished.</summary>
     [Replicate] public ulong FinishTick;
+    /// <summary>The run is finished and not yet restarted: the camera shows the results view.</summary>
+    [Replicate] public bool Finished;
 }
