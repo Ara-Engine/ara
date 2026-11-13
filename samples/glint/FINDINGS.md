@@ -232,6 +232,30 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
     opacity or animation in the UI subset (item 7) they switch off instead: shown until the
     first input of the session, and again only after seven idle seconds in a run.
 
+33. **The pylons cast no shadow on the clouds; the decks do.** Asked by the Unreal
+    side-by-sides, where hardware Lumen draws the bridge lattice's shadow on the right-hand
+    cloud at the start and pylon shadows across the clouds at the goal, and Ara shows almost
+    none. *What the scene asks for:* every course piece, pylon, ring and cloud bank casts and
+    receives. Nothing in Glint turns either off except the sun's disc and the ball's trail
+    (`castShadows: false`, which the traced path ignores anyway: item 5); no component has a
+    shadow distance; the sun is one directional light of 95,000 lux, 0.54 degrees across, 20
+    degrees up, so a deck 45 m over a cloud top throws its shadow about 120 m along the cloud.
+    *What Renderlab draws* (M5, traced path, main `9a6541060`, Renderlab 99f5d395): with the
+    course model moved 3 km up, its shadow leaves the cloud (the launch deck's grey
+    parallelogram in the overview); with the pylons model moved 3 km down, nothing on any
+    cloud changes except a faint soft darkening round where they stood, in the start, goal and
+    overview stills. So the decks' shadows reach the clouds and the pylons', which stand in
+    the clouds and should stripe them for 120 m each, do not. The sheets are
+    [`cloud_shadows_over.jpg`](preview/defects/cloud_shadows_over.jpg),
+    [`cloud_shadows_start.jpg`](preview/defects/cloud_shadows_start.jpg) and
+    [`cloud_shadows_goal.jpg`](preview/defects/cloud_shadows_goal.jpg): the still, the still
+    without pylons, the still without the course, and under the last two their difference
+    from the first, six times amplified. The height fog is not the cause: with its density
+    at zero the clouds gain contrast and still carry no pylon shadows. *Not isolated:* why.
+    The pylons are one model of tapered columns 220 m tall whose bounds cover the whole
+    course; the decks are boxes in another model. The ring and rail shadows the Unreal still
+    shows were not tested separately. A renderer finding; nothing in the level is changed.
+
 ## Where the engine was bypassed
 
 - **Geometry** is written as glTF by the sample builder's `Kit` (boxes, cylinders, spheres),
