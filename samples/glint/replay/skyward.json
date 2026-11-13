@@ -3,7 +3,7 @@
   "scene": "levels/glint.scene",
   "seed": 7,
   "chunk": 4,
-  "endTick": 3180,
+  "endTick": 3184,
   "events": [
     {
       "tick": 4,
@@ -2744,109 +2744,109 @@
     {
       "tick": 1824,
       "action": "Move",
-      "value": [0, 0.581],
+      "value": [0, 0.594],
       "hold": 4
     },
     {
       "tick": 1828,
       "action": "Move",
-      "value": [0, 0.218],
+      "value": [0, 0.242],
       "hold": 4
     },
     {
       "tick": 1832,
       "action": "Move",
-      "value": [0, -0.049],
+      "value": [0, -0.014],
       "hold": 4
     },
     {
       "tick": 1836,
       "action": "Move",
-      "value": [0, -0.219],
+      "value": [0, -0.177],
       "hold": 4
     },
     {
       "tick": 1840,
       "action": "Move",
-      "value": [0, -0.291],
+      "value": [0, -0.25],
       "hold": 4
     },
     {
       "tick": 1844,
       "action": "Move",
-      "value": [0, -0.266],
+      "value": [0, -0.233],
       "hold": 4
     },
     {
       "tick": 1848,
       "action": "Move",
-      "value": [0, -0.163],
+      "value": [0, -0.141],
       "hold": 4
     },
     {
       "tick": 1852,
       "action": "Move",
-      "value": [0, -0.085],
+      "value": [0, -0.072],
       "hold": 4
     },
     {
       "tick": 1856,
       "action": "Move",
-      "value": [0, -0.045],
+      "value": [0, -0.036],
       "hold": 4
     },
     {
       "tick": 1860,
       "action": "Move",
-      "value": [0, -0.027],
+      "value": [0, -0.018],
       "hold": 4
     },
     {
       "tick": 1864,
       "action": "Move",
-      "value": [0, -0.016],
+      "value": [0, -0.009],
       "hold": 4
     },
     {
       "tick": 1868,
       "action": "Move",
-      "value": [0, -0.01],
+      "value": [0, -0.003],
       "hold": 4
     },
     {
       "tick": 1872,
       "action": "Move",
-      "value": [0, -0.007],
+      "value": [0, 0],
       "hold": 4
     },
     {
       "tick": 1876,
       "action": "Move",
-      "value": [0, -0.004],
+      "value": [0, 0.001],
       "hold": 4
     },
     {
       "tick": 1880,
       "action": "Move",
-      "value": [0, -0.003],
+      "value": [0, 0.002],
       "hold": 4
     },
     {
       "tick": 1884,
       "action": "Move",
-      "value": [0, -0.002],
+      "value": [0, 0.002],
       "hold": 4
     },
     {
       "tick": 1888,
       "action": "Move",
-      "value": [0, -0.001],
+      "value": [0, 0.002],
       "hold": 4
     },
     {
       "tick": 1892,
       "action": "Move",
-      "value": [0, 0],
+      "value": [0, 0.001],
       "hold": 4
     },
     {
@@ -2864,55 +2864,55 @@
     {
       "tick": 1904,
       "action": "Move",
-      "value": [0, 0.001],
+      "value": [0, -0.001],
       "hold": 4
     },
     {
       "tick": 1908,
       "action": "Move",
-      "value": [0, 0.001],
+      "value": [0, -0.002],
       "hold": 4
     },
     {
       "tick": 1912,
       "action": "Move",
-      "value": [0, 0.002],
+      "value": [0, -0.002],
       "hold": 4
     },
     {
       "tick": 1916,
       "action": "Move",
-      "value": [0, 0.002],
+      "value": [0, -0.003],
       "hold": 4
     },
     {
       "tick": 1920,
       "action": "Move",
-      "value": [0, 0.002],
+      "value": [0, -0.004],
       "hold": 4
     },
     {
       "tick": 1924,
       "action": "Move",
-      "value": [0, 0.003],
+      "value": [0, -0.004],
       "hold": 4
     },
     {
       "tick": 1928,
       "action": "Move",
-      "value": [0, 0.003],
+      "value": [0, -0.005],
       "hold": 4
     },
     {
       "tick": 1932,
       "action": "Move",
-      "value": [0, 0.003],
+      "value": [0, -0.005],
       "hold": 4
     },
     {
       "tick": 1936,
       "action": "Move",
-      "value": [0, 0.003],
+      "value": [0, -0.006],
       "hold": 4
     },
     {
@@ -2972,139 +2972,139 @@
     {
       "tick": 1976,
       "action": "Move",
-      "value": [0, 0.271],
+      "value": [0, 0.353],
       "hold": 4
     },
     {
       "tick": 1980,
       "action": "Move",
-      "value": [0, -0.093],
+      "value": [0, -0.005],
       "hold": 4
     },
     {
       "tick": 1984,
       "action": "Move",
-      "value": [0, -0.363],
+      "value": [0, -0.27],
       "hold": 4
     },
     {
       "tick": 1988,
       "action": "Move",
-      "value": [0, -0.54],
+      "value": [0, -0.447],
       "hold": 4
     },
     {
       "tick": 1992,
       "action": "Move",
-      "value": [0, -0.622],
+      "value": [0, -0.536],
       "hold": 4
     },
     {
       "tick": 1996,
       "action": "Move",
-      "value": [0, -0.613],
+      "value": [0, -0.538],
       "hold": 4
     },
     {
       "tick": 2000,
       "action": "Move",
-      "value": [0, -0.513],
+      "value": [0, -0.455],
       "hold": 4
     },
     {
       "tick": 2004,
       "action": "Move",
-      "value": [0, -0.326],
+      "value": [0, -0.288],
       "hold": 4
     },
     {
       "tick": 2008,
       "action": "Move",
-      "value": [0, -0.153],
+      "value": [0, -0.139],
       "hold": 4
     },
     {
       "tick": 2012,
       "action": "Move",
-      "value": [0, -0.049],
+      "value": [0, -0.059],
       "hold": 4
     },
     {
       "tick": 2016,
       "action": "Move",
-      "value": [0, -0.011],
+      "value": [0, -0.029],
       "hold": 4
     },
     {
       "tick": 2020,
       "action": "Move",
-      "value": [0, -0.007],
+      "value": [0, -0.016],
       "hold": 4
     },
     {
       "tick": 2024,
       "action": "Move",
-      "value": [0, -0.004],
+      "value": [0, -0.009],
       "hold": 4
     },
     {
       "tick": 2028,
       "action": "Move",
-      "value": [0, -0.002],
+      "value": [0, -0.005],
       "hold": 4
     },
     {
       "tick": 2032,
       "action": "Move",
-      "value": [0, -0.001],
+      "value": [0, -0.003],
       "hold": 4
     },
     {
       "tick": 2036,
       "action": "Move",
-      "value": [0, 0],
+      "value": [0, -0.002],
       "hold": 4
     },
     {
       "tick": 2040,
       "action": "Move",
-      "value": [0, 0.001],
+      "value": [0, -0.002],
       "hold": 4
     },
     {
       "tick": 2044,
       "action": "Move",
-      "value": [0, 0.001],
+      "value": [0, -0.003],
       "hold": 4
     },
     {
       "tick": 2048,
       "action": "Move",
-      "value": [0, 0.001],
+      "value": [0, -0.003],
       "hold": 4
     },
     {
       "tick": 2052,
       "action": "Move",
-      "value": [0, 0.002],
+      "value": [0, -0.003],
       "hold": 4
     },
     {
       "tick": 2056,
       "action": "Move",
-      "value": [0, 0.002],
+      "value": [0, -0.004],
       "hold": 4
     },
     {
       "tick": 2060,
       "action": "Move",
-      "value": [0, 0.003],
+      "value": [0, -0.005],
       "hold": 4
     },
     {
       "tick": 2064,
       "action": "Move",
-      "value": [0, 0.003],
+      "value": [0, -0.005],
       "hold": 4
     },
     {
@@ -4036,6 +4036,12 @@
       "action": "Move",
       "value": [0, 0.7],
       "hold": 4
+    },
+    {
+      "tick": 2676,
+      "action": "Move",
+      "value": [0, 0.7],
+      "hold": 4
     }
   ],
   "captures": [
@@ -4072,22 +4078,22 @@
       "name": "bars"
     },
     {
-      "tick": 2796,
+      "tick": 2800,
       "name": "cannon"
     },
     {
-      "tick": 2906,
+      "tick": 2910,
       "name": "flight"
     },
     {
-      "tick": 3030,
+      "tick": 3034,
       "name": "goal"
     }
   ],
   "expect": {
-    "finishTicks": 2996,
+    "finishTicks": 2998,
     "falls": 0,
-    "hash": "3aa4a5cf945102886604be2d583a7ad6eb232fa58d7e783b78e163e1a2a95c52",
+    "hash": "cd1fa184f8a400512bb40dad598f925f324d74b95482f6e00d4bf6ff93e5c2ba",
     "platform": "macos-aarch64"
   }
 }

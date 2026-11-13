@@ -68,7 +68,9 @@ public sealed partial class BallController : Behaviour
         var wish = ball.Flying ? Vector3.Zero : forward * stick.Y + right * stick.X;
         if (wish.LengthSquared() > 1f) wish = Vector3.Normalize(wish);
 
-        var carry = grounded && World.Has<Mover>(under) ? Course.MoverVelocity(under, in tick) : Vector3.Zero;
+        // What the ball rests on may be moving: a kinematic body's Velocity is how fast physics
+        // moved it last tick, so steering is relative to that and the ball rides along.
+        var carry = grounded && World.Has<Velocity>(under) ? World.Read<Velocity>(under).Linear : Vector3.Zero;
         var up = grounded ? normal : Vector3.UnitY;
         var relative = body.Linear - carry;
         var across = up * Vector3.Dot(relative, up);

@@ -81,17 +81,6 @@ public static class Course
         return found;
     }
 
-    /// <summary>The velocity of a <see cref="Mover"/> platform this tick, m/s. The physics engine
-    /// does not carry a ball on a platform that scripts move by writing its transform.</summary>
-    public static Vector3 MoverVelocity(Entity entity, in Tick tick)
-    {
-        var mover = World.Read<Mover>(entity);
-        if (mover.PeriodTicks <= 0) return Vector3.Zero;
-        var phase = (tick.Frame + (ulong)Math.Max(0, mover.PhaseTicks)) % (ulong)mover.PeriodTicks;
-        var omega = MathF.Tau / mover.PeriodTicks;
-        return mover.Travel * (MathF.Cos(phase * omega) * omega / tick.Dt);
-    }
-
     /// <summary>Places a physics body at a point and stops it.</summary>
     public static void Teleport(Entity entity, Vector3 point)
     {

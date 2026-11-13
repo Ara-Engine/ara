@@ -17,7 +17,9 @@ public static partial class Movers
     [Query(Order = 0)]
     static void Spin(in Spinner spinner, ref Transform transform, in Tick tick)
     {
-        transform.Rotation.Y = spinner.StartYaw + spinner.DegreesPerSecond * (float)tick.Elapsed;
+        // The whole rotation, not only its Y: physics writes a kinematic body's pose back as
+        // Euler angles, and past 90 degrees of yaw those come back as (180, 180 - yaw, 180).
+        transform.Rotation = new Vector3(0, spinner.StartYaw + spinner.DegreesPerSecond * (float)tick.Elapsed, 0);
     }
 
     /// <summary>Bobs each pickup about its home, each a little out of step with the next.</summary>
