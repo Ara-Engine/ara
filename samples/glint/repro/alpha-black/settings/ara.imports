@@ -1,0 +1,7 @@
+{
+  "$schema": "ara://schema/imports/1",
+  "id": "ip_project",
+  "records": {
+    "pi_settings": {}
+  }
+}

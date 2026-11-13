@@ -276,6 +276,115 @@ impl Kit {
         }
     }
 
+    /// A closed, smooth lump: a UV sphere whose surface point along each unit direction is
+    /// `shape(direction)` (clouds, boulders). Normals come from the surface itself, so shading
+    /// stays smooth however the lump bulges. `rings` sets the tessellation.
+    pub fn blob(
+        &mut self,
+        material: usize,
+        center: Vec3,
+        rings: u32,
+        shape: impl Fn(Vec3) -> Vec3,
+    ) {
+        let mesh = &mut self.meshes[material];
+        let segments = rings * 2;
+        let row = segments + 1;
+        let direction = |r: u32, s: u32| {
+            let theta = r as f32 / rings as f32 * std::f32::consts::PI;
+            let phi = (s % segments) as f32 / segments as f32 * std::f32::consts::TAU;
+            match r {
+                0 => Vec3::Y,
+                r if r == rings => Vec3::NEG_Y,
+                _ => Vec3::new(
+                    theta.sin() * phi.cos(),
+                    theta.cos(),
+                    -theta.sin() * phi.sin(),
+                ),
+            }
+        };
+        let base = mesh.positions.len() as u32;
+        for r in 0..=rings {
+            for s in 0..=segments {
+                let d = direction(r, s);
+                // The normal is the cross product of the surface's two tangents, taken across
+                // the neighbouring samples (around the seam and over the poles alike).
+                let around = shape(direction(r, s + 1)) - shape(direction(r, s + segments - 1));
+                let down = shape(direction((r + 1).min(rings), s))
+                    - shape(direction(r.saturating_sub(1), s));
+                let n = down.cross(around).normalize_or(d);
+                mesh.positions.push(center + shape(d));
+                mesh.normals.push(if n.dot(d) < 0.0 { -n } else { n });
+                mesh.uvs.push(Vec2::new(
+                    s as f32 / segments as f32,
+                    r as f32 / rings as f32,
+                ));
+            }
+        }
+        for r in 0..rings {
+            for s in 0..segments {
+                let a = base + r * row + s;
+                let b = a + row;
+                mesh.indices.extend([a, b, a + 1, a + 1, b, b + 1]);
+            }
+        }
+    }
+
+    /// A tapered column (axis +Y from its base): `bottom` and `top` radii, smooth sides, caps.
+    pub fn frustum(
+        &mut self,
+        material: usize,
+        bottom: f32,
+        top: f32,
+        height: f32,
+        segments: u32,
+        transform: Mat4,
+    ) {
+        let normal = Mat3::from_mat4(transform).inverse().transpose();
+        let mesh = &mut self.meshes[material];
+        let dir = |i: u32| {
+            let a = i as f32 / segments as f32 * std::f32::consts::TAU;
+            Vec3::new(a.cos(), 0.0, -a.sin())
+        };
+        // The side's normal leans up by the taper.
+        let lean = (bottom - top) / height;
+        for i in 0..segments {
+            let (d0, d1) = (dir(i), dir(i + 1));
+            let base = mesh.positions.len() as u32;
+            for (d, radius, y) in [
+                (d0, bottom, 0.0),
+                (d1, bottom, 0.0),
+                (d1, top, height),
+                (d0, top, height),
+            ] {
+                mesh.positions
+                    .push(transform.transform_point3(d * radius + Vec3::Y * y));
+                mesh.normals
+                    .push((normal * (d + Vec3::Y * lean)).normalize());
+                mesh.uvs
+                    .push(Vec2::new(i as f32 / segments as f32, y / height));
+            }
+            mesh.indices
+                .extend([base, base + 1, base + 2, base, base + 2, base + 3]);
+            for (y, radius, n) in [(height, top, Vec3::Y), (0.0, bottom, -Vec3::Y)] {
+                let base = mesh.positions.len() as u32;
+                for p in [
+                    Vec3::Y * y,
+                    d0 * radius + Vec3::Y * y,
+                    d1 * radius + Vec3::Y * y,
+                ] {
+                    mesh.positions.push(transform.transform_point3(p));
+                    mesh.normals.push((normal * n).normalize());
+                    mesh.uvs.push(Vec2::new(p.x, p.z));
+                }
+                if n.y > 0.0 {
+                    mesh.indices.extend([base, base + 1, base + 2]);
+                } else {
+                    mesh.indices.extend([base, base + 2, base + 1]);
+                }
+            }
+        }
+    }
+
     /// A flat, irregular disc (puddles) at height `y`, facing +Y; `seed` shapes it.
     pub fn disc(&mut self, material: usize, radius: f32, seed: u32, y: f32) {
         let mesh = &mut self.meshes[material];
