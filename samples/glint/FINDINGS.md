@@ -334,3 +334,37 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
   floor. *For the renderer:* a hard step in cost at one roughness, with no visible step in
   the picture, is easy to fall off without knowing; the untraced path pays more for the same
   surfaces (not measurable on the Mac).
+- **The rule, and two more things that were on the wrong side of it.** As the renderer threads
+  state it for Renderlab 614b15da: a surface under roughness 0.05 is a mirror traced with one
+  ray; from 0.05 up to 0.5 it is a glossy lobe whose ray count rises with roughness (about 4
+  at 0.05, 10 at 0.2) and is thinned by reflectance; at 0.5 and above nothing is traced. (A
+  fade between 0.35 and 0.5 and a lower slope are being tried.) Against that rule, on the M5
+  (traced path, 720p, 60 held frames, GPU / shading ms; base twice, within 0.1):
+
+  | | Goal | Start | Descent | Kicker | Spinner deck |
+  |---|---|---|---|---|---|
+  | Base | 30.6 / 21.8 | 23.6 / 14.5 | 20.1 / 12.0 | 21.7 / 13.8 | 18.6 / 10.9 |
+  | Goal floor 0.05 to 0.04 (three runs) | 30.4 / 21.6 | 23.6 / 14.5 | 20.1 / 12.0 | 21.8 / 14.0 | 18.7 / 11.0 |
+  | Polished navy stone 0.06 to 0.04 (two runs) | 30.6 / 21.8 | 23.5 / 14.4 | 20.0 / 11.9 | 21.7 / 13.8 | 18.6 / 11.0 |
+  | Chrome 0.06 to 0.04 | 29.7 / 20.9 | 22.9 / 13.8 | 19.9 / 11.8 | 20.9 / 13.0 | 18.6 / 10.9 |
+  | Every emitter 0.4 to 0.6 (two runs) | 27.3 / 18.5 | 22.2 / 13.1 | 19.0 / 10.9 | 19.8 / 11.9 | 17.9 / 10.3 |
+  | Emitters and chrome (shipped, three runs) | 26.3 / 17.6 | 21.5 / 12.4 | 18.8 / 10.7 | 19.0 / 11.1 | 17.8 / 10.1 |
+
+  - **Emitters.** The sample builder's emissive material (`Material::emitter` in
+    `crates/ara-samples/src/kit.rs`) is written at roughness 0.4, so every lit strip,
+    chevron, stud, band and beacon was also traced as a glossy reflector, under its own
+    light where no reflection can be seen. That was the "lit surfaces cost 4.5 ms at the goal"
+    of the earlier table: not the light, the gloss. Glint's emitters are now written at 0.6:
+    3.3 ms back at the goal and 0.7 to 1.9 on every other view, with no visible change. The
+    builder's default is unchanged because Outpost, Showcase and Atelier use it and were not
+    re-shot here; it costs them the same.
+  - **Chrome** (posts, hoops, the bridge frame, the portal casing, the cannon barrel) was at
+    0.06, a lobe of several rays. At 0.04 it is a one-ray mirror: 0.7 to 0.9 ms back where
+    chrome is on screen. At 1:1 the portal casing's reflection is a little crisper
+    (`preview/r10/crop_goal_floor.jpg`); elsewhere I cannot see a difference.
+  - **The mirror floor and the polished discs do not follow the prediction on the M5.** One
+    ray instead of four should have returned about a millisecond on the goal's floor; it
+    returned 0.2 at most, and the polished stone nothing. Both also look harder at 0.04 (the
+    reflected edges lose their slight blur: the `decide_*` crops in `preview/r10/`), so they
+    are left at 0.05 and 0.06. Worth one RTX run before deciding: if it does return a
+    millisecond there, the pair is the trade.
