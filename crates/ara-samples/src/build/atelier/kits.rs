@@ -63,6 +63,8 @@ pub fn shell(root: &Path, lock: &Lock) -> Result<String> {
     const GROUND: usize = 6;
     const SAND: usize = 7;
     const JOINT: usize = 8;
+    const BOUNDARY: usize = 9;
+    const MAST: usize = 10;
     let mut k = Kit::new(vec![
         // Mid-grey polished concrete in large tiles, darker than the walls so the sun patches
         // keep their shape instead of clipping; the joints are thin dark strips.
@@ -75,6 +77,11 @@ pub fn shell(root: &Path, lock: &Lock) -> Result<String> {
         Material::flat("dark gravel", [0.2, 0.19, 0.18], 0.95, 0.0),
         Material::flat("charcoal render", [0.065, 0.062, 0.06], 0.9, 0.0),
         Material::flat("floor joint", [0.05, 0.05, 0.05], 0.8, 0.0),
+        // Very dark for the same reason as the render: the exposure is the room's, about
+        // five stops under the sun out here, so a paler wall clips and a shadow on it
+        // cannot be read. A deep rust, the planters' colour at half its value.
+        Material::flat("boundary wall", [0.06, 0.025, 0.014], 0.9, 0.0),
+        Material::flat("mast paint", [0.012, 0.012, 0.013], 0.6, 0.0),
     ]);
     let v = Vec3::new;
     let stone_m = meters(lock, "concrete_floor_02");
@@ -232,11 +239,33 @@ pub fn shell(root: &Path, lock: &Lock) -> Result<String> {
     ] {
         slab(&mut k, SAND, a, b, Vec2::ONE);
     }
+    // The long-shadow test, south-west of the building: three 14 m masts of 0.4, 0.2 and
+    // 0.1 m diameter stand 8 m in front of a 7 m boundary wall that faces the sun. Each
+    // mast's shadow crosses the gravel and climbs the wall 4.6 m to its west, as a stripe
+    // 0.46, 0.23 and 0.12 m wide. From the `shadow` camera the masts are 42 to 44 m away
+    // and their shadows on the wall 50 to 54 m.
+    slab(
+        &mut k,
+        BOUNDARY,
+        v(-46.0, -0.31, -44.5),
+        v(2.0, 6.7, -44.0),
+        Vec2::ONE,
+    );
+    for (x, radius) in [(-22.0, 0.2), (-16.0, 0.1), (-10.0, 0.05)] {
+        post(&mut k, MAST, v(x, -0.31, -36.0), radius, 14.0);
+    }
     k.write(root, lock, "atelier_shell")
 }
 
+/// The table's centre on the floor.
+pub const TABLE: Vec3 = Vec3::new(0.2, 0.0, -6.0);
+/// The table lamp's glowing globe, from `TABLE`: it rests on the nickel tray.
+pub const GLOBE: Vec3 = Vec3::new(0.45, 0.877, -0.03);
+const GLOBE_RADIUS: f32 = 0.1;
+
 /// The furniture and objects of the room: sculpture on its plinth, the table with
-/// glass and brass, the armchair, bookshelf, lamps, rug and the painting.
+/// glass, the glow group (globe, nickel tray, chrome sphere), the armchair, bookshelf,
+/// lamps, rug and the painting.
 pub fn furniture(root: &Path, lock: &Lock) -> Result<String> {
     const OAK: usize = 0;
     const WALNUT: usize = 1;
@@ -250,6 +279,7 @@ pub fn furniture(root: &Path, lock: &Lock) -> Result<String> {
     const RUG: usize = 9;
     const BOOKS: usize = 10;
     const TERRACOTTA_BOOK: usize = 13;
+    const NICKEL: usize = 17;
     let mut k = Kit::new(vec![
         Material::flat("dark oak", [0.2, 0.12, 0.07], 0.5, 0.0),
         Material::flat("walnut", [0.3, 0.18, 0.1], 0.4, 0.0),
@@ -268,6 +298,8 @@ pub fn furniture(root: &Path, lock: &Lock) -> Result<String> {
         Material::flat("canvas white", [0.85, 0.84, 0.8], 0.9, 0.0),
         Material::flat("canvas charcoal", [0.14, 0.14, 0.15], 0.85, 0.0),
         Material::flat("canvas oatmeal", [0.62, 0.55, 0.42], 0.85, 0.0),
+        // A near-mirror: just over the roughness under which a reflection is one ray.
+        Material::flat("polished nickel", [0.72, 0.7, 0.66], 0.07, 1.0),
     ]);
     let v = Vec3::new;
     // Sculpture: marble plinth, brass disc and a chrome sphere in the front sun patch.
@@ -276,7 +308,7 @@ pub fn furniture(root: &Path, lock: &Lock) -> Result<String> {
     post(&mut k, BRASS, s + v(0.0, 0.9, 0.0), 0.3, 0.04);
     k.sphere(CHROME, s + v(0.0, 1.27, 0.0), 0.33, 48, Vec2::ONE);
     // Table (walnut top on steel legs), rug beneath, objects on it.
-    let t = v(0.2, 0.0, -6.0);
+    let t = TABLE;
     block(&mut k, WALNUT, t + v(0.0, 0.74, 0.0), v(1.9, 0.05, 0.95));
     for (dx, dz) in [(-0.9, -0.42), (0.9, -0.42), (-0.9, 0.42), (0.9, 0.42)] {
         post(&mut k, STEEL, t + v(dx, 0.0, dz), 0.025, 0.74);
@@ -295,8 +327,17 @@ pub fn furniture(root: &Path, lock: &Lock) -> Result<String> {
             yaw,
         );
     }
-    post(&mut k, BRASS, t + v(0.55, 0.765, 0.0), 0.11, 0.02);
-    k.sphere(BRASS, t + v(0.55, 0.9, 0.0), 0.11, 32, Vec2::ONE);
+    // The glow group, in the table's shade: a glowing globe (the table lamp) on a polished
+    // nickel tray, with a small chrome sphere beside it. The tray shows the globe in a
+    // near-mirror and the sphere shows it in chrome; the `glow` camera frames the three.
+    block(
+        &mut k,
+        NICKEL,
+        t + v(0.605, 0.771, -0.13),
+        v(0.65, 0.012, 0.54),
+    );
+    k.sphere(BULB, t + GLOBE, GLOBE_RADIUS, 32, Vec2::ONE);
+    k.sphere(CHROME, t + v(0.47, 0.852, -0.29), 0.075, 32, Vec2::ONE);
     // Pendant over the table: cord, brass shade, bulb.
     post(&mut k, STEEL, v(t.x, 2.7, t.z), 0.006, 1.3);
     k.cylinder(

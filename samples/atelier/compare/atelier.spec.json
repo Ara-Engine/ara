@@ -98,11 +98,11 @@
     {
       "name": "Table lamp glow",
       "type": "point",
-      "position": [0.75, 0.9800000190734863, -6],
+      "position": [0.6499999761581421, 0.8769999742507935, -6.03000020980835],
       "aimAt": null,
       "color": [1, 0.800000011920929, 0.550000011920929],
       "lumens": 120,
-      "sourceRadius": 0.029999999329447746,
+      "sourceRadius": 0.10000000149011612,
       "sourceLength": 0,
       "range": 3,
       "coneHalfAnglesDeg": null,

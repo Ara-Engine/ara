@@ -77,6 +77,18 @@
         "rotation": [-4.5139885, 11.852828, 0.929008]
       }
     },
+    "e_camglow0": {
+      "name": "Camera glow 0",
+      "order": "ab",
+      "Camera": {
+        "fov": 34,
+        "priority": 10
+      },
+      "Transform": {
+        "position": [1.85, 1.3, -5.7],
+        "rotation": [-49.304447, 57.868458, 44.55786]
+      }
+    },
     "e_camprop": {
       "name": "Antique camera",
       "order": "aB",
@@ -87,6 +99,18 @@
         "position": [-0.308, 0.765, -5.946],
         "rotation": [0, 25, 0],
         "scale": [0.11, 0.11, 0.11]
+      }
+    },
+    "e_camshadow0": {
+      "name": "Camera shadow 0",
+      "order": "ac",
+      "Camera": {
+        "fov": 26,
+        "priority": 10
+      },
+      "Transform": {
+        "position": [-8.5, 1.29, 6],
+        "rotation": [4.2435703, 10.176583, -0.7510956]
       }
     },
     "e_camstill0": {
@@ -182,10 +206,10 @@
         "color": [1, 0.800000011920929, 0.550000011920929, 1],
         "intensity": 120,
         "range": 3,
-        "sourceRadius": 0.029999999329447746
+        "sourceRadius": 0.10000000149011612
       },
       "Transform": {
-        "position": [0.75, 0.98, -6]
+        "position": [0.65, 0.877, -6.03]
       }
     },
     "e_lfloor": {

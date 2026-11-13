@@ -83,6 +83,36 @@
           "cut": false
         }
       ]
+    },
+    {
+      "name": "glow",
+      "note": "The table's end, in shade: a glowing globe on a polished nickel tray (roughness 0.07) beside a chrome sphere (0.03).",
+      "duration": 0,
+      "keys": [
+        {
+          "t": 0,
+          "position": [1.85, 1.3, -5.7],
+          "rotation": [-0.17109228670597076, 0.545278787612915, 0.11481698602437973, 0.8125364780426025],
+          "lookAt": [0.8, 0.8, -6.13],
+          "fovYDeg": 34,
+          "cut": false
+        }
+      ]
+    },
+    {
+      "name": "shadow",
+      "note": "From the gravel west of the courtyard: three masts 42 to 44 m away and their shadows on the boundary wall at 50 to 54 m.",
+      "duration": 0,
+      "keys": [
+        {
+          "t": 0,
+          "position": [-8.5, 1.29, 6],
+          "rotation": [0.0362960584461689, 0.08886977285146713, -0.0032406053505837917, 0.9953765273094177],
+          "lookAt": [-17.5, 5, -44],
+          "fovYDeg": 26,
+          "cut": false
+        }
+      ]
     }
   ]
 }

@@ -108,6 +108,25 @@ No engine code was changed for any of these.
     of those pixels is the shaded back wall and ceiling, which are darker than what the
     floor shows, so the glossy term looks too bright; not checked against a reference
     render or another engine. The floor is authored honed (roughness 0.7).
+15. **A glowing object is dark in its reflections.** The `glow` still (`e_camglow0`,
+    [`preview/glow.jpg`](preview/glow.jpg)) frames the table lamp's globe, an emitter at
+    6000 nits in the table's shade, on a polished nickel tray (roughness 0.07) beside a
+    chrome sphere (0.03). Seen directly the globe is sRGB 249/244/238. Its reflection in
+    the tray is 124/130/139, darker than the tray around it (228/231/237), and in the
+    chrome sphere 141/153/170: a grey ball where a glowing one should be. The chrome
+    sphere's own reflection in the tray is bright (229/229/227), so the reflections
+    themselves work; it is the emitter's light that is missing from them. On Ara main
+    `f134c989f` (Renderlab `9ae2929d`). A renderer fix is on its way; this still is the
+    check for it.
+16. **The sun casts no shadow more than about 40 m from the camera.** The `shadow` still
+    (`e_camshadow0`, [`preview/shadow.jpg`](preview/shadow.jpg)) looks at three 14 m masts
+    42 to 44 m away, 8 m in front of a wall that faces the sun: no shadow on the gravel or
+    the wall. With the camera moved to 25 m from the masts and nothing else changed
+    ([`preview/defects/shadow_from_25m.jpg`](preview/defects/shadow_from_25m.jpg)) the
+    three shadows are on the wall, sRGB 110/89/96 against 203/172/159 beside them, and on
+    the gravel. The same cause as Glint's finding 33 (pylons that cast nothing on the
+    clouds); a renderer fix for the sun's shadow range is on its way and this still is the
+    check for it. Same build as item 15.
 
 ## The look pass of 13 November
 
@@ -128,3 +147,19 @@ a compromise between room and courtyard, and Neutral clipped the sun patches. Wh
   brass bowl and books; the still now looks at that corner at 46 degrees instead of 56.
 - Not fixed: the blotches of item 2 are as visible on white as they were on beige, and the
   sky is nearly white at this exposure.
+
+## Two test stills (13 November, later)
+
+Added for the renderer work on reflections and shadows; the three comparison clips keep
+their cameras.
+
+- **`glow`**: the table lamp was a brass sphere with a light inside it and nothing that
+  glowed. It is now a glowing globe (0.1 m radius, the bulbs' emitter material) resting on
+  a polished nickel tray with a small chrome sphere beside it, all in the table's shade so
+  the globe's brightness is its own. The lamp's light moved 0.14 m to the globe's centre
+  (0.65, 0.877, -6.03) and its source radius is the globe's (0.1, was 0.03); its 120 lm
+  are unchanged.
+- **`shadow`**: three masts and a boundary wall south-west of the building, outside every
+  other camera's view except the first frames of the dolly, where the wall's end shows left
+  of the building. The wall is very dark (0.06, 0.025, 0.014) for the reason the render
+  is: at the room's exposure it still displays as a pale terracotta in sun.

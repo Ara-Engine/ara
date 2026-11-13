@@ -16,7 +16,7 @@ ara-samples build atelier
 ara capture --root samples/atelier --scene levels/atelier.scene --camera e_camstill0 --ticks 90
 ```
 
-Camera entities: `e_camstill0`, `e_camdolly0`/`1`, `e_camcut0`..`3` (one per clip key).
+Camera entities: `e_camstill0`, `e_camdolly0`/`1`, `e_camcut0`..`3`, `e_camglow0`, `e_camshadow0` (one per clip key).
 Export notes (what the Unity/Unreal export carries and cannot): [`compare/EXPORT.md`](compare/EXPORT.md). `preview/` holds the current stills (JPEG, replaced as the scene changes).
 
 ## Conventions
@@ -54,7 +54,9 @@ shadow flag yet (see FINDINGS).
 | Picture light | spot | 1.6, 2.65, -8.7 | 350 | 1.0, 0.9, 0.75 | 0.02 | 3.5 | 30 / 55 | no |
 | Shelf LED strip | point | -2.4, 1.2, -8.65 | 300 | 1.0, 0.93, 0.8 | 0.01 | 3 | | no |
 | Courtyard wall lantern | point | 3.3, 2.4, 0.68 | 600 | 1.0, 0.78, 0.5 | 0.07 | 8 | | no |
-| Table lamp glow | point | 0.75, 0.98, -6.0 | 120 | 1.0, 0.8, 0.55 | 0.03 | 3 | | no |
+| Table lamp glow | point | 0.65, 0.877, -6.03 | 120 | 1.0, 0.8, 0.55 | 0.10 | 3 | | no |
+
+The table lamp is a glowing globe of 0.1 m radius on the table; its light sits at the globe's centre with the globe's radius.
 
 ## Materials (all metallic-roughness)
 
@@ -66,11 +68,14 @@ shadow flag yet (see FINDINGS).
 | Charcoal render (2 cm outer skin, courtyard walls) | 0.065, 0.062, 0.06 | 0.9 | 0 | dark so it keeps modelling outside at the room's exposure |
 | Courtyard stone | concrete_floor_02 x (0.34, 0.33, 0.31) | texture | texture | |
 | Dark gravel (ground) | 0.2, 0.19, 0.18 | 0.95 | 0 | |
+| Boundary wall (48 x 7 m, its sunlit face at z = -44) | 0.06, 0.025, 0.014 | 0.9 | 0 | very dark so a shadow on it reads at the room's exposure |
+| Mast paint (three 14 m masts at z = -36, x = -22, -16, -10; 0.4, 0.2, 0.1 m across) | 0.012, 0.012, 0.013 | 0.6 | 0 | |
 | Weathered steel (planters) | 0.13, 0.055, 0.03 | 0.85 | 0 | repeats the terracotta outside |
 | Black steel (window frame, bench legs, lantern) | 0.05, 0.05, 0.055 | 0.42 | 1 | |
 | Blackened steel (table legs, picture frames, console legs) | 0.07, 0.07, 0.075 | 0.4 | 1 | |
 | Window glass, table glass | tint 0.88-0.9, 0.96, 1.0; alpha 0.14-0.16 | 0.04 | 0 | alpha blend, no texture |
-| Chrome sphere | 0.95 | 0.03 | 1 | mirror-like |
+| Chrome (the sculpture's sphere, 0.33 m radius; a 0.075 m sphere on the table's tray) | 0.95 | 0.03 | 1 | mirror-like |
+| Polished nickel (0.65 x 0.54 m tray on the table) | 0.72, 0.7, 0.66 | 0.07 | 1 | a near-mirror, under the glowing globe |
 | Brushed brass | 0.93, 0.72, 0.36 | 0.28 | 1 | |
 | Walnut (table top, console) | 0.3, 0.18, 0.1 | 0.4 | 0 | |
 | Graphite leather (armchair) | 0.09, 0.09, 0.1 | 0.45 | 0 | |
@@ -97,6 +102,8 @@ between keys, a key with `cut: true` ends its segment.
 | `still` | 1 frame | interior from the doorway's east side toward the south-west corner (3.1, 1.5, -0.6 looking at -1.5, 1.6, -5.0, 46 deg): terracotta panel, chrome sphere, large canvas and console, armchair, table |
 | `dolly` | 8 s | push from the courtyard through the doorway toward the table |
 | `cut` | 6 s | 3 s low courtyard pan, hard cut to the chrome sphere |
+| `glow` | 1 frame | test still at the table's end, in shade (1.85, 1.3, -5.7 looking at 0.8, 0.8, -6.13, 34 deg): the glowing globe on the nickel tray beside the small chrome sphere, so one emitter is seen directly, in a near-mirror (roughness 0.07) and in chrome (0.03) |
+| `shadow` | 1 frame | test still from the gravel west of the courtyard (-8.5, 1.29, 6.0 looking at -17.5, 5.0, -44.0, 26 deg): three masts 42 to 44 m from the camera, whose shadows cross the gravel and climb the boundary wall 50 to 54 m away as stripes 0.46, 0.23 and 0.12 m wide |
 
 ## Engine-side extras (do not export)
 

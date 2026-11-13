@@ -10,9 +10,11 @@ builder writes and from the third-party models as fetched, on Ara main `9a654106
 | Surface | Roughness | Metalness | Rule |
 |---|---|---|---|
 | Chrome sphere on the plinth (0.33 m radius) | 0.03 | 1 | one-ray mirror |
+| Chrome sphere on the table's tray (0.075 m radius) | 0.03 | 1 | one-ray mirror; 0.26 m from the glowing globe |
+| Polished nickel tray on the table (0.65 x 0.54 m) | 0.07 | 1 | glossy lobe at its sharp end: a near-mirror, under the glowing globe |
 | Window glass (5.6 x 3.2 m pane) | 0.04 | 0 | alpha blend at 0.14 opacity, not transmission |
 | Clear glass (the objects on the table) | 0.04 | 0 | alpha blend at 0.16 opacity, not transmission |
-| Brushed brass (bowl, table lamp, small objects) | 0.28 | 1 | glossy lobe |
+| Brushed brass (bowl, pendant shade, floor lamp, the disc under the sculpture) | 0.28 | 1 | glossy lobe |
 | Walnut (table top, console) | 0.40 | 0 | glossy lobe, in the fade |
 | Blackened steel (table legs, picture frames, console legs) | 0.40 | 1 | glossy lobe, in the fade |
 | Black stone plinth | 0.40 | 0 | glossy lobe, in the fade |
@@ -20,8 +22,8 @@ builder writes and from the third-party models as fetched, on Ara main `9a654106
 | Graphite leather (armchair) | 0.45 | 0 | glossy lobe, near the end of the fade |
 
 Not traced, at or above the cut-off: **the concrete floor (0.70)**, dark oak (0.50), teak
-(0.60), the warm bulbs and the lantern's glass (emitters, 0.60), plaster and render (0.88 to
-0.90), the rug, books and canvases (0.70 to 1.0), gravel, soil, weathered steel, and the
+(0.60), the warm bulbs, the table's glowing globe and the lantern's glass (emitters, 0.60),
+the masts' paint (0.60), plaster, render and the boundary wall (0.88 to 0.90), the rug, books and canvases (0.70 to 1.0), gravel, soil, weathered steel, and the
 mannequin's clay suit (a material graph: roughness 1, metalness 0).
 
 ## Set by a texture
@@ -57,6 +59,9 @@ Per texel from a metallic-roughness texture (factors 1.0), sampled at 256 x 256.
   at 0.36 it was a full glossy lobe on about a third of the still.
 - **The glass is a blended film.** The window pane and the glass on the table are alpha-blended
   at roughness 0.04, not transmission glass with an index of refraction.
+- **An emitter in two reflectors.** The `glow` still frames the table lamp's globe (an
+  emitter, in shade) on the nickel tray beside the small chrome sphere: the same glowing
+  object directly, in a glossy lobe at roughness 0.07 and in a one-ray mirror.
 - **What does reflect** is small on screen: the chrome sphere (a one-ray mirror), brass, the
   steel frames and legs, the walnut table top and console, the plinth and the armchair, most
   of them inside the fade.

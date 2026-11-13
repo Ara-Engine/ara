@@ -5,10 +5,11 @@
 //! one idling mannequin; six local lights with explicit source sizes.
 //!
 //! Built to cross engines: one fixed exposure, physical light units, a gradient sky
-//! given as numbers, plain metallic-roughness glTF materials, and three camera clips
-//! as poses over time. The numbers live in the tables below and are written once to
-//! `compare/atelier.spec.json` and `compare/camera_clips.json`; the scene is built from
-//! the same tables, so the documents and the scene cannot drift.
+//! given as numbers, plain metallic-roughness glTF materials, and five camera clips
+//! (three comparison clips and two test stills) as poses over time. The numbers live in
+//! the tables below and are written once to `compare/atelier.spec.json` and
+//! `compare/camera_clips.json`; the scene is built from the same tables, so the documents
+//! and the scene cannot drift.
 //! Frame: Y up, right-handed, metres; cameras look along their local -Z (glTF).
 mod kits;
 
@@ -133,11 +134,12 @@ const LAMPS: [Lamp; 6] = [
     Lamp {
         id: "e_lcup",
         name: "Table lamp glow",
-        position: Vec3::new(0.75, 0.98, -6.0),
+        // The centre of the glowing globe on the table (`kits::TABLE + kits::GLOBE`).
+        position: Vec3::new(0.65, 0.877, -6.03),
         target: None,
         color: [1.0, 0.8, 0.55],
         lumens: 120.0,
-        radius: 0.03,
+        radius: 0.1,
         length: 0.0,
         range: 3.0,
         cone: None,
@@ -167,9 +169,11 @@ const fn key(t: f32, position: Vec3, target: Vec3, fov: f32, cut: bool) -> Pose 
     }
 }
 
-/// The three comparison clips: a still, a moving stretch and one hard cut. Positions
-/// interpolate linearly and rotations by slerp between keys, at 30 frames a second.
-const CLIPS: [(&str, &str, &[Pose]); 3] = [
+/// The comparison clips: a still, a moving stretch, one hard cut, and two test stills
+/// (`glow`: an emitter seen in a near-mirror and in chrome; `shadow`: thin shadows more
+/// than 40 m from the camera). Positions interpolate linearly and rotations by slerp
+/// between keys, at 30 frames a second.
+const CLIPS: [(&str, &str, &[Pose]); 5] = [
     (
         "still",
         "Interior from the doorway side: sun patches, sculpture, table, armchair.",
@@ -235,6 +239,28 @@ const CLIPS: [(&str, &str, &[Pose]); 3] = [
             ),
         ],
     ),
+    (
+        "glow",
+        "The table's end, in shade: a glowing globe on a polished nickel tray (roughness 0.07) beside a chrome sphere (0.03).",
+        &[key(
+            0.0,
+            Vec3::new(1.85, 1.3, -5.7),
+            Vec3::new(0.8, 0.8, -6.13),
+            34.0,
+            false,
+        )],
+    ),
+    (
+        "shadow",
+        "From the gravel west of the courtyard: three masts 42 to 44 m away and their shadows on the boundary wall at 50 to 54 m.",
+        &[key(
+            0.0,
+            Vec3::new(-8.5, 1.29, 6.0),
+            Vec3::new(-17.5, 5.0, -44.0),
+            26.0,
+            false,
+        )],
+    ),
 ];
 
 /// A camera looks along -Z: its rotation as a glTF quaternion `[x, y, z, w]`.
@@ -297,7 +323,7 @@ fn spec() -> Value {
     })
 }
 
-/// The three clips as poses over time (plain JSON, 30 fps).
+/// The clips as poses over time (plain JSON, 30 fps).
 fn clips() -> Value {
     json!({
         "handedness": "right", "up": "+Y", "units": "metres", "cameraForward": "-Z (glTF)",
