@@ -93,11 +93,11 @@
       "name": "Camera still 0",
       "order": "aU",
       "Camera": {
-        "fov": 56
+        "fov": 46
       },
       "Transform": {
-        "position": [3.4, 1.5, -0.3],
-        "rotation": [-4.6533523, 46.83621, 3.3976548]
+        "position": [3.1, 1.5, -0.6],
+        "rotation": [1.3019532, 46.265644, -0.94080704]
       }
     },
     "e_courtyard": {
@@ -126,18 +126,18 @@
       "Environment": {
         "sky": [0.20000000298023224, 0.36000001430511475, 0.8500000238418579, 1],
         "horizon": [0.7200000286102295, 0.8199999928474426, 0.949999988079071, 1],
-        "ground": [0.2800000011920929, 0.25999999046325684, 0.23000000417232513, 1],
+        "ground": [0.4000000059604645, 0.4000000059604645, 0.38999998569488525, 1],
         "intensity": 9000
       },
       "PostProcessVolume": {
         "overrides": [
           {
             "exposure": "manual",
-            "ev100": 11.5
+            "ev100": 10
           },
           {
             "module": "toneMapping",
-            "toneMapping": "neutral"
+            "toneMapping": "agxMediumHighContrast"
           }
         ]
       }
@@ -276,8 +276,8 @@
         ]
       },
       "Transform": {
-        "position": [-3.6, 0, 2.2],
-        "rotation": [0, 150, 0]
+        "position": [-4.7, 0, 3.3],
+        "rotation": [0, 105, 0]
       }
     },
     "e_plant0": {
@@ -452,7 +452,7 @@
       "Light": {
         "kind": "directional",
         "color": [1, 0.9100000262260437, 0.7599999904632568, 1],
-        "intensity": 75000
+        "intensity": 45000
       },
       "Transform": {
         "position": [0, 40, 30],

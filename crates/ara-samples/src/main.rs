@@ -273,12 +273,9 @@ fn main() -> Result<()> {
                     "Material and character showcase",
                     lock,
                 )?)?,
-                "atelier" => build::atelier::build(&build::Ctx::open(
-                    &samples,
-                    "atelier",
-                    "Atelier",
-                    lock,
-                )?)?,
+                "atelier" => {
+                    build::atelier::build(&build::Ctx::open(&samples, "atelier", "Atelier", lock)?)?
+                }
                 other => anyhow::bail!("unknown project {other} (outpost, showcase, atelier)"),
             }
             println!("built {project}");

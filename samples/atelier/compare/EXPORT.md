@@ -10,10 +10,10 @@ scene is built from, so they win wherever the two disagree.
 
 ```sh
 ARA_UNITY_EXPORT=<dir> ara capture --root samples/atelier --scene levels/atelier.scene \
-  --camera e_camstill0 --ev100 11.5
+  --camera e_camstill0 --ev100 10
 ```
 
-- `--ev100 11.5` matters: the sidecar's `exposure.ev100Lock` is the capture's locked EV100.
+- `--ev100 10` matters: the sidecar's `exposure.ev100Lock` is the capture's locked EV100.
   Atelier's own manual exposure sits in its post-process volume; without the flag the sidecar
   may say `null` ("the bridge meters").
 - `e_camstill0` is also the scene's main camera now (priority 0; the other camera entities
