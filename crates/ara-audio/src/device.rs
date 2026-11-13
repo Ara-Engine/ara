@@ -29,6 +29,16 @@ pub struct DeviceFormat {
     /// SDL-reported hardware callback buffer length in frames.
     pub buffer_frames: u32,
 }
+impl DeviceFormat {
+    /// One line for a start-up log: the device, its driver and format, and the mixer's rate
+    /// (`"Speakers" via wasapi: 48000 Hz, 2 channels, 480-frame buffer; mixing at 48000 Hz`).
+    pub fn summary(&self, name: &str, driver: &str, mix_rate: u32) -> String {
+        format!(
+            "\"{name}\" via {driver}: {} Hz, {} channels, {}-frame buffer; mixing at {mix_rate} Hz",
+            self.sample_rate, self.channels, self.buffer_frames
+        )
+    }
+}
 /// Device state change, forwarded to diagnostics by the platform bridge.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeviceEvent {
@@ -233,6 +243,13 @@ impl SdlBackend {
     pub fn format(&self) -> DeviceFormat {
         self.format
     }
+    /// The open output in one line, for a start-up log (see [`DeviceFormat::summary`]). A
+    /// name or driver SDL cannot report reads as `unknown`.
+    pub fn summary(&self) -> String {
+        let unknown = |text: Result<String>| text.unwrap_or_else(|_| "unknown".into());
+        self.format
+            .summary(&unknown(self.name()), &unknown(self.driver()), self.rate)
+    }
     /// Active SDL driver name, for distinguishing WASAPI from fallback device paths.
     pub fn driver(&self) -> Result<String> {
         // SAFETY: SDL retains the driver name while the initialized subsystem is owned here.
@@ -400,5 +417,23 @@ impl Drop for SdlBackend {
             }
             SDL_QuitSubSystem(SDL_INIT_AUDIO);
         }
+    }
+}
+
+#[cfg(test)]
+mod summary_tests {
+    use super::DeviceFormat;
+
+    #[test]
+    fn the_start_up_line_names_the_device_its_format_and_the_mix_rate() {
+        let format = DeviceFormat {
+            sample_rate: 44_100,
+            channels: 2,
+            buffer_frames: 441,
+        };
+        assert_eq!(
+            format.summary("Speakers (Realtek)", "wasapi", 48_000),
+            "\"Speakers (Realtek)\" via wasapi: 44100 Hz, 2 channels, 441-frame buffer; mixing at 48000 Hz"
+        );
     }
 }

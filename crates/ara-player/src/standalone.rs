@@ -237,12 +237,9 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
                 source.as_ref(),
             )?);
         }
-        let mut audio = match ara_audio::device::SdlBackend::open(48_000) {
-            Ok(device) => Some((world.audio_presenter()?, device)),
-            Err(error) => {
-                eprintln!("ara-player: no audio: {error}");
-                None
-            }
+        let mut audio = match crate::open_audio("play") {
+            Some(device) => Some((world.audio_presenter()?, device)),
+            None => None,
         };
         let mut previous = Instant::now();
         let mut frames = 0;
