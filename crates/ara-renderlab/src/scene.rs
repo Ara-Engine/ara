@@ -59,6 +59,8 @@ struct Object {
     /// The shared material in use: `material` and whether the mesh has tangents.
     material_slot: u64,
     world: [f32; 16],
+    /// What the engine was last told about its shadow casting (`shadow_change`).
+    casts_shadows: bool,
     /// The posed mesh and joint count of a skinned object.
     skin: Option<(MeshId, usize)>,
 }
@@ -596,7 +598,9 @@ impl Scene {
         self.coverage.prune();
         // Each draw's group, and the groups in order of first appearance.
         let mut keyed = Vec::with_capacity(frame.draws.len() + static_draws.len());
-        let mut index: HashMap<(MeshKey, u64), usize> = HashMap::new();
+        // A draw that casts no shadow groups apart from one that does (the flag is the
+        // object's), and never joins a batch, whose members share one object.
+        let mut index: HashMap<(MeshKey, u64, bool), usize> = HashMap::new();
         let mut groups: Vec<Group> = Vec::new();
         let mut singular = 0usize;
         let draws = frame
@@ -622,11 +626,13 @@ impl Scene {
                 };
                 (mesh, material_key(draw, &mut self.coverage))
             });
-            let group = *index.entry((mesh, material)).or_insert_with(|| {
+            let key = (mesh, material, draw.casts_shadows);
+            let group = *index.entry(key).or_insert_with(|| {
                 groups.push(Group {
                     material,
                     // Cut geometry comes from its own upload, so it never joins a batch.
                     mergeable: matches!(mesh, MeshKey::Static(_))
+                        && draw.casts_shadows
                         && !see_through(draw, &mut self.coverage)
                         && cut(draw, &mut self.coverage).is_none(),
                     objects: 0,
@@ -875,6 +881,8 @@ impl Scene {
                     material,
                     material_slot,
                     world,
+                    // Renderlab spawns an object casting.
+                    casts_shadows: true,
                     skin,
                 },
             );
@@ -886,6 +894,11 @@ impl Scene {
         if object.world != world {
             engine.set_transform(object.id, Mat4::from_cols_array(&world))?;
             object.world = world;
+        }
+        // `MeshRenderer.castShadows` (and the model node's own), at spawn and whenever it
+        // changes: a lamp's glass must not shadow the light inside it.
+        if let Some(casts) = shadow_change(&mut object.casts_shadows, draw.casts_shadows) {
+            engine.set_casts_shadows(object.id, casts)?;
         }
         if let (Some((posed, joints)), Some(range)) = (object.skin, draw.skin.clone()) {
             self.palette.clear();
@@ -1380,6 +1393,17 @@ impl Scene {
     }
 }
 
+/// What the engine must now be told about an object's shadow casting: `Some(wanted)` when
+/// the draw's flag differs from what the engine was `told` last (an object spawns
+/// casting), and `told` then records it; `None` when they agree, so an unchanged flag
+/// costs no call.
+fn shadow_change(told: &mut bool, wanted: bool) -> Option<bool> {
+    (*told != wanted).then(|| {
+        *told = wanted;
+        wanted
+    })
+}
+
 /// Uploads static triangles, with tangents when `wanted` (a normal-mapped material) and
 /// usable; otherwise without, reported under `label`. Returns the mesh and whether it
 /// carries tangents.
@@ -1548,6 +1572,22 @@ fn skinned_mesh(
 mod tests {
     /// Transforms Renderlab can light draw; a zero or squashed scale, a non-finite one or axes
     /// collapsed onto a plane do not.
+    /// A mesh renderer with `castShadows: false` tells the engine once, when its object is
+    /// spawned (objects spawn casting); an unchanged flag says nothing more; switching it
+    /// back on mid-run, or off again, each tells the engine again.
+    #[test]
+    fn a_draws_shadow_flag_reaches_the_engine_at_spawn_and_on_every_change() {
+        let mut told = true;
+        assert_eq!(shadow_change(&mut told, false), Some(false));
+        assert_eq!(shadow_change(&mut told, false), None);
+        assert_eq!(shadow_change(&mut told, true), Some(true));
+        assert_eq!(shadow_change(&mut told, true), None);
+        assert_eq!(shadow_change(&mut told, false), Some(false));
+        // A renderer that casts, as most do, never produces a call.
+        let mut told = true;
+        assert_eq!(shadow_change(&mut told, true), None);
+    }
+
     #[test]
     fn singular_transforms_are_not_drawn() {
         use glam34::{Mat4, Vec3};
