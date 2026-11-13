@@ -489,6 +489,25 @@ pub struct Stepped {
     pub hash: String,
     /// Watch samples in tick order.
     pub samples: Vec<Sample>,
+    /// Error diagnostics raised while stepping, in order: gameplay code that threw and is
+    /// now disabled until the next reload (a C# system, behaviour or command). They are
+    /// events too; a caller that only steps would otherwise never learn that part of the
+    /// game stopped running.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub faults: Vec<Value>,
+}
+
+/// The error diagnostics among `events`, for [`Stepped::faults`].
+pub fn faults(events: &[Event]) -> Vec<Value> {
+    events
+        .iter()
+        .filter_map(|event| match event {
+            Event::Diagnostic { diagnostic } if diagnostic["severity"] == "error" => {
+                Some(diagnostic.clone())
+            }
+            _ => None,
+        })
+        .collect()
 }
 
 /// `play.input` params.
