@@ -29,6 +29,14 @@ pub enum Format {
     Depth16Unorm,
     /// Reversed-Z floating depth.
     Depth32Float,
+    /// BC7 block-compressed linear RGBA: 4x4-texel blocks of 16 bytes. Block formats are
+    /// sampled and copied only, never storage or attachments, and only where
+    /// `DeviceInfo::texture_compression_bc` is set.
+    Bc7,
+    /// BC7 with sRGB-encoded colour and linear alpha.
+    Bc7Srgb,
+    /// BC5 block-compressed linear red and green (a normal map's X and Y).
+    Bc5,
 }
 /// Buffer allocation and declared reachable uses.
 pub struct BufferDesc {
@@ -86,13 +94,25 @@ pub struct QueueInfo {
 }
 
 impl Format {
-    /// Bytes in one texel of the uncompressed portable format.
+    /// Bytes in one texel of an uncompressed format. A block format has no whole number
+    /// of bytes a texel: size its copies with [`Self::block`].
     pub fn texel_bytes(self) -> u32 {
         match self {
             Self::Rgba32Float | Self::Rgba32Uint => 16,
             Self::Rgba16Float | Self::Rg32Uint => 8,
             Self::R16Float | Self::Depth16Unorm => 2,
             _ => 4,
+        }
+    }
+
+    /// The format's block: its edge in texels and its bytes. An uncompressed format is
+    /// 1x1 blocks of `texel_bytes`; BC7 and BC5 are 4x4 blocks of 16 bytes. A level's
+    /// rows hold `ceil(width / edge)` blocks and there are `ceil(height / edge)` rows,
+    /// so a level under 4x4 texels still takes one whole block.
+    pub fn block(self) -> (u32, u32) {
+        match self {
+            Self::Bc7 | Self::Bc7Srgb | Self::Bc5 => (4, 16),
+            _ => (1, self.texel_bytes()),
         }
     }
 
@@ -113,6 +133,9 @@ impl Format {
             Self::Rg32Uint => F::R32G32_UINT,
             Self::Rg16Float => F::R16G16_SFLOAT,
             Self::Depth16Unorm => F::D16_UNORM,
+            Self::Bc7 => F::BC7_UNORM_BLOCK,
+            Self::Bc7Srgb => F::BC7_SRGB_BLOCK,
+            Self::Bc5 => F::BC5_UNORM_BLOCK,
         }
     }
 }
