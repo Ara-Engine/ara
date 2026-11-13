@@ -211,6 +211,18 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
     live frames at each of the eleven positions (checked on the Mac at 24 held frames and as
     12-frame clips; the replay still ends at the same tick and hash).
 
+31. **A sample build that overlaps a daemon of the same project can write a scene with a
+    third of its entities missing, and says "built".** *Happened once* (observed, not
+    isolated): `ara-samples build glint` started right after killing an `ara serve` that a
+    capture had left running; the scene came out with 175 records instead of 252 (no deck
+    colliders, most rails, clouds and islands gone), `ara check` inside the build passed, and
+    the only symptom was the ball falling through the launch deck in the replay. The same
+    build a minute later, with no daemon alive, wrote all 252. *Wanted:* the build to fail, or
+    to take the project lock the daemon holds.
+32. **The UI cannot fade.** The key hints were asked to fade out after the first input; with no
+    opacity or animation in the UI subset (item 7) they switch off instead: shown until the
+    first input of the session, and again only after seven idle seconds in a run.
+
 ## Where the engine was bypassed
 
 - **Geometry** is written as glTF by the sample builder's `Kit` (boxes, cylinders, spheres),

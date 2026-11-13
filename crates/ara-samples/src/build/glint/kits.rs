@@ -27,6 +27,19 @@ fn stone() -> Material {
 fn paint() -> Material {
     Material::flat("white paint", [0.74, 0.75, 0.77], 0.5, 0.0)
 }
+/// The second material family: a dark blue-grey stone for what holds the course up and for
+/// the far islands, so the pale decks separate from the cloud.
+fn slate() -> Material {
+    Material::flat("slate", [0.2, 0.235, 0.3], 0.8, 0.0)
+}
+/// The darker running lane down a deck.
+fn lane() -> Material {
+    Material::flat("lane stone", [0.25, 0.29, 0.38], 0.7, 0.0)
+}
+/// Panel seams across a deck.
+fn seam() -> Material {
+    Material::flat("deck seam", [0.13, 0.15, 0.19], 0.85, 0.0)
+}
 fn navy() -> Material {
     Material::flat("navy paint", [0.035, 0.08, 0.22], 0.45, 0.0)
 }
@@ -145,6 +158,8 @@ pub fn course(root: &Path, lock: &Lock, c: &Course) -> Result<String> {
     const CHROME: usize = 7;
     const GLASS: usize = 8;
     const BRIDGE: usize = 9;
+    const LANE: usize = 10;
+    const SEAM: usize = 11;
     let mut k = Kit::new(vec![
         stone(),
         paint(),
@@ -174,6 +189,8 @@ pub fn course(root: &Path, lock: &Lock, c: &Course) -> Result<String> {
                 attenuation_distance: 0.6,
             },
         ),
+        lane(),
+        seam(),
     ]);
     let v = Vec3::new;
     for p in &c.pieces {
@@ -249,18 +266,24 @@ pub fn course(root: &Path, lock: &Lock, c: &Course) -> Result<String> {
             v(h.x, h.y - 0.05, h.z),
             Quat::IDENTITY,
         );
+        // The spinner deck is dark from kerb to kerb: its own colour block in a wide shot.
+        let dark = p.name == "Spinner deck";
         local(
             &mut k,
-            STONE,
+            if dark { LANE } else { STONE },
             p,
             v(0.0, h.y - 0.05, 0.0),
             v(h.x - kerb * 2.0, 0.05, h.z),
             Quat::IDENTITY,
         );
+        // Each section has its own deck: the fast ones (descent, run-up, kicker) wear coral
+        // kerbs, the climbs are stepped with bands, the rest keep navy.
+        let fast = matches!(p.name, "Descent" | "Run-up" | "Kicker");
+        let climb = matches!(p.name, "Climb" | "Tower ramp");
         for side in [-1.0f32, 1.0] {
             local(
                 &mut k,
-                NAVY,
+                if fast { CORAL } else { NAVY },
                 p,
                 v(side * (h.x - kerb), h.y - 0.02, 0.0),
                 v(kerb, 0.08, h.z),
@@ -318,6 +341,64 @@ pub fn course(root: &Path, lock: &Lock, c: &Course) -> Result<String> {
                 );
             }
         } else if p.kind != Kind::Beam {
+            // A darker running lane between two coral pinstripes, pale shoulders outside it.
+            let lane = (h.x * 0.6).max(1.0);
+            local(
+                &mut k,
+                LANE,
+                p,
+                v(0.0, h.y + 0.002, 0.0),
+                v(lane, 0.002, h.z),
+                Quat::IDENTITY,
+            );
+            // Every straight deck opens with a navy band from kerb to kerb: a section's
+            // entry reads from across the course.
+            if p.kind == Kind::Deck {
+                local(
+                    &mut k,
+                    NAVY,
+                    p,
+                    v(0.0, h.y + 0.0052, -h.z + 1.3),
+                    v(h.x - kerb * 2.0, 0.0022, 1.3),
+                    Quat::IDENTITY,
+                );
+            }
+            for side in [-1.0f32, 1.0] {
+                local(
+                    &mut k,
+                    CORAL,
+                    p,
+                    v(side * lane, h.y + 0.003, 0.0),
+                    v(0.045, 0.003, h.z),
+                    Quat::IDENTITY,
+                );
+            }
+            // Panel seams across the deck every 4 m; a climb is stepped instead, with a dark
+            // band every 2 m.
+            let step = if climb { 2.0 } else { 4.0 };
+            let seams = (h.z * 2.0 / step).floor() as u32;
+            for i in 1..seams.max(1) {
+                let z = -h.z + h.z * 2.0 * i as f32 / seams as f32;
+                local(
+                    &mut k,
+                    SEAM,
+                    p,
+                    v(0.0, h.y + 0.005, z),
+                    v(h.x - kerb * 2.0, 0.0015, if climb { 0.45 } else { 0.05 }),
+                    Quat::IDENTITY,
+                );
+            }
+            // The kicker's lip is marked: a coral band across its last half metre.
+            if p.name == "Kicker" {
+                local(
+                    &mut k,
+                    CORAL,
+                    p,
+                    v(0.0, h.y + 0.006, h.z - 0.3),
+                    v(h.x - kerb * 2.0, 0.003, 0.25),
+                    Quat::IDENTITY,
+                );
+            }
             // The polished inlay down the middle: the best line.
             local(
                 &mut k,
@@ -363,6 +444,50 @@ pub fn course(root: &Path, lock: &Lock, c: &Course) -> Result<String> {
             }
         }
     }
+    // Under each spinner bar its sweep is painted on the deck: a dark disc in a coral ring.
+    let reach = super::BAR.0 * 0.5 + 0.2;
+    for bar in &c.bars {
+        if let Some(deck) = c.pieces.iter().find(|p| p.name == "Spinner deck") {
+            let top = Vec3::new(
+                bar.pivot.x,
+                deck.center.y + deck.half.y + 0.009,
+                bar.pivot.z,
+            );
+            column(&mut k, SEAM, top, reach.min(deck.half.x - 0.5), 0.004, 48);
+            floor_ring(
+                &mut k,
+                CORAL,
+                top + Vec3::Y * 0.006,
+                reach.min(deck.half.x - 0.5),
+                0.12,
+                48,
+            );
+        }
+    }
+    // The launch deck's start line: two rows of navy and white blocks ahead of the disc.
+    if let Some(p) = c.pieces.iter().find(|p| p.name == "Launch deck") {
+        let h = p.half;
+        let block = 0.5;
+        let across = ((h.x - 0.6) / block).floor() as i32;
+        for row in 0..2 {
+            for i in -across..across {
+                if (i + row).rem_euclid(2) == 0 {
+                    local(
+                        &mut k,
+                        NAVY,
+                        p,
+                        v(
+                            (i as f32 + 0.5) * block,
+                            h.y + 0.004,
+                            h.z * 0.62 + row as f32 * block,
+                        ),
+                        v(block * 0.5, 0.004, block * 0.5),
+                        Quat::IDENTITY,
+                    );
+                }
+            }
+        }
+    }
     for w in &c.walls {
         oriented(&mut k, GLASS, w.center, w.half, w.rot);
         let cap = w.rot * v(0.0, w.half.y + 0.03, 0.0);
@@ -402,7 +527,8 @@ fn pylon(k: &mut Kit, top: Vec3, radius: f32) {
 pub fn supports(root: &Path, lock: &Lock, c: &Course) -> Result<String> {
     const PAINT: usize = 0;
     const NAVY: usize = 3;
-    let mut k = Kit::new(vec![paint(), coral(), cool("pylon band"), navy()]);
+    // Slate shafts and heads: the supports are the course's dark family against the cloud.
+    let mut k = Kit::new(vec![slate(), coral(), cool("pylon band"), navy()]);
     let v = Vec3::new;
     let banks: Vec<usize> = (0..c.pieces.len())
         .filter(|i| c.pieces[*i].kind == Kind::Bank)
@@ -511,9 +637,10 @@ pub fn mover(root: &Path, lock: &Lock, half: Vec3) -> Result<String> {
     const GLOW: usize = 3;
     const CHEVRON: usize = 4;
     const CHROME: usize = 5;
+    // A navy top: the sliders are their own colour block between the pale pads.
     let mut k = Kit::new(vec![
         paint(),
-        stone(),
+        navy(),
         coral(),
         cool("underglow"),
         lit("platform chevron"),
@@ -907,8 +1034,14 @@ pub fn goal(root: &Path, lock: &Lock) -> Result<String> {
     let halo = Mat4::from_translation(v(0.0, 19.0, 0.0)) * Mat4::from_rotation_x(FRAC_PI_2);
     ring(&mut k, PAINT, halo, 15.0, Vec2::new(0.8, 0.5), 72, 0.0, TAU);
     ring(&mut k, LIT, halo, 14.5, Vec2::new(0.14, 0.3), 72, 0.0, TAU);
+    // The great gate behind the plaza: an upright ring 56 m across with a lit inner band,
+    // the thing to aim at from the launch deck.
+    let gate = Mat4::from_translation(v(0.0, 22.0, 15.5));
+    ring(&mut k, PAINT, gate, 28.0, Vec2::new(1.8, 1.4), 96, 0.0, TAU);
+    ring(&mut k, LIT, gate, 26.6, Vec2::new(0.3, 0.9), 96, 0.0, TAU);
+    ring(&mut k, CORAL, gate, 29.6, Vec2::new(0.5, 0.5), 96, 0.0, TAU);
     // The beacon: visible from the start, from anywhere on the course.
-    column(&mut k, BEACON, v(0.0, 19.0, 0.0), 0.5, 240.0, 16);
+    column(&mut k, BEACON, v(0.0, 19.0, 0.0), 1.4, 240.0, 20);
     k.write(root, lock, "glint_goal")
 }
 
@@ -1037,8 +1170,9 @@ pub fn gantry(root: &Path, lock: &Lock) -> Result<String> {
     const CORAL: usize = 1;
     const NAVY: usize = 3;
     const LIT: usize = 4;
+    // A slate frame with coral and lit trim, like everything else that holds the course up.
     let mut k = Kit::new(vec![
-        paint(),
+        slate(),
         coral(),
         cool("pylon band"),
         navy(),
@@ -1101,14 +1235,13 @@ pub fn isle(root: &Path, lock: &Lock) -> Result<String> {
     const PAINT: usize = 2;
     const LIT: usize = 3;
     const CORAL: usize = 4;
-    const NAVY: usize = 5;
     let mut k = Kit::new(vec![
         stone(),
-        Material::flat("rock", [0.42, 0.44, 0.5], 0.9, 0.0),
-        paint(),
+        // Slate rock and slate towers with lit bands: dark shapes on the pale cloud.
+        slate(),
+        slate(),
         lit("tower light"),
         coral(),
-        navy(),
     ]);
     let v = Vec3::new;
     column(&mut k, STONE, v(0.0, -2.0, 0.0), 30.0, 2.0, 40);
@@ -1130,7 +1263,7 @@ pub fn isle(root: &Path, lock: &Lock) -> Result<String> {
         (4.0, 12.0, 2.6, 20.0),
     ] {
         column(&mut k, PAINT, v(x, 0.0, z), r, height, 24);
-        column(&mut k, NAVY, v(x, height, z), r * 1.15, 1.2, 24);
+        column(&mut k, CORAL, v(x, height, z), r * 1.15, 1.2, 24);
         column(&mut k, LIT, v(x, height + 1.2, z), r * 0.3, 5.0, 12);
         for band in [0.3f32, 0.55, 0.8] {
             column(&mut k, LIT, v(x, height * band, z), r * 1.02, 0.5, 24);
