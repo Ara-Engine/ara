@@ -13,16 +13,31 @@ const SETTLE: u32 = 24;
 pub(super) type Drawn = (renderlab::Revision, crate::state::Camera, [u32; 2], u64);
 
 impl SceneView {
-    /// One pass of the Scene view: keeps the extracted frame current (a worker extracts it when
-    /// the document, review, content, pose or drafts change), adopts a finished one, and has
-    /// Renderlab draw it when the frame, the camera or the size changed.
+    /// One pass of the Scene view for a caller that has no composite to order it against (a
+    /// capture): [`Self::prepare_scene_frame`], then [`Self::start_scene_frame`].
     pub(super) fn render_scene_frame(
         &mut self,
         device: &mut SceneDevice,
         editor: &Editor,
         view: &crate::world::DocumentView,
     ) -> ara_ui::Result<()> {
-        ara_gpu::cpu_scope!("SceneView.render_scene_frame");
+        self.prepare_scene_frame(device, editor, view)?;
+        self.start_scene_frame(device, editor)
+    }
+
+    /// The first half of a Scene pass: keeps the extracted frame current (a worker extracts it
+    /// when the document, review, content, pose or drafts change) and adopts a finished Renderlab
+    /// frame. The studio composites what this leaves on screen, then calls
+    /// [`Self::start_scene_frame`]: the composite's GPU work is submitted before the next frame's,
+    /// so it never queues behind a frame that takes tens of milliseconds on a shared GPU, and the
+    /// loop keeps running (and recording the next frame) while one is in flight.
+    pub(super) fn prepare_scene_frame(
+        &mut self,
+        device: &mut SceneDevice,
+        editor: &Editor,
+        view: &crate::world::DocumentView,
+    ) -> ara_ui::Result<()> {
+        ara_gpu::cpu_scope!("SceneView.prepare_scene_frame");
         self.live_size = device.size();
         if self.preview_view.is_some() && self.preview_scene != editor.state.doc {
             // Drafts belong to the outgoing scene.
@@ -136,18 +151,35 @@ impl SceneView {
             self.scene_drawn = Some(drawn);
             self.scene_settle = SETTLE;
         }
-        // Renderlab refines its image over the frames after a change (its pipelines warm, its
-        // acceleration structures build, its history converges): draw a few, then rest. A frame
-        // is submitted without waiting for it (one in flight, the newest camera each time) and
-        // taken by the pass that finds it done, so the studio keeps running at its own rate.
+        // Frames are submitted without waiting for them and taken by the pass that finds them done.
         self.poll_renderlab(device);
-        if self.scene_settle > 0 && !self.renderlab.as_ref().is_some_and(|r| r.in_flight()) {
-            self.scene_settle -= 1;
-            self.start_renderlab(device, editor);
-            // A frame that finished inside `start` (an engine that cannot split one) is the still
-            // the capture routes read.
-            self.publish_still(device)?;
+        self.active = self.presentable();
+        Ok(())
+    }
+
+    /// The second half of a Scene pass: Renderlab refines its image over the frames after a
+    /// change (its pipelines warm, its acceleration structures build, its history converges), so
+    /// it draws a few, then rests. A frame is submitted without waiting for it (up to two in
+    /// flight, the newest camera each time).
+    pub(super) fn start_scene_frame(
+        &mut self,
+        device: &mut SceneDevice,
+        editor: &Editor,
+    ) -> ara_ui::Result<()> {
+        if self.frame.is_none()
+            || self.scene_settle == 0
+            || self
+                .renderlab
+                .as_ref()
+                .is_some_and(|r| !r.has_room(device.size()))
+        {
+            return Ok(());
         }
+        self.scene_settle -= 1;
+        self.start_renderlab(device, editor);
+        // A frame that finished inside `start` (an engine that cannot split one) is the still
+        // the capture routes read.
+        self.publish_still(device)?;
         self.active = self.presentable();
         Ok(())
     }
