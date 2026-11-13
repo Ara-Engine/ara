@@ -268,7 +268,10 @@ impl Presenter {
             )?;
             std::thread::yield_now();
         }
-        let pipelined = std::mem::take(&mut self.external_pipelined);
+        // The settle frames present one behind when pipelining is on (so a capture times the
+        // same loop the player runs); the last one is drawn and waited for, so the still is the
+        // frame asked for.
+        let pipelined = self.external_pipelined;
         let external = self.external.as_mut().context("external renderer")?;
         external.cut();
         let frames = external.settle_frames().max(request.settle_frames);
@@ -278,11 +281,27 @@ impl Presenter {
         let mut walls = Vec::new();
         for index in 0..=frames {
             let started = Instant::now();
+            if index == frames && pipelined {
+                // Frames in flight go first, then the still's own frame is drawn blocking.
+                while self.external.as_ref().is_some_and(|e| e.in_flight()) {
+                    let gpu = self
+                        .device
+                        .as_mut()
+                        .context("presentation device")?
+                        .gpu_mut();
+                    if let Some(external) = self.external.as_mut() {
+                        let _ = external.finish(gpu)?;
+                    }
+                    std::thread::yield_now();
+                }
+                self.external_pipelined = false;
+            }
             self.present_external(frame, || match resolve.take() {
                 Some(resolve) => resolve(),
                 None => Ok(Content::default()),
             })?;
-            if index > frames / 2 {
+            // The still's own blocking frame is not a pipelined frame time.
+            if index > frames / 2 && !(pipelined && index == frames) {
                 walls.push(started.elapsed().as_secs_f64() * 1000.);
             }
         }
