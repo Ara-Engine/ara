@@ -1,0 +1,246 @@
+{
+ "asset": {
+  "version": "2.0",
+  "generator": "alpha-black repro"
+ },
+ "scene": 0,
+ "scenes": [
+  {
+   "nodes": [
+    0
+   ]
+  }
+ ],
+ "nodes": [
+  {
+   "mesh": 0,
+   "name": "three blended quads"
+  }
+ ],
+ "meshes": [
+  {
+   "name": "quads",
+   "primitives": [
+    {
+     "attributes": {
+      "POSITION": 0,
+      "NORMAL": 1
+     },
+     "indices": 2,
+     "material": 0
+    },
+    {
+     "attributes": {
+      "POSITION": 3,
+      "NORMAL": 4
+     },
+     "indices": 5,
+     "material": 1
+    },
+    {
+     "attributes": {
+      "POSITION": 6,
+      "NORMAL": 7
+     },
+     "indices": 8,
+     "material": 2
+    }
+   ]
+  }
+ ],
+ "materials": [
+  {
+   "name": "red 0.5",
+   "alphaMode": "BLEND",
+   "doubleSided": true,
+   "pbrMetallicRoughness": {
+    "baseColorFactor": [
+     1,
+     0,
+     0,
+     0.5
+    ],
+    "metallicFactor": 0,
+    "roughnessFactor": 0.6
+   }
+  },
+  {
+   "name": "blue 0.5",
+   "alphaMode": "BLEND",
+   "doubleSided": true,
+   "pbrMetallicRoughness": {
+    "baseColorFactor": [
+     0,
+     0,
+     1,
+     0.5
+    ],
+    "metallicFactor": 0,
+    "roughnessFactor": 0.6
+   }
+  },
+  {
+   "name": "white 0.5",
+   "alphaMode": "BLEND",
+   "doubleSided": true,
+   "pbrMetallicRoughness": {
+    "baseColorFactor": [
+     1,
+     1,
+     1,
+     0.5
+    ],
+    "metallicFactor": 0,
+    "roughnessFactor": 0.6
+   }
+  }
+ ],
+ "accessors": [
+  {
+   "bufferView": 0,
+   "componentType": 5126,
+   "count": 4,
+   "type": "VEC3",
+   "min": [
+    -1.7,
+    0,
+    -0.5
+   ],
+   "max": [
+    -0.7,
+    0,
+    0.5
+   ]
+  },
+  {
+   "bufferView": 1,
+   "componentType": 5126,
+   "count": 4,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 2,
+   "componentType": 5123,
+   "count": 6,
+   "type": "SCALAR"
+  },
+  {
+   "bufferView": 3,
+   "componentType": 5126,
+   "count": 4,
+   "type": "VEC3",
+   "min": [
+    -0.5,
+    0,
+    -0.5
+   ],
+   "max": [
+    0.5,
+    0,
+    0.5
+   ]
+  },
+  {
+   "bufferView": 4,
+   "componentType": 5126,
+   "count": 4,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 5,
+   "componentType": 5123,
+   "count": 6,
+   "type": "SCALAR"
+  },
+  {
+   "bufferView": 6,
+   "componentType": 5126,
+   "count": 4,
+   "type": "VEC3",
+   "min": [
+    0.7,
+    0,
+    -0.5
+   ],
+   "max": [
+    1.7,
+    0,
+    0.5
+   ]
+  },
+  {
+   "bufferView": 7,
+   "componentType": 5126,
+   "count": 4,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 8,
+   "componentType": 5123,
+   "count": 6,
+   "type": "SCALAR"
+  }
+ ],
+ "bufferViews": [
+  {
+   "buffer": 0,
+   "byteOffset": 0,
+   "byteLength": 48,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 48,
+   "byteLength": 48,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 96,
+   "byteLength": 12,
+   "target": 34963
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 108,
+   "byteLength": 48,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 156,
+   "byteLength": 48,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 204,
+   "byteLength": 12,
+   "target": 34963
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 216,
+   "byteLength": 48,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 264,
+   "byteLength": 48,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 312,
+   "byteLength": 12,
+   "target": 34963
+  }
+ ],
+ "buffers": [
+  {
+   "byteLength": 324,
+   "uri": "data:application/octet-stream;base64,mpnZvwAAAAAAAAC/MzMzvwAAAAAAAAC/MzMzvwAAAAAAAAA/mpnZvwAAAAAAAAA/AAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAACAAEAAAADAAIAAAAAvwAAAAAAAAC/AAAAPwAAAAAAAAC/AAAAPwAAAAAAAAA/AAAAvwAAAAAAAAA/AAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAACAAEAAAADAAIAMzMzPwAAAAAAAAC/mpnZPwAAAAAAAAC/mpnZPwAAAAAAAAA/MzMzPwAAAAAAAAA/AAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAACAAEAAAADAAIA"
+  }
+ ]
+}

@@ -96,6 +96,9 @@ pub struct Editor {
     sources_checked: BTreeSet<String>,
     /// Each scene's last Scene view camera, saved as a user preference.
     cameras: crate::view_camera::SavedCameras,
+    /// Tests: one editor alive per process (see `crate::test_turn`).
+    #[cfg(test)]
+    _test_turn: crate::test_turn::Turn,
 }
 impl Drop for Editor {
     fn drop(&mut self) {
@@ -122,6 +125,8 @@ impl Editor {
         user_settings: Option<std::path::PathBuf>,
         host_config: HostConfig,
     ) -> anyhow::Result<Self> {
+        #[cfg(test)]
+        let test_turn = crate::test_turn::Turn::take();
         // One schema world: the editor validates exactly what the player runs.
         let mut project =
             ara_play_host::open_project(root).map_err(|d| anyhow::anyhow!(d.to_string()))?;
@@ -275,6 +280,8 @@ impl Editor {
             display_hz: 60.,
             sources_checked: BTreeSet::new(),
             cameras,
+            #[cfg(test)]
+            _test_turn: test_turn,
         };
         // A scene without a saved camera gets its opening view, like `editor.scene.open`.
         if !editor.state.scene_cameras.contains_key(&editor.state.doc) {
