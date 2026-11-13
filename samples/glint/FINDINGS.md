@@ -82,7 +82,7 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
    0.00%), at the same shading time. The disc's 300 m shadow was not re-tested: with the disc
    moved onto the sun's direction and forced to cast, today's renderer drew no such shadow
    either way, so the test says nothing. The 2.6 degree workaround is left in place. The
-   committed stills predate the fix and are re-shot with the cloud-shadow sheets.
+   committed stills were re-shot after it (item 33).
 6. **`ara capture` could not show a UI screen, and nothing can click through the shell.**
    *Wanted:* stills of the title and the course page. *Happened:* a capture always drew the
    in-game HUD, so for five rounds the title was never seen; when it finally was, it had four
@@ -242,7 +242,37 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
     opacity or animation in the UI subset (item 7) they switch off instead: shown until the
     first input of the session, and again only after seven idle seconds in a run.
 
-33. **The pylons cast no shadow on the clouds; the decks do.** Asked by the Unreal
+33. **Fixed (Ara main `b958132fd`, Renderlab `fdf2fb05`: sun shadows to 1 km): the pylons
+    cast no shadow on the clouds; the decks did.** On the M5 the pylons now stripe the clouds
+    under the course, and the rings, the bridge lattice, the towers and the far decks reach
+    them too. The same three views, with the pylons and then the course switched to cast no
+    shadow at run time (`castShadows`, honoured since item 5's fix) and back:
+
+    | View | Pylons not casting | Course not casting | The same frame twice |
+    |---|---|---|---|
+    | Overview | 4.9% of pixels by more than 8 levels | 1.8% | 0.5% |
+    | Start | 1.9% | 3.7% | 0.3% |
+    | Goal | 1.3% | 1.0% | 0.2% |
+
+    Sheets, laid out as before:
+    [`cloud_shadows_over_fixed.jpg`](preview/defects/cloud_shadows_over_fixed.jpg),
+    [`cloud_shadows_start_fixed.jpg`](preview/defects/cloud_shadows_start_fixed.jpg),
+    [`cloud_shadows_goal_fixed.jpg`](preview/defects/cloud_shadows_goal_fixed.jpg). The stills
+    in `preview/` are re-shot on that main. Seen on the same shots (M5, traced path):
+    - **The clouds are left as they are.** They are solid white mounds and take the shadows
+      as such. The edge is the sun's: the renderer draws the penumbra of its 0.54 degrees
+      (at 0.05 degrees the cloud shadows are crisper, at 2 degrees the lattice's dissolve
+      into soft bands), so shadows thrown from 45 m up are already softer than the ones on
+      the deck. A wider sun would soften the clouds' shadows and the deck's crisp ones
+      alike, which is the course's look; Ara has no switch for a mesh that receives no
+      shadow; and the Unreal and Unity copies already draw these shadows. Nothing changes
+      in the level or its copies.
+    - The inside of a big shadow on the cloud is mottled: blotches a few levels either way
+      under the goal's deck, where the sunlit cloud beside it is even. The indirect light's
+      blotches (as in Atelier), which the sun used to hide.
+    - The row of small dashes between the hoops' shadows at the goal is the orbs' shadows:
+      with the 43 orbs switched to cast none, the dashes go and nothing else changes.
+    *As first found.* Asked by the Unreal
     side-by-sides, where hardware Lumen draws the bridge lattice's shadow on the right-hand
     cloud at the start and pylon shadows across the clouds at the goal, and Ara shows almost
     none. *What the scene asks for:* every course piece, pylon, ring and cloud bank casts and
