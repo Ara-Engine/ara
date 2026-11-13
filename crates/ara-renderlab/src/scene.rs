@@ -39,6 +39,80 @@ fn fnv(hash: u64, bytes: &[u8]) -> u64 {
     })
 }
 
+/// Everything of a frame's own draws (not the bridge's foliage) that [`Scene::sync`] reads, as
+/// one 64-bit word each folded in: two frames with the same signature make the same objects.
+fn draws_signature(frame: &RenderFrame) -> u64 {
+    let mut h = 0x9e37_79b9_7f4a_7c15_u64;
+    let mut word = |w: u64| h = (h ^ w).wrapping_mul(0xff51_afd7_ed55_8ccd).rotate_left(31);
+    let float = |v: f32| u64::from(v.to_bits());
+    word(frame.draws.len() as u64);
+    for draw in &frame.draws {
+        word(draw.entity);
+        for v in draw.world.to_cols_array() {
+            word(float(v));
+        }
+        for v in draw
+            .color
+            .into_iter()
+            .chain([draw.roughness, draw.metallic])
+        {
+            word(float(v));
+        }
+        for v in draw
+            .emissive
+            .into_iter()
+            .chain(draw.emissive_factor.into_iter().flatten())
+        {
+            word(float(v));
+        }
+        word(u64::from(draw.emissive_factor.is_some()));
+        word(u64::from(draw.casts_shadows) | u64::from(draw.receives_decals) << 1);
+        match &draw.geometry {
+            Geometry::Shape { shape, size } => {
+                word(*shape as u64);
+                size.iter().for_each(|v| word(float(*v)));
+            }
+            Geometry::Model { model, primitive } => {
+                model.digest.0.chunks(8).for_each(|c| {
+                    word(u64::from_le_bytes(std::array::from_fn(|i| {
+                        *c.get(i).unwrap_or(&0)
+                    })));
+                });
+                word(*primitive as u64);
+            }
+        }
+        if let Some(native) = &draw.material {
+            native.digest.0.chunks(8).for_each(|c| {
+                word(u64::from_le_bytes(std::array::from_fn(|i| {
+                    *c.get(i).unwrap_or(&0)
+                })));
+            });
+        }
+        word(
+            draw.paint
+                .as_ref()
+                .map_or(0, |p| p.as_ptr() as u64 ^ p.len() as u64),
+        );
+        if let Some(range) = &draw.skin {
+            word(range.start as u64 ^ (range.len() as u64) << 32);
+            for joint in &frame.palettes[range.clone()] {
+                for v in joint.to_cols_array() {
+                    word(float(v));
+                }
+            }
+        }
+    }
+    h
+}
+
+/// What the last [`Scene::sync`] saw, so an unchanged frame can skip the whole pass.
+#[derive(PartialEq, Eq, Clone, Copy)]
+struct Synced {
+    draws: u64,
+    static_key: u64,
+    reserved: usize,
+}
+
 /// A resource shared by the objects that use it; released with its last user.
 struct Shared<T> {
     id: T,
@@ -137,6 +211,8 @@ pub(crate) struct Scene {
     batches: HashMap<u64, Batch>,
     /// Key of the static draws last placed (`sync`'s `static_key`).
     static_key: Option<u64>,
+    /// The inputs of the last completed `sync`.
+    synced: Option<Synced>,
     /// The ids last set on Renderlab's objects, with the object they were set on: own
     /// objects by entity (`false`), batches by material key (`true`).
     tags: Tags,
@@ -582,6 +658,17 @@ impl Scene {
         reserved: usize,
         gaps: &mut Gaps,
     ) -> Result<()> {
+        // A frame whose draws, foliage and terrain reservation are what the last pass saw makes
+        // the same objects, batches and ids: nothing to do (a moving camera, a redraw).
+        let seen = Synced {
+            draws: draws_signature(frame),
+            static_key,
+            reserved,
+        };
+        if self.synced == Some(seen) {
+            return Ok(());
+        }
+        self.synced = None;
         let budget = MAX_GROUPS.saturating_sub(reserved);
         let settled = self.static_key == Some(static_key);
         self.coverage.prune();
@@ -691,7 +778,9 @@ impl Scene {
             self.remove(engine, entity)?;
         }
         self.sync_batches(engine, merged, gaps)?;
-        self.tag(engine, frame)
+        self.tag(engine, frame)?;
+        self.synced = Some(seen);
+        Ok(())
     }
 
     /// Gives Renderlab's objects the editor's ids: a draw's id is its index in the frame's
@@ -1589,6 +1678,33 @@ mod tests {
             receives_decals: true,
             paint: None,
         }
+    }
+
+    /// The skip key follows everything a draw is made from, and nothing else.
+    #[test]
+    fn the_draws_signature_changes_with_a_draw_and_not_with_a_redraw() {
+        let model = leaf_model(&[255]);
+        let frame_of = |draws: Vec<Draw>| {
+            let mut frame = RenderFrame::default();
+            frame.draws = draws;
+            frame
+        };
+        let one = || leaf_draw(&model, 0);
+        let before = draws_signature(&frame_of(vec![one()]));
+        // Another tick or camera is not a change of the draws.
+        let mut redrawn = frame_of(vec![one()]);
+        redrawn.tick += 1;
+        redrawn.alpha = 0.5;
+        assert_eq!(draws_signature(&redrawn), before);
+        // A moved, recoloured, added or removed draw is.
+        let mut moved = one();
+        moved.world = glam34::Mat4::from_translation(glam34::Vec3::X);
+        assert_ne!(draws_signature(&frame_of(vec![moved])), before);
+        let mut tinted = one();
+        tinted.color = [0.5; 4];
+        assert_ne!(draws_signature(&frame_of(vec![tinted])), before);
+        assert_ne!(draws_signature(&frame_of(vec![one(), one()])), before);
+        assert_ne!(draws_signature(&frame_of(Vec::new())), before);
     }
 
     #[test]
