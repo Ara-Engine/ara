@@ -15,6 +15,9 @@ use std::time::{Duration, Instant};
 /// Renderlab's `FrameReport::cpu` parts, by name.
 pub(crate) type CpuParts = [(&'static str, Duration); 10];
 
+/// Parts already inside one of the ten (`finish` is part of `encode`, `early_submit` part of `submit`): logged, not summed.
+pub(crate) type CpuNested = [(&'static str, Duration); 2];
+
 pub(crate) struct CpuLog {
     out: BufWriter<File>,
     last_begin: Option<Instant>,
@@ -28,6 +31,7 @@ pub(crate) struct CpuRow {
     bridge: Duration,
     render_call: Duration,
     parts: CpuParts,
+    nested: CpuNested,
 }
 
 fn ms(duration: Duration) -> f64 {
@@ -52,6 +56,7 @@ impl CpuLog {
         bridge: Duration,
         render_call: Duration,
         parts: CpuParts,
+        nested: CpuNested,
     ) -> CpuRow {
         let wall = self
             .last_begin
@@ -64,6 +69,7 @@ impl CpuLog {
             bridge,
             render_call,
             parts,
+            nested,
         }
     }
 
@@ -78,6 +84,9 @@ impl CpuLog {
             ms(row.render_call)
         );
         for (name, part) in row.parts {
+            line.push_str(&format!(",\"{name}\":{:.3}", ms(part)));
+        }
+        for (name, part) in row.nested {
             line.push_str(&format!(",\"{name}\":{:.3}", ms(part)));
         }
         line.push_str(&format!(
