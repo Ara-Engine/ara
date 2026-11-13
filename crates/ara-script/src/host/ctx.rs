@@ -166,6 +166,7 @@ impl HostCtx {
             animation_bool: host_animation_bool,
             graphics: super::graphics::host_graphics,
             graphics_revision: super::graphics::host_graphics_revision,
+            physics_raycast: host_physics_raycast,
         }
     }
 }
@@ -609,6 +610,54 @@ unsafe extern "C" fn host_character_stop(c: *mut c_void, entity: u64) {
     if let Some(mut controls) = unsafe { scope.world.get_resource_mut::<super::ScriptControls>() } {
         controls.stopped.push(entity);
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+unsafe extern "C" fn host_physics_raycast(
+    c: *mut c_void,
+    ox: f32,
+    oy: f32,
+    oz: f32,
+    dx: f32,
+    dy: f32,
+    dz: f32,
+    ignore: u64,
+    entity: *mut u64,
+    hit: *mut f32,
+) -> u32 {
+    // SAFETY: the caller returns its live host context on the exclusive callback thread.
+    let Some(scope) = (unsafe { ctx(c) }).current() else {
+        return 0;
+    };
+    if entity.is_null() || hit.is_null() {
+        return 0;
+    }
+    // SAFETY: the seam resource is not writable from C#.
+    let Some(rays) = (unsafe { scope.world.get_resource::<super::ScriptRays>() }).copied() else {
+        return 0;
+    };
+    let ignore = (ignore != 0)
+        .then(|| Entity::try_from_bits(ignore))
+        .flatten();
+    // SAFETY: this is an exclusive gameplay phase, as the seam's function requires.
+    let Some(found) = (unsafe { (rays.0)(scope.world, [ox, oy, oz], [dx, dy, dz], ignore) }) else {
+        return 0;
+    };
+    let values = [
+        found.point[0],
+        found.point[1],
+        found.point[2],
+        found.normal[0],
+        found.normal[1],
+        found.normal[2],
+        found.fraction,
+    ];
+    // SAFETY: the caller provides room for one entity handle and seven floats.
+    unsafe {
+        entity.write(found.entity);
+        std::ptr::copy_nonoverlapping(values.as_ptr(), hit, values.len());
+    }
+    1
 }
 
 unsafe extern "C" fn host_animation_bool(

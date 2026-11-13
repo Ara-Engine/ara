@@ -7708,6 +7708,18 @@ expression: out
           "type": "bool",
           "doc": "Use swept collision detection for fast bodies.",
           "default": false
+        },
+        "linearDamping": {
+          "type": "f32",
+          "doc": "Linear damping: the fraction of linear velocity a dynamic body loses each second, in free flight as well as in contact. Zero keeps a thrown body on its ballistic arc.",
+          "default": 0.05,
+          "range": [0, null]
+        },
+        "angularDamping": {
+          "type": "f32",
+          "doc": "Angular damping: the fraction of angular velocity a dynamic body loses each second.",
+          "default": 0.05,
+          "range": [0, null]
         }
       }
     },

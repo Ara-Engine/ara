@@ -1,5 +1,26 @@
 //! Portable native game UI sources and schema-checked C# field subscriptions.
+use ara_schema::Schema;
 use serde::{Deserialize, Serialize};
+
+/// A top-level screen of the native game UI: the root element the game shell shows for
+/// each of its states. A capture can ask for one, to look at a menu without playing to it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Schema, Serialize, Deserialize)]
+#[ara(module = "play")]
+#[serde(rename_all = "camelCase")]
+pub enum UiScreen {
+    /// The title (`main-menu`).
+    MainMenu,
+    /// The lobby (`lobby`).
+    Lobby,
+    /// The loading page (`loading`).
+    Loading,
+    /// The settings page (`settings`).
+    Settings,
+    /// The pause menu over the HUD (`pause` and `hud`).
+    Pause,
+    /// The in-game HUD (`hud`): what a capture shows by default.
+    Hud,
+}
 
 /// Authored `ui/game.ui`, `ui/game.css` and `ui/bindings.json` carried inside Play/export.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -193,6 +193,54 @@ pub fn id_for_body(world: &World, body: BodyHandle) -> Option<u64> {
         .find_map(|(&id, b)| (b.body() == Some(body)).then_some(id))
 }
 
+/// The first solid surface along a ray (sensors excluded) and the entity that owns it, from
+/// the bodies as physics last left them. `ignore` leaves one entity's own body out.
+///
+/// For gameplay code that runs inside an exclusive phase and holds only a world cell.
+///
+/// # Safety
+/// Nothing may mutate the physics world, this seam's bindings or any `PhysicsId` while this
+/// runs: call it from an exclusive gameplay phase, never beside the physics boundary.
+pub unsafe fn ray_entity<B: PhysicsBackend>(
+    world: bevy_ecs::world::unsafe_world_cell::UnsafeWorldCell<'_>,
+    origin: [f32; 3],
+    displacement: [f32; 3],
+    ignore: Option<Entity>,
+) -> Result<Option<(Entity, crate::QueryHit)>> {
+    // SAFETY: the caller rules out concurrent mutation of these resources and of `PhysicsId`.
+    let (physics, runtime) = unsafe {
+        let (Some(physics), Some(runtime)) = (
+            world.get_resource::<PhysicsWorld<B>>(),
+            world.get_resource::<Runtime>(),
+        ) else {
+            return Ok(None);
+        };
+        (physics, runtime)
+    };
+    let own = ignore.and_then(|entity| {
+        // SAFETY: as above; `PhysicsId` is only read.
+        let id = unsafe { world.get_entity(entity).ok()?.get::<PhysicsId>() }?;
+        runtime.bindings.get(&id.value)?.body()
+    });
+    let hit = physics.query_first(crate::Query::Ray {
+        origin,
+        displacement,
+        filter: crate::QueryFilter {
+            sensors: false,
+            ignore: own,
+            ..Default::default()
+        },
+    })?;
+    // `rows` is sorted by `PhysicsId`, which is the body's user data.
+    Ok(hit.and_then(|hit| {
+        let row = runtime
+            .rows
+            .binary_search_by_key(&hit.user_data, |r| r.0)
+            .ok()?;
+        Some((runtime.rows[row].1, hit))
+    }))
+}
+
 /// Extracts lifecycle/configuration changes without advancing a tick or consuming input.
 /// Use this after scene projection and before the initial tick-zero simulation snapshot.
 pub fn prepare_ecs<B: PhysicsBackend>(world: &mut World) -> Result<()> {

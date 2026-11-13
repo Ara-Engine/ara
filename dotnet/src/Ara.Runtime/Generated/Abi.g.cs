@@ -294,7 +294,7 @@ namespace Ara.Hosting
     /// <summary>
     /// Passed to <c>ara_script_init</c>: ABI identity, the host context and the host table.
     /// </summary>
-    [StructLayout(LayoutKind.Explicit, Size = 192)]
+    [StructLayout(LayoutKind.Explicit, Size = 200)]
     public unsafe partial struct HostInit
     {
         /// <summary>
@@ -322,7 +322,7 @@ namespace Ara.Hosting
     /// <summary>
     /// Functions the Rust host offers C#. Each takes the opaque <c>ctx</c> from <c>HostInit</c>.
     /// </summary>
-    [StructLayout(LayoutKind.Explicit, Size = 168)]
+    [StructLayout(LayoutKind.Explicit, Size = 176)]
     public unsafe partial struct HostApi
     {
         /// <summary>
@@ -439,6 +439,15 @@ namespace Ara.Hosting
         /// </summary>
         // (void* ctx)
         [FieldOffset(160)] public delegate* unmanaged<void*, ulong> GraphicsRevision;
+        /// <summary>
+        /// First solid surface (sensors excluded) along the ray from <c>o</c> over the full
+        /// displacement <c>d</c>, in the physics state of the last step. <c>ignore</c> (0: none) leaves
+        /// one entity's own body out. On a hit writes the entity to <c>entity</c> and seven floats
+        /// to <c>hit</c> (point, outward normal, fraction of the displacement) and returns 1;
+        /// otherwise 0. Exclusive gameplay phases only.
+        /// </summary>
+        // (void* ctx, float ox, float oy, float oz, float dx, float dy, float dz, ulong ignore, ulong* entity, float* hit)
+        [FieldOffset(168)] public delegate* unmanaged<void*, float, float, float, float, float, float, ulong, ulong*, float*, uint> PhysicsRaycast;
     }
 
     /// <summary>
@@ -727,9 +736,9 @@ namespace Ara.Hosting
     public static class AbiInfo
     {
         /// <summary>Must equal the host's <c>ABI_VERSION</c>.</summary>
-        public const uint Version = 5;
+        public const uint Version = 6;
         /// <summary>Hash of every ABI layout and the engine components this file was generated from.</summary>
-        public const ulong LayoutHash = 0x9256AB4E8EC96F39UL;
+        public const ulong LayoutHash = 0x2E1839C21AA9C88AUL;
 
         /// <summary>Checks that the C# layouts agree with the generated sizes; returns an error or null.</summary>
         public static string? VerifySizes()
@@ -740,7 +749,7 @@ namespace Ara.Hosting
             if (Unsafe.SizeOf<global::Ara.Hosting.BehaviourCall>() != 56) return "global::Ara.Hosting.BehaviourCall: expected 56 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.BehaviourCall>();
             if (Unsafe.SizeOf<global::Ara.Hosting.CommandCall>() != 112) return "global::Ara.Hosting.CommandCall: expected 112 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.CommandCall>();
             if (Unsafe.SizeOf<global::Ara.Hosting.ReloadReport>() != 120) return "global::Ara.Hosting.ReloadReport: expected 120 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.ReloadReport>();
-            if (Unsafe.SizeOf<global::Ara.Hosting.HostInit>() != 192) return "global::Ara.Hosting.HostInit: expected 192 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.HostInit>();
+            if (Unsafe.SizeOf<global::Ara.Hosting.HostInit>() != 200) return "global::Ara.Hosting.HostInit: expected 200 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.HostInit>();
             if (Unsafe.SizeOf<global::Ara.Transform>() != 36) return "global::Ara.Transform: expected 36 bytes, got " + Unsafe.SizeOf<global::Ara.Transform>();
             return null;
         }

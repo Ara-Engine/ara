@@ -20,7 +20,7 @@ pub(crate) use describe::Fnv;
 pub use describe::{AbiConst, AbiField, AbiFn, AbiStruct, AbiTable};
 
 /// Bumped on any incompatible change to the semantics of the tables.
-pub const ABI_VERSION: u32 = 5;
+pub const ABI_VERSION: u32 = 6;
 
 abi_structs! { PUBLIC_STRUCTS;
     /// The fixed simulation tick that every system, behaviour and command sees.
@@ -326,6 +326,12 @@ abi_table! {
         fn graphics(ctx: *mut c_void, request: *const u8, len: u32, out: *mut u8, cap: u32) -> i32;
         /// Accepted graphics revision, or zero outside a host-owned exclusive scope.
         fn graphics_revision(ctx: *mut c_void) -> u64;
+        /// First solid surface (sensors excluded) along the ray from `o` over the full
+        /// displacement `d`, in the physics state of the last step. `ignore` (0: none) leaves
+        /// one entity's own body out. On a hit writes the entity to `entity` and seven floats
+        /// to `hit` (point, outward normal, fraction of the displacement) and returns 1;
+        /// otherwise 0. Exclusive gameplay phases only.
+        fn physics_raycast(ctx: *mut c_void, ox: f32, oy: f32, oz: f32, dx: f32, dy: f32, dz: f32, ignore: u64, entity: *mut u64, hit: *mut f32) -> u32;
     }
 }
 
