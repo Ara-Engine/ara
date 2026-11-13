@@ -152,6 +152,14 @@ pub(crate) struct Bridge {
     /// How many frames `begin` allows in flight (`Options::frames_in_flight`, at most
     /// `MAX_IN_FLIGHT`).
     in_flight_limit: usize,
+    /// `ARA_RENDERLAB_FREEZE_SKIN_AFTER=<n>` (an A/B switch for what skinned members cost
+    /// Renderlab's acceleration structures): from the n-th begun frame on, skinned objects'
+    /// transforms and palettes are no longer handed to Renderlab (`Scene::skin_frozen`).
+    freeze_skin_after: Option<u64>,
+    /// Frames begun so far.
+    frames_begun: u64,
+    /// `ARA_RENDERLAB_DROP_SKINNED=1` (`Scene::skin_dropped`).
+    drop_skinned: bool,
     /// The frames begun and not yet taken, oldest first (`Bridge::begin`, `Bridge::finish`).
     pending: std::collections::VecDeque<Pending>,
     /// The last frame's eye and view direction, to notice a view that jumps.
@@ -288,6 +296,12 @@ impl Bridge {
                 .unwrap_or(options.frames_in_flight)
                 .clamp(1, MAX_IN_FLIGHT),
             pending: std::collections::VecDeque::new(),
+            freeze_skin_after: std::env::var("ARA_RENDERLAB_FREEZE_SKIN_AFTER")
+                .ok()
+                .and_then(|value| value.parse().ok()),
+            frames_begun: 0,
+            drop_skinned: std::env::var("ARA_RENDERLAB_DROP_SKINNED")
+                .is_ok_and(|value| value == "1"),
             last_view: None,
         })
     }
@@ -395,6 +409,11 @@ impl Bridge {
         // (`TERRAIN_GROUPS`); entity draws and foliage share the rest. On the non-RT path foliage is capped by the largest
         // mesh uploaded: when this frame uploads a larger one (a new cut or batch), the
         // foliage is rebuilt for it before the frame renders.
+        self.scene.skin_dropped = self.drop_skinned;
+        self.scene.skin_frozen = self
+            .freeze_skin_after
+            .is_some_and(|after| self.frames_begun >= after);
+        self.frames_begun += 1;
         let nonrt = self.path == ActivePath::NonRt;
         for _ in 0..2 {
             let known = self.scene.largest_triangles();
