@@ -73,6 +73,16 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
    shows the right-hand pad and slider in the disc's shadow. *Workaround:* the disc sits 2.6
    degrees high so its shadow passes over the course. *Smallest change:* honour the flag in the
    traced sun visibility, and give `Environment` a sun disc.
+   **Fixed for the trail and the speckles (Ara #192, Renderlab #93; Ara main `a7a124dfa`):**
+   the flag reaches the renderer. On the M5 the ball's spark trail no longer throws a shadow
+   on the deck beside itself, and the faint warm speckles that covered the sunlit decks are
+   gone: forcing the sun disc to cast again at run time brings them back across the start
+   view, and switching it off removes them. All eleven replay views differ from the previous
+   main by that much (0.1 to 0.8% of pixels by more than 8 levels; the same build twice,
+   0.00%), at the same shading time. The disc's 300 m shadow was not re-tested: with the disc
+   moved onto the sun's direction and forced to cast, today's renderer drew no such shadow
+   either way, so the test says nothing. The 2.6 degree workaround is left in place. The
+   committed stills predate the fix and are re-shot with the cloud-shadow sheets.
 6. **`ara capture` could not show a UI screen, and nothing can click through the shell.**
    *Wanted:* stills of the title and the course page. *Happened:* a capture always drew the
    in-game HUD, so for five rounds the title was never seen; when it finally was, it had four
@@ -237,7 +247,7 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
     cloud at the start and pylon shadows across the clouds at the goal, and Ara shows almost
     none. *What the scene asks for:* every course piece, pylon, ring and cloud bank casts and
     receives. Nothing in Glint turns either off except the sun's disc and the ball's trail
-    (`castShadows: false`, which the traced path ignores anyway: item 5); no component has a
+    (`castShadows: false`, which the traced path ignored when this was measured: item 5); no component has a
     shadow distance; the sun is one directional light of 95,000 lux, 0.54 degrees across, 20
     degrees up, so a deck 45 m over a cloud top throws its shadow about 120 m along the cloud.
     *What Renderlab draws* (M5, traced path, main `9a6541060`, Renderlab 99f5d395): with the
