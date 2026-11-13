@@ -27,9 +27,10 @@ pub use boost::register_tick_thread;
 pub use clr::Runtime;
 pub use ecs::cmdbuf::Applied;
 pub use host::{
-    Boundary, CommandRecord, ComponentWrite, Cue, EditOrigin, EngineBindings, LogSink,
-    ModuleStatus, RayQuery, ResourceWrite, ScriptConfig, ScriptControls, ScriptHost, ScriptInputs,
-    ScriptNavigation, ScriptRayHit, ScriptRays, SourceClaim, SourceClaimPhase,
+    Boundary, CommandRecord, ComponentWrite, ContactQuery, Cue, EditOrigin, EngineBindings,
+    LogSink, ModuleStatus, RayQuery, ResourceWrite, ScriptConfig, ScriptContact, ScriptContacts,
+    ScriptControls, ScriptHost, ScriptInputs, ScriptNavigation, ScriptRayHit, ScriptRays,
+    SourceClaim, SourceClaimPhase,
 };
 pub use module::{MODULE_FILE, ModuleProfile, ModuleSpec, load_order};
 pub mod project;

@@ -16,6 +16,32 @@ public readonly struct RayHit
     public float Distance { get; init; }
 }
 
+/// <summary>Where a contact is in its life this tick.</summary>
+public enum ContactPhase
+{
+    /// <summary>The two first touched this tick.</summary>
+    Started,
+    /// <summary>They were already touching.</summary>
+    Persisted,
+    /// <summary>They stopped touching this tick (or one of them was removed).</summary>
+    Stopped,
+}
+
+/// <summary>One contact of an entity in the last completed physics tick.</summary>
+public readonly struct Contact
+{
+    /// <summary>The entity touched; null once it has been removed.</summary>
+    public Entity Other { get; init; }
+    /// <summary>Where they touch, in world space.</summary>
+    public Vector3 Point { get; init; }
+    /// <summary>The normal out of the other surface, towards the entity asked about.</summary>
+    public Vector3 Normal { get; init; }
+    /// <summary>Started, persisted or stopped this tick.</summary>
+    public ContactPhase Phase { get; init; }
+    /// <summary>The other collider is a trigger: nothing pushed back.</summary>
+    public bool IsTrigger { get; init; }
+}
+
 /// <summary>
 /// Scene queries against the physics world, for behaviours and commands. Answers come from the
 /// bodies as physics left them after the last fixed tick, so the same tick always sees the same
@@ -45,5 +71,31 @@ public static class Physics
             Distance = values[6] * distance,
         };
         return true;
+    }
+
+    /// <summary>
+    /// The contacts <paramref name="entity"/> took part in during the last completed physics
+    /// tick, copied into caller-owned <paramref name="scratch"/>: solid contacts, then triggers,
+    /// then character contacts, each in a fixed order. Throws if the span is too small.
+    /// A body that has fallen asleep reports none: turn <c>RigidBody.allowSleep</c> off on a
+    /// body whose resting contacts you need every tick.
+    /// </summary>
+    public static Span<Contact> Contacts(Entity entity, Span<Contact> scratch)
+    {
+        Span<ContactRecord> records = stackalloc ContactRecord[scratch.Length];
+        var count = Host.PhysicsContacts(entity, records);
+        for (var i = 0; i < count; i++)
+        {
+            ref readonly var r = ref records[i];
+            scratch[i] = new Contact
+            {
+                Other = new Entity(r.Other),
+                Point = new Vector3(r.Px, r.Py, r.Pz),
+                Normal = new Vector3(r.Nx, r.Ny, r.Nz),
+                Phase = (ContactPhase)r.Phase,
+                IsTrigger = r.Sensor != 0,
+            };
+        }
+        return scratch[..count];
     }
 }

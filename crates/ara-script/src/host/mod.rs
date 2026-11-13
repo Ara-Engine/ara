@@ -85,6 +85,34 @@ pub type RayQuery = unsafe fn(
     Option<Entity>,
 ) -> Option<ScriptRayHit>;
 
+/// One contact of an entity this tick, as C# sees it (`Physics.Contacts`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ScriptContact {
+    /// The entity touched (`Entity::to_bits`), or zero once it has been removed.
+    pub other: u64,
+    /// World-space contact point.
+    pub point: [f32; 3],
+    /// Normal out of the other surface, towards the entity asked about.
+    pub normal: [f32; 3],
+    /// 0 started, 1 persisted, 2 stopped.
+    pub phase: u32,
+    /// The other collider is a trigger.
+    pub sensor: bool,
+}
+
+/// The contacts an entity took part in during the last completed physics tick, supplied by
+/// the embedding runtime like [`ScriptRays`]. Absent, nothing touches anything.
+#[derive(Resource, Clone, Copy)]
+pub struct ScriptContacts(pub ContactQuery);
+
+/// A contact query: the running phase's world cell, the entity asked about and the list to
+/// append its contacts to, in physics' own deterministic order.
+pub type ContactQuery = unsafe fn(
+    bevy_ecs::world::unsafe_world_cell::UnsafeWorldCell<'_>,
+    Entity,
+    &mut Vec<ScriptContact>,
+);
+
 /// Per-tick native controls emitted by exclusive C# gameplay, drained before physics/animation.
 #[derive(Resource, Default)]
 pub struct ScriptControls {
