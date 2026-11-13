@@ -214,5 +214,7 @@ as a still, and a still is taken right after a history cut. `ara-samples glint-r
 - `compare/` numbers and camera path for the three-engine comparison, and export notes.
 - `preview/` stills (1280 x 720 JPEG): eleven taken mid-run by the replay, five review views,
   the title, the course page and pause; `preview/defects/` holds renderer evidence.
+  The run and review stills are from Ara main `b958132fd` (Renderlab `fdf2fb05`, M5 Pro), with
+  sun shadows reaching the clouds; the title, the course page and pause are older.
 - `repro/alpha-black/` the minimal alpha-blend reproducer (Renderlab #65).
 - [`FINDINGS.md`](FINDINGS.md) what building this through Ara's own interfaces showed.
