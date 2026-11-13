@@ -672,8 +672,8 @@ fn author(ctx: &Ctx, models: &Models, time: &Time) -> Result<()> {
     );
     // The lamp fittings that enclose their own light (`kits::lamps`, the lantern glass):
     // they glow, and they must not shadow the light inside them, which is this switch on
-    // the mesh renderer. Renderlab does not honour it yet (FINDINGS 17), so today each of
-    // these lamps lights only the inside of its own fitting.
+    // the mesh renderer (honoured on the Renderlab path from Ara #192; FINDINGS 17). Their
+    // glow still adds to the lamp's light through the indirect cache.
     for (id, name, model, nits) in [
         ("e_lamps", "Lamp shades and bulbs", "atelier_lamps", 6000),
         (

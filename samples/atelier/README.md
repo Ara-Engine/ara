@@ -124,6 +124,13 @@ Night scene clips (`scene` in `camera_clips.json` says which scene a clip belong
 | `nightdolly` | 3 s | a push across the courtyard toward the doorway (0.5, 1.5, 8.0 to 0.3, 1.5, 4.5, looking at 0, 1.6, 0, 55 deg) |
 | `nightlantern` | 1 frame | the day's `lantern` view at night |
 
+The stills in `preview/` are shot on Ara main `a7a124dfa` (Renderlab `c35a19ee`) on an M5 Pro.
+From that main the lamps light what is round them (FINDINGS 17). In `night`, `nightlantern`,
+`glow` and `lantern` each fitting still counts twice: its lamp lights the scene, and its
+glowing glass adds several times as much again through the indirect light, which is the
+blotching on the night stills' paving and walls. That is rebalanced once the renderer's rule
+for a light inside a glowing mesh lands.
+
 ## Engine-side extras (do not export)
 
 The mannequin (stands by the courtyard bench at -4.7, 0, 3.3, turned toward the doorway; seen in the dolly and cut clips, not the still) and its idle animation (skinned meshes are baked at one pose by the exporter), the

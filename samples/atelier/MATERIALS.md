@@ -4,7 +4,7 @@ Every surface in `levels/atelier.scene` whose roughness is under 0.5, the value 
 Renderlab stops tracing a glossy reflection (under 0.05 a one-ray mirror; between the two a
 lobe that, from Renderlab 99f5d395, fades out between 0.35 and 0.5). Read from the kit glTF the
 builder writes and from the third-party models as fetched; the previews are shot on Ara main
-`f134c989f` (Renderlab `9ae2929d`).
+`a7a124dfa` (Renderlab `c35a19ee`).
 
 ## Set by a number
 
@@ -53,9 +53,10 @@ Per texel from a metallic-roughness texture (factors 1.0), sampled at 256 x 256.
 
 ## The night scene: what it asks of the lights
 
-`levels/atelier_night.scene`, the same geometry and materials after dark. **Not yet a valid
-measure**: until the renderer honours `castShadows: false`, every light below is blocked by
-its own fitting and the frame is lit by glowing glass alone (FINDINGS 17).
+`levels/atelier_night.scene`, the same geometry and materials after dark. The lights light it
+from Ara main `a7a124dfa`, which honours `castShadows: false` (FINDINGS 17); **its cost is a
+valid measure, its picture not yet**, because each fitting's glowing glass still adds
+several times its lamp's light through the indirect cache.
 
 | Lights | Count | Kind | Each |
 |---|---|---|---|
@@ -80,9 +81,10 @@ because each encloses its own light:
 | `atelier_night_glass` (night only) | the nineteen night lanterns' glass | Night lantern 0 to 18 |
 
 The lanterns' steel frames, the lamps' stems and the pendant's cord still cast shadows. The
-glass and bulbs still glow (5000 and 6000 nits), so once the lamps light the room the glow
-adds to them through the indirect light; the lamp intensities have not been rebalanced for
-that and will be looked at when it can be seen.
+glass and bulbs still glow (5000 and 6000 nits), and now that the lamps light the scene the
+glow adds to them through the indirect light: each fitting counts twice, the glass with
+several times its lamp's lumens (FINDINGS 17). Neither is rebalanced yet; that is done once,
+when the renderer lets a lamp claim the glow of the mesh it sits in.
 
 ## What this means for a reflection test
 

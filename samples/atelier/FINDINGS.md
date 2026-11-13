@@ -62,37 +62,42 @@ No engine code was changed for any of these.
    the mannequin (`Idle_Talking`) in the courtyard, in the dolly and cut clips and out of the
    still.
 
-17. **A lamp whose light sits inside its own fitting lights nothing.** Atelier's lamps are
-    built as lamps are: a point or spot light at the centre of a glowing bulb, globe or
-    lantern glass (and, for the pendant, inside its shade). The fitting's mesh blocks every
-    shadow ray to the light, so the light reaches only the inside of its own fitting. The
-    switch every engine has for this, a fitting that casts no shadow, exists in Ara
-    (`MeshRenderer.castShadows`) and **the Renderlab path ignores it** (the bridge never
-    reads it; Renderlab has no per-object equivalent). Measured on the night scene
-    (`levels/atelier_night.scene`, 25 local lights, M5 Pro, 1280 x 720, main `f134c989f`):
-    - With every emissive surface switched off at run time the frame is black: mean 0.2 of
-      255 ([`preview/defects/night_emissives_off.jpg`](preview/defects/night_emissives_off.jpg)).
-      With the lights' shadow rays off as well (`RENDERLAB_LOCAL_RAY_BUDGET=0`) the same
-      frame is smoothly lit by the 20 lanterns, mean 6.9
-      ([`preview/defects/night_emissives_off_unshadowed.jpg`](preview/defects/night_emissives_off_unshadowed.jpg)).
-      So all the light in the night still comes from the glowing glass through the
-      indirect cache, which is why its paving and walls are covered in hand-sized blotches
-      that 60 held frames do not settle.
-    - The lights still pay for their shadow rays: 41.4 ms of shading with them, 15.8 ms
-      with the budget at 0. That is 25.6 ms, about 1 ms a light, for lights that light
-      nothing.
-    - All 25 are shadowed, none dropped: the default frame is pixel-identical to
-      `RENDERLAB_LOCAL_RAY_BUDGET=all`, and budgets of 13 and 4 change 5.6% and 9.3% of its
-      pixels by more than 8 levels.
-    - The chrome sphere is pure black at night and the lantern's polished backplate shows no
-      lantern, for the same reason; with shadows off both show the lights.
-    - **The day scene has the same fault and has had it since it was built**: its pendant,
-      floor lamp, table globe and wall lantern contribute almost nothing; the room is lit by
-      sun, sky and glowing bulbs. An engine that honours the switch, or imports the lights
-      without the fittings' shadows, lights the room with its lamps.
-    The content is now what it should be: the fittings are their own models with
-    `castShadows: false` (`MATERIALS.md` lists them). The picture does not change until the
-    renderer has a per-object "casts no shadow" and the bridge passes the flag.
+17. **Fixed by the flag (Ara #192, Renderlab #93): a lamp whose light sits inside its own
+    fitting lit nothing.** Atelier's lamps are built as lamps are: a point or spot light at
+    the centre of a glowing bulb, globe or lantern glass (and, for the pendant, inside its
+    shade). The fitting's mesh blocked every shadow ray to the light, because the Renderlab
+    path ignored `MeshRenderer.castShadows: false`, the switch every engine has for this.
+    It is honoured from Ara main `a7a124dfa` (Renderlab `c35a19ee`). The night scene
+    (`levels/atelier_night.scene`, 25 local lights, M5 Pro, 1280 x 720, 60 held frames):
+
+    | | before (main `f134c989f`) | with the flag |
+    |---|---|---|
+    | every glowing surface off, frame mean of 255 | 0.2 ([still](preview/defects/night_emissives_off.jpg)) | **3.0** ([still](preview/defects/night_lamps_only.jpg)) |
+    | and the lights' shadow rays off too (`RENDERLAB_LOCAL_RAY_BUDGET=0`) | 6.9 ([still](preview/defects/night_emissives_off_unshadowed.jpg)) | 7.4 ([still](preview/defects/night_lamps_only_unshadowed.jpg)) |
+    | shading, all 25 lamps shadowed | 41.4 ms | **29.3 ms** |
+    | shading, ray budget 0 | 15.8 ms | 9.2 ms |
+
+    - The lamps now light the paving, the parapet and the walls, with the shadows of the
+      mannequin, the planters and each lantern's own frame and backplate; 3.0 against 7.4
+      unshadowed is that shading. The time rows include the other renderer changes between
+      the two mains, not the flag alone. Before the fix the lights paid about 1 ms each in
+      shadow rays for lighting nothing.
+    - A switch at run time takes effect both ways: one lantern's glass patched to cast and
+      back changes 16.6% of the `nightlantern` view's pixels by more than 8 levels, and the
+      picture returns (0.0%).
+    - By day the lamps hardly show (the same switch moves 0.2% of the `lantern` and `glow`
+      views' pixels): 120 to 900 lm against the sun. What does show is each lamp as a
+      highlight in the polished plate behind the lantern and in the tray under the globe.
+    - **Still wrong, and not the flag's to fix: each fitting counts twice.** Its lamp lights
+      the scene and its glowing glass lights it again, with several times the lamp's light:
+      a lantern's glass is 0.262 m2 at about 4,000 nits, about 3,300 lm, round a 600 lm
+      light; the room's bulbs give about 5,400 lm round 1,470 lm of lights. The glow arrives
+      through the indirect cache as hand-sized blotches that 60 held frames do not settle,
+      so the `night` still is still mostly that light (frame mean 26.5 where the lamps
+      alone give 3.0). The glass and the night exposure are rebalanced once, when the
+      renderer's rule for a light inside a glowing mesh lands: the lamp then claims the
+      glow, and the glass is seen by the camera and in reflections but adds no light.
+    - The glowing glass itself is still dark in reflections (item 15).
 18. **A see-through material that glows cannot be drawn on the Mac.** Making the lantern
     glass an alpha-blended emitter fails every capture of the scene with `ARA7300 ... a
     transparent material's program with Parameters is not assembled`: Renderlab's ara-gpu
@@ -155,8 +160,10 @@ No engine code was changed for any of these.
     chrome sphere 141/153/170: a grey ball where a glowing one should be. The chrome
     sphere's own reflection in the tray is bright (229/229/227), so the reflections
     themselves work; it is the emitter's light that is missing from them. On Ara main
-    `f134c989f` (Renderlab `9ae2929d`). A renderer fix is on its way; this still is the
-    check for it. The same outdoors, in daylight: the `lantern` still (`e_camlantern0`,
+    `f134c989f` (Renderlab `9ae2929d`); the stills were re-shot on `a7a124dfa` (Renderlab
+    `c35a19ee`), where the globe's and the lantern's reflections are as dark as before and
+    only the lamp inside each shows, as a small highlight. A renderer fix is on its way;
+    this still is the check for it. The same outdoors, in daylight: the `lantern` still (`e_camlantern0`,
     [`preview/lantern.jpg`](preview/lantern.jpg)) shows the courtyard wall lantern's glass
     at 186/174/158 and, in the nickel plate behind it, the same glass at 49 to 59 grey,
     no brighter than the plate beside it (58).
