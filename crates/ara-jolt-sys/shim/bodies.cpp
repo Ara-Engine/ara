@@ -16,12 +16,14 @@ uint32_t ara_bodies_create(AraWorld* w, const AraBodyDesc* descs, uint32_t count
             require(d.motion == 0 || !shape->MustBeStatic(), "mesh/heightfield requires a static body");
             require(finite(d.position) && unit(d.rotation) && finite(d.linear) && finite(d.angular), "invalid body pose/velocity");
             require(finite(d.mass) && d.mass >= 0 && finite(d.friction) && d.friction >= 0 && finite(d.restitution) && d.restitution >= 0 && d.restitution <= 1, "invalid mass/material");
+            require(finite(d.linear_damping) && d.linear_damping >= 0 && finite(d.angular_damping) && d.angular_damping >= 0, "invalid body damping");
         }
         batch.reserve(count);
         for (uint32_t i=0; i<count; ++i) {
             const auto& d = descs[i];
             BodyCreationSettings s(w->shape(d.shape), RVec3(v3(d.position)), q4(d.rotation), EMotionType(d.motion), ObjectLayer(d.layer));
             s.mFriction = d.friction; s.mRestitution = d.restitution;
+            s.mLinearDamping = d.linear_damping; s.mAngularDamping = d.angular_damping;
             s.mIsSensor = (d.flags & 1) != 0; s.mAllowSleeping = (d.flags & 2) != 0;
             s.mCollideKinematicVsNonDynamic = s.mIsSensor;
             s.mMotionQuality = (d.flags & 4) ? EMotionQuality::LinearCast : EMotionQuality::Discrete;
