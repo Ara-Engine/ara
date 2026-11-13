@@ -105,7 +105,7 @@ satin at 0.5, which is where the renderer stops tracing a glossy reflection for 
 (navy at 0.45 and coral at 0.25 cost 2 to 3 ms a frame on the decks: FINDINGS, renderer notes,
 and `preview/r8/` for the pairs); the
 polish is deliberate and limited to the navy inlay down each deck (roughness 0.06), a disc on
-each pad and the goal's floor; chrome on posts, the ball, the cannon's barrel and the goal portal's casing; the rails and
+each pad and the goal's floor (0.05); chrome (0.04, a one-ray mirror) on posts, the cannon's barrel and the goal portal's casing, and the ball (0.03); emissive surfaces are written at roughness 0.6 so they are not traced as reflectors; the rails and
 the bridge's slab are transmission glass (IOR 1.5). Small lit studs run along every kerb. One accent colour: coral (1.0, 0.33, 0.12).
 
 ## The deterministic replay
