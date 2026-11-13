@@ -152,6 +152,9 @@ pub(crate) struct Bridge {
     /// How many frames `begin` allows in flight (`Options::frames_in_flight`, at most
     /// `MAX_IN_FLIGHT`).
     in_flight_limit: usize,
+    /// `ARA_RENDERLAB_ONE_SUBMIT=1`: the CPU-copy handoff's copy rides in the frame's own
+    /// submission instead of a submission of its own.
+    one_submit: bool,
     /// The frames begun and not yet taken, oldest first (`Bridge::begin`, `Bridge::finish`).
     pending: std::collections::VecDeque<Pending>,
     /// The last frame's eye and view direction, to notice a view that jumps.
@@ -288,6 +291,7 @@ impl Bridge {
                 .unwrap_or(options.frames_in_flight)
                 .clamp(1, MAX_IN_FLIGHT),
             pending: std::collections::VecDeque::new(),
+            one_submit: std::env::var("ARA_RENDERLAB_ONE_SUBMIT").is_ok_and(|value| value == "1"),
             last_view: None,
         })
     }
@@ -485,10 +489,29 @@ impl Bridge {
             self.readbacks.discard();
         }
         self.ensure_target(gpu, view.size)?;
-        let rendered = self
-            .engine
-            .render_view(view_id, &lighting::camera(frame)?)?
-            .frame;
+        // With `ARA_RENDERLAB_ONE_SUBMIT=1` and the CPU-copy handoff, the copy of the frame into
+        // its readback buffer is recorded into the frame's own last command encoder: one queue
+        // submission less per frame (`Engine::render_view_then`).
+        let camera = lighting::camera(frame)?;
+        let in_frame = self.one_submit && self.target.as_ref().is_some_and(|t| t.shared.is_none());
+        let mut colour_in_frame = None;
+        let rendered = if in_frame {
+            let taken = std::sync::Arc::new(std::sync::Mutex::new(None));
+            let (device, size, slot) = (self.engine.device().clone(), view.size, taken.clone());
+            let report =
+                self.engine
+                    .render_view_then(view_id, &camera, move |encoder, output| {
+                        if let Ok(mut slot) = slot.lock() {
+                            *slot = Some(crate::id_target::Readback::record(
+                                &device, encoder, output, size,
+                            ));
+                        }
+                    })?;
+            colour_in_frame = taken.lock().ok().and_then(|mut slot| slot.take());
+            report.frame
+        } else {
+            self.engine.render_view(view_id, &camera)?.frame
+        };
         let target = self.target.as_mut().context("target ensured above")?;
         if self.scene_ids {
             if target.ids.as_ref().is_none_or(|t| t.size() != view.size) {
@@ -521,12 +544,14 @@ impl Bridge {
         } else if let Some(output) = self.engine.view_output(view_id) {
             // The CPU copy: the frame's texels are copied into buffers now, behind it, so a frame
             // recorded after it cannot change what this one's `finish` reads.
-            let colour = crate::id_target::Readback::queue(
-                self.engine.device(),
-                self.engine.queue(),
-                output,
-                view.size,
-            );
+            let colour = colour_in_frame.take().unwrap_or_else(|| {
+                crate::id_target::Readback::queue(
+                    self.engine.device(),
+                    self.engine.queue(),
+                    output,
+                    view.size,
+                )
+            });
             let ids = target.ids.as_ref().map(|ids| ids.queue_read(&self.engine));
             readback = Some((colour, ids));
         }
