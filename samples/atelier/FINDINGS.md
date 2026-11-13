@@ -117,7 +117,10 @@ No engine code was changed for any of these.
     sphere's own reflection in the tray is bright (229/229/227), so the reflections
     themselves work; it is the emitter's light that is missing from them. On Ara main
     `f134c989f` (Renderlab `9ae2929d`). A renderer fix is on its way; this still is the
-    check for it.
+    check for it. The same outdoors, in daylight: the `lantern` still (`e_camlantern0`,
+    [`preview/lantern.jpg`](preview/lantern.jpg)) shows the courtyard wall lantern's glass
+    at 186/174/158 and, in the nickel plate behind it, the same glass at 49 to 59 grey,
+    no brighter than the plate beside it (58).
 16. **The sun casts no shadow more than about 40 m from the camera.** The `shadow` still
     (`e_camshadow0`, [`preview/shadow.jpg`](preview/shadow.jpg)) looks at three 14 m masts
     42 to 44 m away, 8 m in front of a wall that faces the sun: no shadow on the gravel or
@@ -166,6 +169,11 @@ their cameras.
   its own exposure, EV100 12, from a 2 m box volume round its camera (`e_shadowev`), so
   the stripes are judged at a sensible level; the room's exposure is untouched and no
   other camera comes within 8 m of the box.
+- **`lantern`**: a polished nickel plate (0.6 x 0.6 m, the tray's material) on the wall
+  behind the courtyard lantern, a short arm from the wall to its bracket, and a camera
+  above and to the right with its own exposure (EV100 13, the box `e_lanternev`). At the
+  room's exposure the plate is a pale square on the wall in the dolly's first frame and
+  the courtyard pan.
 - **The wall lantern glows now.** Its glass sat inside a solid steel block of the frame's
   outer size, so nothing of it showed: a dark box on the wall in the dolly's first frame
   and the courtyard pan. The frame is four corner bars with the cap, foot and two bands it

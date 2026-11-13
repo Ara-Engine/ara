@@ -13,6 +13,7 @@ builder writes and from the third-party models as fetched; the previews are shot
 | Chrome sphere on the plinth (0.33 m radius) | 0.03 | 1 | one-ray mirror |
 | Chrome sphere on the table's tray (0.075 m radius) | 0.03 | 1 | one-ray mirror; 0.26 m from the glowing globe |
 | Polished nickel tray on the table (0.65 x 0.54 m) | 0.07 | 1 | glossy lobe at its sharp end: a near-mirror, under the glowing globe |
+| Polished nickel plate behind the courtyard wall lantern (0.6 x 0.6 m, on the front wall) | 0.07 | 1 | the same near-mirror, in daylight: it shows the lantern's glowing glass 0.25 m in front of it. **On today's main (`f134c989f`) the reflection shows the lantern almost unlit**: glass 186/174/158 seen directly, 49 to 59 grey in the plate, no brighter than the plate beside it (58). That is the "before" |
 | Window glass (5.6 x 3.2 m pane) | 0.04 | 0 | alpha blend at 0.14 opacity, not transmission |
 | Clear glass (the objects on the table) | 0.04 | 0 | alpha blend at 0.16 opacity, not transmission |
 | Brushed brass (bowl, pendant shade, floor lamp, the disc under the sculpture) | 0.28 | 1 | glossy lobe |
@@ -63,17 +64,14 @@ Per texel from a metallic-roughness texture (factors 1.0), sampled at 256 x 256.
 - **An emitter in two reflectors.** The `glow` still frames the table lamp's globe (an
   emitter, in shade) on the nickel tray beside the small chrome sphere: the same glowing
   object directly, in a glossy lobe at roughness 0.07 and in a one-ray mirror.
-- **The wall lantern outdoors has nothing to be seen in.** Its glass (an emitter at 5000
+- **An emitter in a reflector in daylight.** The courtyard wall lantern (an emitter at 5000
   nits on a base colour of 0.05, so in full sun its own light is about nine times what it
-  reflects) is on the front wall right of the doorway, at 3.3, 2.4, 0.68. The doorway is an
-  open hole, not glazed, and the east window's pane is round the corner, out of the
-  lantern's sight. What is within reach is all at the faint end: the lantern's own black
-  steel frame and bracket (0.42), the leaves in the planter below it (shrub 04, mean 0.46;
-  potted plant 01, mean 0.55) and the courtyard stone under it (mean 0.52, 14% of its texels
-  under 0.5, none under 0.49). None is a mirror or a near-mirror, so the lantern is an
-  emitter seen directly and nothing more; the indoor globe is the scene's only emitter in a
-  reflector. To make the lantern an outdoor check it needs a reflector added beside or below
-  it (a polished backplate on the wall, or a strip of polished stone or water on the paving).
+  reflects) has a polished nickel plate on the wall behind it, and the `lantern` still
+  looks at the two from above and to the right, where the lantern's reflection sits beside
+  the lantern. The indoor globe is the same test in shade. Nothing else near the lantern
+  would show it: the doorway is an open hole, the east window's pane is round the corner,
+  and the frame, the planter's leaves and the courtyard stone are all faint lobes
+  (roughness 0.42 to 0.55).
 - **What does reflect** is small on screen: the chrome sphere (a one-ray mirror), brass, the
   steel frames and legs, the walnut table top and console, the plinth and the armchair, most
   of them inside the fade.

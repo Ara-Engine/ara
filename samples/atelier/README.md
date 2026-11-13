@@ -16,7 +16,7 @@ ara-samples build atelier
 ara capture --root samples/atelier --scene levels/atelier.scene --camera e_camstill0 --ticks 90
 ```
 
-Camera entities: `e_camstill0`, `e_camdolly0`/`1`, `e_camcut0`..`3`, `e_camglow0`, `e_camshadow0` (one per clip key).
+Camera entities: `e_camstill0`, `e_camdolly0`/`1`, `e_camcut0`..`3`, `e_camglow0`, `e_camshadow0`, `e_camlantern0` (one per clip key).
 Export notes (what the Unity/Unreal export carries and cannot): [`compare/EXPORT.md`](compare/EXPORT.md). `preview/` holds the current stills (JPEG, replaced as the scene changes).
 
 ## Conventions
@@ -32,7 +32,7 @@ direction the light moves, not where it comes from.
 |---|---|
 | Exposure | fixed, **EV100 10.0**, set for the room (walls in shade read as white), no auto-exposure, no compensation (photometric `H = L / (1.2 * 2^EV100)`) |
 | Tone mapping | AgX, Medium High Contrast look, in Ara (the sunlit floor is about ten times the walls in shade, and Neutral clipped it to flat white); for comparisons use linear HDR |
-| The `shadow` still | **EV100 12.0**, its own: it looks at the sunlit exterior, which the room's exposure washes out. In the scene a 2 m box volume round its camera (`e_shadowev`) sets it; `camera_clips.json` gives every clip its `ev100` |
+| The `shadow` and `lantern` stills | **EV100 12.0** and **13.0**, their own: they look at the sunlit exterior, which the room's exposure washes out. In the scene a 2 m box volume round each camera (`e_shadowev`, `e_lanternev`) sets it; `camera_clips.json` gives every clip its `ev100` |
 | Post | no bloom, vignette, grading, fog, decals or material graphs |
 
 ## Sky and sun
@@ -76,7 +76,7 @@ The table lamp is a glowing globe of 0.1 m radius on the table; its light sits a
 | Blackened steel (table legs, picture frames, console legs) | 0.07, 0.07, 0.075 | 0.4 | 1 | |
 | Window glass, table glass | tint 0.88-0.9, 0.96, 1.0; alpha 0.14-0.16 | 0.04 | 0 | alpha blend, no texture |
 | Chrome (the sculpture's sphere, 0.33 m radius; a 0.075 m sphere on the table's tray) | 0.95 | 0.03 | 1 | mirror-like |
-| Polished nickel (0.65 x 0.54 m tray on the table) | 0.72, 0.7, 0.66 | 0.07 | 1 | a near-mirror, under the glowing globe |
+| Polished nickel (0.65 x 0.54 m tray on the table; 0.6 x 0.6 m plate on the wall behind the courtyard lantern) | 0.72, 0.7, 0.66 | 0.07 | 1 | a near-mirror, under the glowing globe and behind the lantern |
 | Brushed brass | 0.93, 0.72, 0.36 | 0.28 | 1 | |
 | Walnut (table top, console) | 0.3, 0.18, 0.1 | 0.4 | 0 | |
 | Graphite leather (armchair) | 0.09, 0.09, 0.1 | 0.45 | 0 | |
@@ -105,6 +105,7 @@ between keys, a key with `cut: true` ends its segment.
 | `cut` | 6 s | 3 s low courtyard pan, hard cut to the chrome sphere |
 | `glow` | 1 frame | test still at the table's end, in shade (1.85, 1.3, -5.7 looking at 0.8, 0.8, -6.13, 34 deg): the glowing globe on the nickel tray beside the small chrome sphere, so one emitter is seen directly, in a near-mirror (roughness 0.07) and in chrome (0.03) |
 | `shadow` | 1 frame | test still from the gravel west of the courtyard (-8.5, 1.29, 6.0 looking at -17.5, 5.0, -44.0, 26 deg): three masts 42 to 44 m from the camera, whose shadows cross the gravel and climb the boundary wall 50 to 54 m away as stripes 0.46, 0.23 and 0.12 m wide; exposed at EV100 12 |
+| `lantern` | 1 frame | test still of the courtyard wall lantern from above its right (4.2, 3.3, 1.9 looking at 3.42, 2.45, 0.43, 30 deg): its glowing glass beside its own reflection in the nickel plate behind it, in daylight; exposed at EV100 13 |
 
 ## Engine-side extras (do not export)
 

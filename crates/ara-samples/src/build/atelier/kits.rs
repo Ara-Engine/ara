@@ -469,12 +469,15 @@ pub fn courtyard(root: &Path, lock: &Lock) -> Result<String> {
     const STEEL: usize = 2;
     const LANTERN: usize = 3;
     const SOIL: usize = 4;
+    const NICKEL: usize = 5;
     let mut k = Kit::new(vec![
         Material::flat("teak", [0.4, 0.25, 0.12], 0.6, 0.0),
         Material::flat("weathered steel", [0.13, 0.055, 0.03], 0.85, 0.0),
         Material::flat("black steel", [0.05, 0.05, 0.055], 0.42, 1.0),
         Material::emitter("lantern glass", [1.0, 0.78, 0.5]),
         Material::flat("dark soil", [0.1, 0.07, 0.05], 1.0, 0.0),
+        // The furniture's near-mirror, for the lantern's backplate.
+        Material::flat("polished nickel", [0.72, 0.7, 0.66], 0.07, 1.0),
     ]);
     let v = Vec3::new;
     // Bench: slatted seat on steel legs, against the west wall.
@@ -500,8 +503,13 @@ pub fn courtyard(root: &Path, lock: &Lock) -> Result<String> {
         block(&mut k, STONE, v(x, 0.3, z), v(w, 0.6, d));
         block(&mut k, SOIL, v(x, 0.605, z), v(w - 0.08, 0.02, d - 0.08));
     }
-    // Wall lantern right of the doorway: bracket, frame and glowing glass.
+    // Wall lantern right of the doorway: backplate, arm, bracket, frame and glowing glass.
     let l = v(3.3, 2.4, 0.5);
+    // A polished plate on the wall behind it, set to its right and a little high so the
+    // `lantern` camera, above and to the right, sees the lantern's reflection beside the
+    // lantern: the scene's emitter in a near-mirror in daylight.
+    block(&mut k, NICKEL, v(3.42, 2.45, 0.426), v(0.6, 0.6, 0.012));
+    block(&mut k, STEEL, l + v(0.0, 0.0, -0.004), v(0.03, 0.03, 0.128));
     block(&mut k, STEEL, l + v(0.0, 0.0, 0.08), v(0.04, 0.5, 0.04));
     // Four corner bars, not a box: a solid frame round the glass hid it completely.
     for (dx, dz) in [(-0.09, -0.09), (0.09, -0.09), (-0.09, 0.09), (0.09, 0.09)] {

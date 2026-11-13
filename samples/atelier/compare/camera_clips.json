@@ -118,6 +118,22 @@
           "cut": false
         }
       ]
+    },
+    {
+      "name": "lantern",
+      "note": "The courtyard wall lantern from above its right: its glowing glass beside its own reflection in the polished nickel plate behind it (roughness 0.07), in daylight.",
+      "duration": 0,
+      "ev100": 13,
+      "keys": [
+        {
+          "t": 0,
+          "position": [4.2, 3.3, 1.9],
+          "rotation": [-0.22700482606887817, 0.23480570316314697, 0.05649548023939133, 0.9434741735458374],
+          "lookAt": [3.42, 2.45, 0.43],
+          "fovYDeg": 30,
+          "cut": false
+        }
+      ]
     }
   ]
 }

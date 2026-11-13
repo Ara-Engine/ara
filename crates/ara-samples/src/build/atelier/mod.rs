@@ -5,8 +5,8 @@
 //! one idling mannequin; six local lights with explicit source sizes.
 //!
 //! Built to cross engines: one fixed exposure, physical light units, a gradient sky
-//! given as numbers, plain metallic-roughness glTF materials, and five camera clips
-//! (three comparison clips and two test stills) as poses over time. The numbers live in
+//! given as numbers, plain metallic-roughness glTF materials, and six camera clips
+//! (three comparison clips and three test stills) as poses over time. The numbers live in
 //! the tables below and are written once to `compare/atelier.spec.json` and
 //! `compare/camera_clips.json`; the scene is built from the same tables, so the documents
 //! and the scene cannot drift.
@@ -31,10 +31,19 @@ pub const SCENE: (&str, &str) = ("levels/atelier.scene", "sc_atelier01");
 /// ISO 100, ACES-style reference of 1.2·2^EV cd/m² at white in Ara's meter convention),
 /// the same in every engine.
 const EV100: f32 = 10.0;
-/// The `shadow` still's own exposure: it looks at the sunlit exterior, which the room's
-/// exposure washes out. A box volume round its camera sets it in the scene, and its clip
-/// carries the number for other engines.
-const SHADOW_EV100: f32 = 12.0;
+/// The exterior test stills' own exposures: they look at the sunlit outside, which the
+/// room's exposure washes out. A box volume round each one's camera sets it in the scene,
+/// and its clip carries the number for other engines. `shadow`: the wall and gravel in
+/// sun. `lantern`: its glass at 5000 nits stays under white, and the plate behind it shows
+/// the sunlit paving at about a quarter of it.
+const TEST_EV100: [(&str, f32); 2] = [("shadow", 12.0), ("lantern", 13.0)];
+/// The fixed exposure of clip `name`.
+fn clip_ev100(name: &str) -> f32 {
+    TEST_EV100
+        .iter()
+        .find(|(clip, _)| *clip == name)
+        .map_or(EV100, |(_, ev)| *ev)
+}
 /// The sun: illuminance on a surface facing it, lux, and the direction its light
 /// travels (unit, world space; it shines in through the doorway and the east window).
 const SUN_LUX: f32 = 45_000.0;
@@ -173,11 +182,12 @@ const fn key(t: f32, position: Vec3, target: Vec3, fov: f32, cut: bool) -> Pose 
     }
 }
 
-/// The comparison clips: a still, a moving stretch, one hard cut, and two test stills
+/// The comparison clips: a still, a moving stretch, one hard cut, and three test stills
 /// (`glow`: an emitter seen in a near-mirror and in chrome; `shadow`: thin shadows more
-/// than 40 m from the camera). Positions interpolate linearly and rotations by slerp
-/// between keys, at 30 frames a second.
-const CLIPS: [(&str, &str, &[Pose]); 5] = [
+/// than 40 m from the camera; `lantern`: an emitter seen in a near-mirror in daylight).
+/// Positions interpolate linearly and rotations by slerp between keys, at 30 frames a
+/// second.
+const CLIPS: [(&str, &str, &[Pose]); 6] = [
     (
         "still",
         "Interior from the doorway side: sun patches, sculpture, table, armchair.",
@@ -265,6 +275,17 @@ const CLIPS: [(&str, &str, &[Pose]); 5] = [
             false,
         )],
     ),
+    (
+        "lantern",
+        "The courtyard wall lantern from above its right: its glowing glass beside its own reflection in the polished nickel plate behind it (roughness 0.07), in daylight.",
+        &[key(
+            0.0,
+            Vec3::new(4.2, 3.3, 1.9),
+            Vec3::new(3.42, 2.45, 0.43),
+            30.0,
+            false,
+        )],
+    ),
 ];
 
 /// A camera looks along -Z: its rotation as a glTF quaternion `[x, y, z, w]`.
@@ -335,7 +356,7 @@ fn clips() -> Value {
         "interpolation": "position: linear; rotation: slerp; a key with cut=true ends its segment",
         "clips": CLIPS.iter().map(|(name, note, keys)| json!({
             "name": name, "note": note, "duration": keys.last().map_or(0.0, |k| k.t),
-            "ev100": if *name == "shadow" { SHADOW_EV100 } else { EV100 },
+            "ev100": clip_ev100(name),
             "keys": keys.iter().map(|k| json!({
                 "t": k.t, "position": round3(k.position), "rotation": look_rotation(k.position, k.target),
                 "lookAt": round3(k.target), "fovYDeg": k.fov, "cut": k.cut,
@@ -414,21 +435,24 @@ pub fn build(ctx: &Ctx) -> Result<()> {
             ]},
         }),
     );
-    // The `shadow` camera stands in this box; no other camera comes within 8 m of it.
-    let shadow_camera = CLIPS
-        .iter()
-        .find(|(name, ..)| *name == "shadow")
-        .map_or(Vec3::ZERO, |(_, _, keys)| keys[0].position);
-    s.entity(
-        "e_shadowev",
-        "Exposure for the shadow still",
-        json!({
-            "Transform": {"position": round3(shadow_camera), "scale": [2, 2, 2]},
-            "PostProcessVolume": {"shape": "box", "priority": 10, "overrides": [
-                {"exposure": "manual", "ev100": SHADOW_EV100},
-            ]},
-        }),
-    );
+    // Each exterior test camera stands in its own box; no other camera comes within 4 m
+    // of either.
+    for (clip, ev100) in TEST_EV100 {
+        let camera = CLIPS
+            .iter()
+            .find(|(name, ..)| *name == clip)
+            .map_or(Vec3::ZERO, |(_, _, keys)| keys[0].position);
+        s.entity(
+            &format!("e_{clip}ev"),
+            &format!("Exposure for the {clip} still"),
+            json!({
+                "Transform": {"position": round3(camera), "scale": [2, 2, 2]},
+                "PostProcessVolume": {"shape": "box", "priority": 10, "overrides": [
+                    {"exposure": "manual", "ev100": ev100},
+                ]},
+            }),
+        );
+    }
     s.commands.extend(light(
         "e_sun",
         "Sun",
