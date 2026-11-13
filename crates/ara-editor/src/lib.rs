@@ -83,3 +83,6 @@ pub(crate) fn invalid(message: impl Into<String>) -> ara_diag::Diagnostic {
 pub fn testing_embed_play(editor: &Editor, params: &mut serde_json::Value) {
     editor.embed_play(params);
 }
+
+#[cfg(test)]
+pub(crate) mod test_turn;
