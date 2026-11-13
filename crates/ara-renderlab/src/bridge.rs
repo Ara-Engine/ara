@@ -65,7 +65,11 @@ const MAX_IN_FLIGHT: usize = 2;
 fn log_line(line: impl FnOnce() -> String) {
     static TARGET: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
     let Some(target) = TARGET
-        .get_or_init(|| std::env::var("RENDERLAB_SUBMIT_LOG").ok().filter(|v| !v.is_empty()))
+        .get_or_init(|| {
+            std::env::var("RENDERLAB_SUBMIT_LOG")
+                .ok()
+                .filter(|v| !v.is_empty())
+        })
         .as_deref()
     else {
         return;
@@ -650,7 +654,9 @@ impl Bridge {
                 std::thread::current().id(),
                 taken.frame.0,
                 taken.begin_ms,
-                taken.done_after_ms.map_or("none".into(), |ms| format!("{ms:.2}")),
+                taken
+                    .done_after_ms
+                    .map_or("none".into(), |ms| format!("{ms:.2}")),
                 taken.since.elapsed().as_secs_f64() * 1000.,
                 self.pending.len(),
             )
@@ -749,7 +755,9 @@ impl Bridge {
                 timeout: Some(FRAME_WAIT),
             };
             if let Err(error) = self.engine.device().poll(idle) {
-                eprintln!("Ara presentation: Renderlab did not go idle before its target was released ({error})");
+                eprintln!(
+                    "Ara presentation: Renderlab did not go idle before its target was released ({error})"
+                );
             }
         }
         if let Some(target) = self.target.take() {
