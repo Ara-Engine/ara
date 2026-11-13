@@ -90,6 +90,12 @@ pub struct Request<'a> {
     pub record: bool,
     /// Where stills go (the file's `captures`), if anywhere.
     pub captures: Option<PathBuf>,
+    /// Live frames to play at each still, so its timings are steady state.
+    pub hold: Option<u32>,
+    /// With `hold`: metres the camera travels along its heading over those frames (a clip).
+    pub travel: Option<f32>,
+    /// Capture size, pixels.
+    pub size: [u32; 2],
     /// A WAV to render the end of the run's sound into, checked for a signal.
     pub audio: Option<PathBuf>,
 }
@@ -146,6 +152,9 @@ pub fn run(request: &Request<'_>) -> Result<()> {
         finish: None,
         shots: replay.captures.clone(),
         out: request.captures.clone(),
+        hold: request.hold,
+        travel: request.travel,
+        size: request.size,
     };
     let mut events = replay.events.clone();
     events.sort_by_key(|e| e.tick);
@@ -226,6 +235,9 @@ struct Run<'a> {
     finish: Option<Outcome>,
     shots: Vec<Shot>,
     out: Option<PathBuf>,
+    hold: Option<u32>,
+    travel: Option<f32>,
+    size: [u32; 2],
 }
 
 impl Run<'_> {
@@ -280,10 +292,27 @@ impl Run<'_> {
             if let Some(dir) = &self.out {
                 std::fs::create_dir_all(dir)?;
                 let path = dir.join(format!("{}.png", shot.name));
-                self.mcp.play(
-                    "capture",
-                    json!({"world": self.world, "path": path.to_string_lossy(), "width": 1280, "height": 720, "marks": 0}),
-                )?;
+                let mut capture = json!({"world": self.world, "path": path.to_string_lossy(),
+                    "width": self.size[0], "height": self.size[1], "marks": 0});
+                match (self.hold, self.travel) {
+                    // A clip: the camera moves along the follow rig's heading.
+                    (Some(frames), Some(metres)) => {
+                        let read = self.mcp.play(
+                            "read",
+                            json!({"world": self.world, "paths": ["e_camera.FollowCamera.yaw"]}),
+                        )?;
+                        let yaw = read["values"]["e_camera.FollowCamera.yaw"]
+                            .as_f64()
+                            .unwrap_or(0.0)
+                            .to_radians();
+                        capture["video"] = json!(frames);
+                        capture["videoMove"] =
+                            json!([yaw.sin() * metres as f64, 0.0, yaw.cos() * metres as f64]);
+                    }
+                    (Some(frames), None) => capture["stability"] = json!(frames),
+                    (None, _) => {}
+                }
+                self.mcp.play("capture", capture)?;
                 println!("captured {} at tick {}", shot.name, self.tick);
             }
         }
