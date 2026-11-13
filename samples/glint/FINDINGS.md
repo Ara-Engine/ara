@@ -200,3 +200,21 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
   (its mirror floor). Estimated from the stills, not measured.
 - The plain alpha film (the ball's old contact shadow) is gone; nothing in the level uses
   `BLEND` now. The rails are transmission glass.
+- **What changes every tick with the camera still** (all from `Movers.cs` and `BallFx.cs`;
+  everything else, including the sky, the fog, the clouds, the isles and every other emissive,
+  is static, and no emissive level is animated):
+  - 43 orbs: each bobs 0.16 m and turns 140 degrees a second. They are the level's brightest
+    emitters (90,000 cd/m2), so 43 small emissive instances move every tick.
+  - 2 sliding platforms (kinematic bodies with lit edges, 3.2 m each way, period 270 ticks).
+  - 3 spinner bars (kinematic bodies, turning all the time).
+  - 1 trail under the ball: its transform is written every tick, with zero length while the
+    ball is slow or in the air.
+  - The cannon's carriage moves only while it loads and fires; the ball only when rolled.
+  - The HUD clock redraws while a run is on.
+- **A still is already the frozen case.** `ara capture` and `ara_play capture` do not tick the
+  world: with a world stepped to tick 30, a capture left the tick at 30 and an orb's transform
+  unchanged (checked on the Mac). So the replay stills measure a level in which none of the
+  above moves, and the untraced path's 16 to 24 ms GI gather on the RTX is not caused by them.
+  A live run with them frozen is not one switch today (the sliders and bars stop with
+  `periodTicks` 0 and `degreesPerSecond` 0 in the scene, but the orbs' bob is a constant in
+  the script).

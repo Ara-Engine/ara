@@ -174,6 +174,21 @@ floor); the start view has the most, a 6 m polished disc under the camera, and i
 dearest view.
 The simulation with scripts is about 0.5 ms a tick.
 
+### On the RTX PC (1920 x 1080)
+
+Measured by the integration thread from the replay's eleven stills (settled, world not ticking,
+pipelined present off; its table is `table-glint-fps.md` on the PC, not in this repository):
+
+| Path | FPS | GPU ms |
+|---|---|---|
+| Traced | 65 to 94 | 9.6 to 14.5 |
+| Not traced | 23 to 32 | 13.6 to 48.7 (the beam is the worst) |
+
+On the untraced path the renderer's GI gather takes 16 to 24 ms a frame on a still camera (1.6
+traced); the glass rails and bridge cost a quarter of a millisecond and the sun's shadow under
+half. That is with the renderer threads; the level is not changed for it. What moves in the
+level, for anyone chasing it, is listed in FINDINGS under the renderer notes.
+
 ## Files
 
 - `content/` the project: `levels/glint.scene` (the game), `levels/menu.scene` (the title's
