@@ -122,28 +122,29 @@ What could break it:
 
 ## Cost (M5 Pro, 1280 x 720, Renderlab traced path; the Mac loaded by other work)
 
-From this branch's captures with binaries built from Ara main `5ea43c0db` (Renderlab 191462db)
-plus the capture change of #156, on a Mac busy with other work, so treat them as relative; the
+From this branch's captures with binaries built from Ara main `b12de7d66` (Renderlab 316033ce), on a Mac busy with other work, so treat them as relative; the
 Mac GPU thread measures the branch head separately.
 
 | View | GPU ms | Shading | Indirect cache |
 |---|---|---|---|
-| Start (follow camera) | 32.2 | 23.5 | 1.6 |
-| Overview | 19.4 | 13.4 | 1.6 |
-| Turn | 27.7 | 20.9 | 1.7 |
-| Sliders | 28.1 | 20.8 | 1.7 |
-| Cannon | 20.4 | 14.5 | 1.4 |
-| Goal | 25.0 | 18.4 | 1.5 |
+| Start (follow camera) | 26.4 | 17.6 | 1.7 |
+| Overview | 17.1 | 11.1 | 1.6 |
+| Turn | 22.4 | 15.4 | 1.7 |
+| Sliders | 23.7 | 16.2 | 1.7 |
+| Cannon | 18.5 | 12.0 | 1.4 |
+| Goal | 19.9 | 13.2 | 1.5 |
 
 What moved it, round by round (same views, same binary):
 
 - Empty sky (round 1): start 34 ms, mid-course 13.5, goal 10.
 - A world of sphere-cluster clouds and thin poles (rounds 2 and 3): 36 to 50 ms; the indirect
   cache was about 18 ms in every view.
-- Clouds as one closed mesh each and fewer, thicker pylons (this round): the table above; the
-  indirect cache is about 1.6 ms again. Two things changed at once (the clouds went from 21
+- Clouds as one closed mesh each and fewer, thicker pylons: 19 to 32 ms on Renderlab 191462db;
+  the indirect cache is about 1.6 ms again. Two things changed at once (the clouds went from 21
   intersecting spheres to one 7,700-triangle surface; the pylons from about 30 to about 20), so
   which of them the cache was paying for is not isolated.
+- Renderlab 316033ce (cheaper glossy reflections), with the great arch and the gantry added:
+  the table above.
 
 Glossy surface on screen is small by design (the inlay, the pad discs, the ball, the goal's
 floor); the start view has the most, a 6 m polished disc under the camera, and it is the
