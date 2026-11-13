@@ -159,6 +159,8 @@ pub(crate) struct Bridge {
     finish_sleep: Duration,
     /// `Self::pump` calls since the last frame was taken, for the bridge log.
     polls: u32,
+    /// Time in `Engine::poll` and the longest single call since the last frame was taken (ms).
+    poll_ms: (f64, f64),
     /// `ARA_RENDERLAB_PACE=1`: `begin` waits until the GPU should be about to finish the frame
     /// in flight before recording the next, so the next frame's `queue.submit` finds an almost
     /// empty queue instead of the driver blocking it (`ARA_RENDERLAB_PACE_MARGIN_US`, default
@@ -309,6 +311,7 @@ impl Bridge {
                     .unwrap_or(0),
             ),
             polls: 0,
+            poll_ms: (0., 0.),
             pace: std::env::var("ARA_RENDERLAB_PACE")
                 .is_ok_and(|value| value == "1")
                 .then(|| {
@@ -626,7 +629,10 @@ impl Bridge {
     /// completed (any caller's poll may be the one that sees it).
     fn pump(&mut self) -> Result<renderlab::engine::Events> {
         self.polls += 1;
+        let polled = Instant::now();
         let events = self.engine.poll()?;
+        let took = polled.elapsed().as_secs_f64() * 1000.;
+        self.poll_ms = (self.poll_ms.0 + took, self.poll_ms.1.max(took));
         if let Some(sample) = events.gpu.last() {
             let ms = |pass: Option<std::time::Duration>| pass.map(|d| d.as_secs_f64() * 1000.);
             self.gpu_ms = ms(Some(sample.render_span));
@@ -714,9 +720,10 @@ impl Bridge {
         } else {
             taken.begin_ms
         };
+        let poll_ms = std::mem::take(&mut self.poll_ms);
         log_line(|| {
             format!(
-                "bridge_log thread={:?} frame={} begin={:.2} done_after={} in_flight={:.2} handoff={handoff_ms:.2} still_pending={} polls={}",
+                "bridge_log thread={:?} frame={} begin={:.2} done_after={} in_flight={:.2} handoff={handoff_ms:.2} still_pending={} polls={} poll_ms={:.2} poll_max_ms={:.2}",
                 std::thread::current().id(),
                 taken.frame.0,
                 taken.begin_ms,
@@ -726,6 +733,8 @@ impl Bridge {
                 taken.since.elapsed().as_secs_f64() * 1000.,
                 self.pending.len(),
                 std::mem::take(&mut self.polls),
+                poll_ms.0,
+                poll_ms.1,
             )
         });
 
