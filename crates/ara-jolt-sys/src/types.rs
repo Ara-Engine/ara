@@ -115,6 +115,10 @@ pub struct AraBodyDesc {
     pub restitution: f32,
     /// Dynamic mass in kg; zero uses shape density.
     pub mass: f32,
+    /// Linear damping: the fraction of linear velocity lost each second.
+    pub linear_damping: f32,
+    /// Angular damping: the fraction of angular velocity lost each second.
+    pub angular_damping: f32,
     /// Stable application identity, copied to queries and events.
     pub user_data: u64,
 }

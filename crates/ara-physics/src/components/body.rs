@@ -32,6 +32,13 @@ pub struct RigidBody {
     pub allow_sleep: bool,
     /// Use swept collision detection for fast bodies.
     pub continuous: bool,
+    /// Linear damping: the fraction of linear velocity a dynamic body loses each second,
+    /// in free flight as well as in contact. Zero keeps a thrown body on its ballistic arc.
+    #[ara(default = 0.05, range(min = 0))]
+    pub linear_damping: f32,
+    /// Angular damping: the fraction of angular velocity a dynamic body loses each second.
+    #[ara(default = 0.05, range(min = 0))]
+    pub angular_damping: f32,
 }
 impl Default for RigidBody {
     fn default() -> Self {
@@ -40,6 +47,8 @@ impl Default for RigidBody {
             mass: 0.0,
             allow_sleep: true,
             continuous: false,
+            linear_damping: 0.05,
+            angular_damping: 0.05,
         }
     }
 }

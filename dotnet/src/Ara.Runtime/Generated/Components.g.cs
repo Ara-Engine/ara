@@ -3914,7 +3914,7 @@ public partial struct ReverbZone : IComponent<ReverbZone>
 /// <summary>
 /// Rigid-body authoring settings; simulation state is written to pose and velocity.
 /// </summary>
-[StructLayout(LayoutKind.Explicit, Size = 12)]
+[StructLayout(LayoutKind.Explicit, Size = 20)]
 [EngineComponent("RigidBody", Module = "physics")]
 public partial struct RigidBody : IComponent<RigidBody>
 {
@@ -3950,6 +3950,22 @@ public partial struct RigidBody : IComponent<RigidBody>
     /// </remarks>
     [FieldOffset(9), Default(false)]
     public bool Continuous;
+    /// <summary>
+    /// Linear damping: the fraction of linear velocity a dynamic body loses each second, in free flight as well as in contact. Zero keeps a thrown body on its ballistic arc.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, ∞]. Default: 0.05.
+    /// </remarks>
+    [FieldOffset(12), Min(0), Default(0.05)]
+    public float LinearDamping;
+    /// <summary>
+    /// Angular damping: the fraction of angular velocity a dynamic body loses each second.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, ∞]. Default: 0.05.
+    /// </remarks>
+    [FieldOffset(16), Min(0), Default(0.05)]
+    public float AngularDamping;
     /// <summary>Stable engine component index.</summary>
     public static uint TypeIndex => 44;
     /// <inheritdoc/>
@@ -5277,7 +5293,7 @@ public static class EngineComponents
         "{\"shape\":\"global\",\"blendDistance\":0,\"priority\":0,\"weight\":1,\"overrides\":[]}",
         "{\"enabled\":true,\"bounds\":[10,10,10],\"priority\":0,\"blendDistance\":1,\"captureResolution\":256,\"projectionBounds\":[0,0,0],\"projectionOffset\":[0,0,0],\"captureOffset\":[0,0,0],\"intensity\":1}",
         "{\"name\":\"\",\"shape\":\"box\",\"position\":[0,0,0],\"rotation\":[0,0,0,1],\"halfExtents\":[5,3,5],\"radius\":5,\"fade\":1,\"priority\":0,\"material\":\"generic\",\"rt60\":null,\"wet\":1,\"earlyReflections\":true,\"useBaked\":true}",
-        "{\"motion\":\"static\",\"mass\":0,\"allowSleep\":true,\"continuous\":false}",
+        "{\"motion\":\"static\",\"mass\":0,\"allowSleep\":true,\"continuous\":false,\"linearDamping\":0.05,\"angularDamping\":0.05}",
         "{\"motion\":\"static\",\"mass\":0,\"allowSleep\":true,\"continuous\":false,\"lockRotation\":false}",
         "{\"seaLevel\":0,\"bottomRadius\":6360,\"groundAlbedo\":[0.401978,0.401978,0.401978],\"atmosphereHeight\":60,\"multiScattering\":1,\"traceSampleCountScale\":1,\"rayleighScatteringScale\":0.0331,\"rayleighScattering\":[0.175287,0.409607,1],\"rayleighExponentialDistribution\":8,\"mieScatteringScale\":0.003996,\"mieScattering\":[1,1,1],\"mieAbsorptionScale\":0.000444,\"mieAbsorption\":[1,1,1],\"mieAnisotropy\":0.8,\"mieExponentialDistribution\":1.2,\"absorptionScale\":0.001881,\"absorption\":[0.345561,1,0.045189],\"absorptionTipAltitude\":25,\"absorptionTipValue\":1,\"absorptionWidth\":15,\"skyLuminanceFactor\":[1,1,1],\"skyAndAerialPerspectiveLuminanceFactor\":[1,1,1],\"aerialPerspectiveViewDistanceScale\":1,\"heightFogContribution\":1,\"transmittanceMinLightElevationAngle\":-90,\"aerialPerspectiveStartDepth\":0.1,\"cloudCoverage\":0,\"cloudHeight\":2200}",
         "{\"atlas\":null,\"region\":\"\",\"normalAtlas\":null,\"size\":[0,0],\"tint\":[1,1,1,1],\"sortingLayer\":0,\"order\":0,\"flipX\":false,\"flipY\":false,\"nineSlice\":false,\"lit\":false,\"parallax\":[1,1]}",
@@ -8253,6 +8269,8 @@ internal static class EngineValueCodecs
             Mass = Field(v, "mass", "0").GetSingle(),
             AllowSleep = Field(v, "allowSleep", "true").GetBoolean(),
             Continuous = Field(v, "continuous", "false").GetBoolean(),
+            LinearDamping = Field(v, "linearDamping", "0.05").GetSingle(),
+            AngularDamping = Field(v, "angularDamping", "0.05").GetSingle(),
         };
     internal static void WriteRigidBody(Utf8JsonWriter w, RigidBody v)
     {
@@ -8272,6 +8290,14 @@ internal static class EngineValueCodecs
         w.WritePropertyName("continuous");
         {
         w.WriteBooleanValue(v.Continuous);
+        }
+        w.WritePropertyName("linearDamping");
+        {
+        WriteFloat(w, v.LinearDamping);
+        }
+        w.WritePropertyName("angularDamping");
+        {
+        WriteFloat(w, v.AngularDamping);
         }
         w.WriteEndObject();
     }

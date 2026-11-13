@@ -33,6 +33,8 @@ impl JoltBackend {
                 friction: b.collider.friction,
                 restitution: b.collider.restitution,
                 mass: b.body.mass,
+                linear_damping: b.body.linear_damping,
+                angular_damping: b.body.angular_damping,
                 user_data: b.user_data,
             });
         }

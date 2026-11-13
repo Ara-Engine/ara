@@ -58,6 +58,8 @@ typedef struct {
     float friction;
     float restitution;
     float mass;
+    float linear_damping;
+    float angular_damping;
     uint64_t user_data;
 } AraBodyDesc;
 typedef struct {
