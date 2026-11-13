@@ -59,21 +59,11 @@ fn coral() -> Material {
 fn chrome() -> Material {
     Material::flat("chrome", [0.93, 0.93, 0.95], 0.04, 1.0)
 }
-/// A pure emitter that is not also a glossy reflector. The sample builder's emitter is written
-/// at roughness 0.4, under the 0.5 where the renderer stops tracing a reflection for a
-/// surface, so every lit strip, chevron and band was traced as a reflector that nobody can
-/// see under its own light: 3.3 ms a frame at the goal and about 1 ms on every deck.
-fn emitter(name: &str, tint: [f32; 3]) -> Material {
-    Material {
-        roughness: 0.6,
-        ..Material::emitter(name, tint)
-    }
-}
 fn lit(name: &str) -> Material {
-    emitter(name, [1.0, 0.46, 0.22])
+    Material::emitter(name, [1.0, 0.46, 0.22])
 }
 fn cool(name: &str) -> Material {
-    emitter(name, [0.55, 0.8, 1.0])
+    Material::emitter(name, [0.55, 0.8, 1.0])
 }
 
 /// The surface palette, for the comparison spec.
@@ -739,7 +729,10 @@ pub fn bar(root: &Path, lock: &Lock) -> Result<String> {
 
 /// A pickup orb: a lit core inside two chrome gimbal rings.
 pub fn orb(root: &Path, lock: &Lock) -> Result<String> {
-    let mut k = Kit::new(vec![emitter("orb core", [1.0, 0.5, 0.2]), chrome()]);
+    let mut k = Kit::new(vec![
+        Material::emitter("orb core", [1.0, 0.5, 0.2]),
+        chrome(),
+    ]);
     k.sphere(0, Vec3::ZERO, 0.38, 18, Vec2::ONE);
     ring(
         &mut k,
@@ -949,9 +942,9 @@ pub fn goal(root: &Path, lock: &Lock) -> Result<String> {
     const CHROME: usize = 5;
     let mut k = Kit::new(vec![
         paint(),
-        emitter("goal light", [1.0, 0.6, 0.36]),
+        Material::emitter("goal light", [1.0, 0.6, 0.36]),
         coral(),
-        emitter("beacon", [1.0, 0.72, 0.5]),
+        Material::emitter("beacon", [1.0, 0.72, 0.5]),
         // The one mirror floor in the level.
         Material::flat("polished white stone", [0.8, 0.8, 0.82], 0.05, 0.0),
         chrome(),
@@ -1083,7 +1076,7 @@ pub fn cloud(root: &Path, lock: &Lock, seed: u32) -> Result<String> {
 pub fn trail(root: &Path, lock: &Lock) -> Result<String> {
     let mut k = Kit::new(vec![
         lit("trail core"),
-        emitter("trail edge", [1.0, 0.72, 0.5]),
+        Material::emitter("trail edge", [1.0, 0.72, 0.5]),
     ]);
     for (i, (width, from, to)) in [
         (0.34f32, 0.0f32, 0.45f32),
@@ -1301,7 +1294,7 @@ pub fn isle(root: &Path, lock: &Lock) -> Result<String> {
 
 /// The sun's disc: a lit sphere of 1 m radius the scene places far away along the sun's direction.
 pub fn sun(root: &Path, lock: &Lock) -> Result<String> {
-    let mut k = Kit::new(vec![emitter("sun", [1.0, 0.82, 0.6])]);
+    let mut k = Kit::new(vec![Material::emitter("sun", [1.0, 0.82, 0.6])]);
     k.sphere(0, Vec3::ZERO, 1.0, 24, Vec2::ONE);
     k.write(root, lock, "glint_sun")
 }

@@ -356,8 +356,8 @@ Items marked *from reading* were not confirmed by running. Renderlab was not tou
     light where no reflection can be seen. That was the "lit surfaces cost 4.5 ms at the goal"
     of the earlier table: not the light, the gloss. Glint's emitters are now written at 0.6:
     3.3 ms back at the goal and 0.7 to 1.9 on every other view, with no visible change. The
-    builder's default is unchanged because Outpost, Showcase and Atelier use it and were not
-    re-shot here; it costs them the same.
+    builder's default followed (0.6 for every sample; Showcase's emissive ball keeps 0.4 as a
+    material sample), so Glint no longer overrides it.
   - **Chrome** (posts, hoops, the bridge frame, the portal casing, the cannon barrel) was at
     0.06, a lobe of several rays. At 0.04 it is a one-ray mirror: 0.7 to 0.9 ms back where
     chrome is on screen. At 1:1 the portal casing's reflection is a little crisper
