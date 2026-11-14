@@ -327,7 +327,7 @@ impl Bridge {
             if events.ids_lost.iter().any(|lost| lost.request == request) {
                 return Ok(None);
             }
-            std::thread::sleep(Duration::from_millis(1));
+            std::thread::yield_now();
         }
         Ok(None)
     }

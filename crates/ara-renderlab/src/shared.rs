@@ -604,6 +604,17 @@ impl SharedHandoff {
     /// Waits for the published frame once, so colour and id can be copied out separately.
     fn wait_frame(&mut self) -> Result<()> {
         if self.in_flight {
+            // A short copy can finish before a Windows driver wait wakes the thread.
+            // Spin only for this submitted frame, bounded so a stalled GPU still blocks.
+            if no_frame_sleep() {
+                let started = std::time::Instant::now();
+                // SAFETY: The fence belongs to the release submitted in `publish`.
+                while !unsafe { self.raw.get_fence_status(self.fence)? }
+                    && started.elapsed() < std::time::Duration::from_millis(2)
+                {
+                    std::hint::spin_loop();
+                }
+            }
             // SAFETY: The fence belongs to the release submitted in `publish`.
             unsafe { self.raw.wait_for_fences(&[self.fence], true, u64::MAX)? };
             self.in_flight = false;
@@ -860,4 +871,10 @@ fn own(handle: vk::HANDLE) -> Handle {
 #[cfg(not(windows))]
 fn own(_: vk::HANDLE) -> Handle {
     Handle
+}
+
+/// `0` restores the driver wait for A/B measurements.
+fn no_frame_sleep() -> bool {
+    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var("ARA_PLAYER_NO_SLEEP").as_deref() != Ok("0"))
 }
