@@ -33,6 +33,19 @@ const ANIMATION: (&str, &str) = ("anim/human.animation", "ac_human1");
 const MUSIC: (&str, &str) = ("audio/outpost.music", "mu_outpost1");
 /// The hangar centre (its door faces −Z, toward the pad).
 pub const HANGAR: Vec3 = Vec3::new(96.0, 0.0, 117.0);
+/// The floodlight model's primitives (`street_lamp_01`: one node, in source order): the
+/// pole and head, the glass round the bulb, and the bulb.
+const FLOODLIGHT_BODY: u32 = 0;
+const FLOODLIGHT_GLASS: u32 = 1;
+const FLOODLIGHT_BULB: u32 = 2;
+/// Height of the floodlight's bulb above the lamp's foot (its primitive spans 3.23 to
+/// 3.30 m): where the lamp's light is. It was 3.7, in the solid cap above the glass.
+const FLOODLIGHT_BULB_HEIGHT: f32 = 3.27;
+/// The security light model's primitives (`security_light`, in source order): the
+/// housing, the bulb, and the glass (a second node).
+const SECURITY_LIGHT_BODY: u32 = 0;
+const SECURITY_LIGHT_BULB: u32 = 1;
+const SECURITY_LIGHT_GLASS: u32 = 2;
 /// Where the player starts (by the campfire).
 const START: Vec3 = Vec3::new(86.5, 0.05, 89.0);
 
@@ -1135,40 +1148,72 @@ fn exterior(ctx: &Ctx, models: &Models, ground: &Ground) -> Result<()> {
     .enumerate()
     {
         let base = on_pad(x, z);
-        s.prop(
-            Prop::new(
-                &format!("e_flood{i}"),
-                "Floodlight",
+        // The lamp in three renderers of the one model, by primitive: the pole and head,
+        // which cast shadows, and the glass and the bulb, which enclose the light and so
+        // must not (`castShadows: false`; a fitting that shadows its own light leaves the
+        // lamp lighting nothing).
+        for (suffix, name, primitive, casts) in [
+            ("", "Floodlight", FLOODLIGHT_BODY, true),
+            ("glass", "Floodlight glass", FLOODLIGHT_GLASS, false),
+            ("bulb", "Floodlight bulb", FLOODLIGHT_BULB, false),
+        ] {
+            let mut renderer = json!({"emissive": [4000, 3800, 3400], "primitive": primitive});
+            if !casts {
+                renderer["castShadows"] = json!(false);
+            }
+            let prop = Prop::new(
+                &format!("e_flood{i}{suffix}"),
+                name,
                 "floodlight",
                 base,
                 yaw,
             )
-            .renderer(json!({"emissive": [4000, 3800, 3400]})),
-        );
-        let head = base + Vec3::new(0.0, 3.7, 0.0);
-        let target = Vec3::new(C.x, 0.0, C.y);
+            .renderer(renderer);
+            // One collider for the lamp, on the body.
+            s.prop(if casts { prop } else { prop.decor() });
+        }
+        // The light sits at the bulb, inside the glass. Its aim is the direction from the
+        // lamp's cap to the compound's centre, as it was when the light sat in the cap.
+        let bulb = base + Vec3::new(0.0, FLOODLIGHT_BULB_HEIGHT, 0.0);
+        let aim = Vec3::new(C.x, 0.0, C.y) - (base + Vec3::new(0.0, 3.7, 0.0));
         s.commands.extend(light(
             &format!("e_floodl{i}"),
             "Floodlight beam",
-            head,
+            bulb,
             json!({"kind": "spot", "color": [1.0, 0.9, 0.78, 1], "intensity": 14000, "range": 34, "innerAngle": 28, "outerAngle": 48}),
-            Some(target - head),
+            Some(aim),
         ));
     }
     // Security light above the hangar door, washing the apron.
     let door_light = Vec3::new(HANGAR.x - 6.0, 6.6, HANGAR.z - 13.4);
-    s.prop(
-        Prop::new(
-            "e_seclight",
-            "Security light",
-            "security_light",
-            door_light,
-            180.0,
-        )
-        .at_origin()
-        .decor()
-        .renderer(json!({"emissive": [3000, 2900, 2700]})),
-    );
+    // As the floodlights: the housing casts, the bulb and the glass in front of the light
+    // do not.
+    for (id, name, primitive, casts) in [
+        ("e_seclight", "Security light", SECURITY_LIGHT_BODY, true),
+        (
+            "e_seclightbulb",
+            "Security light bulb",
+            SECURITY_LIGHT_BULB,
+            false,
+        ),
+        (
+            "e_seclightglass",
+            "Security light glass",
+            SECURITY_LIGHT_GLASS,
+            false,
+        ),
+    ] {
+        let mut renderer = json!({"emissive": [3000, 2900, 2700], "primitive": primitive});
+        if !casts {
+            renderer["castShadows"] = json!(false);
+        }
+        s.prop(
+            Prop::new(id, name, "security_light", door_light, 180.0)
+                .at_origin()
+                .decor()
+                .renderer(renderer),
+        );
+    }
     s.commands.extend(light(
         "e_seclightl",
         "Security light beam",

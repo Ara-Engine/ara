@@ -59,6 +59,11 @@ captures leave tracked sample evidence unchanged.
 
 ## Gotchas
 
+- A lamp is a light, a fitting that casts, and the parts that glow. The glass and bulb are
+  their own renderers (the same model, picked by `primitive`) with `castShadows: false`, and
+  the light sits at the bulb: a light inside a casting mesh lights nothing. Outpost's
+  floodlights and security light are built this way; their beams show only after dark,
+  since the dusk sun and sky outweigh them.
 - Outpost's exterior uses one world space in metres: terrain and resident chunks span `[-96, 288]` on X/Z around the compound at `(96, 96)`, and props, roads, foliage exclusions, world-space nav bounds and look poses use those same coordinates with parent/prefab transforms applied once.
   Terrain graph UVs are world XZ metres, scaled by `1 / texture.meters`.
 - Rebuild cleanup uses attributed `doc.delete` transactions and retains `.ara/journal`.
