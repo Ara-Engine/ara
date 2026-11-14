@@ -301,10 +301,15 @@ fn main() -> Result<()> {
                     "Material and character showcase",
                     lock,
                 )?)?,
+                "atelier" => {
+                    build::atelier::build(&build::Ctx::open(&samples, "atelier", "Atelier", lock)?)?
+                }
                 "glint" => {
                     build::glint::build(&build::Ctx::open(&samples, "glint", "Glint", lock)?)?
                 }
-                other => anyhow::bail!("unknown project {other} (outpost, showcase, glint)"),
+                other => {
+                    anyhow::bail!("unknown project {other} (outpost, showcase, atelier, glint)")
+                }
             }
             println!("built {project}");
         }
@@ -314,6 +319,7 @@ fn main() -> Result<()> {
             match project.as_str() {
                 "outpost" => build::outpost::generate(&root, &lock)?,
                 "showcase" => build::showcase::generate(&root, &lock)?,
+                "atelier" => build::atelier::generate(&root, &lock)?,
                 "glint" => build::glint::generate(&root, &lock)?,
                 _ => {
                     println!("{project} has no generated kits");
