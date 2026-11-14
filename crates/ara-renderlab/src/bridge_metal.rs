@@ -285,6 +285,72 @@ impl Bridge {
                 )
             })
             .unwrap_or((None, [("", 0.); EXTERNAL_PASSES]));
+        // TMP counting (uncommitted): the HDR holds -(1+n) per channel on scene pixels.
+        if std::env::var_os("TMP_COUNT").is_some()
+            && let Some(images) = self.engine.images(view_id)
+        {
+            fn half(bits: u16) -> f32 {
+                let sign = if bits & 0x8000 != 0 { -1.0 } else { 1.0 };
+                let exp = i32::from((bits >> 10) & 31);
+                let man = f32::from(bits & 1023);
+                sign * if exp == 0 { man * 2f32.powi(-24) } else { (1.0 + man / 1024.0) * 2f32.powi(exp - 15) }
+            }
+            let mut chans: [Vec<f32>; 4] = Default::default();
+            for px in images.hdr.chunks_exact(8) {
+                let v: [f32; 4] = std::array::from_fn(|c| half(u16::from_le_bytes([px[2 * c], px[2 * c + 1]])));
+                // Blue is the zero reference: -(0+1) times the uniform scale.
+                if v[0] < 0.0 && v[2] < 0.0 {
+                    for c in 0..2 {
+                        chans[c].push(v[c] / v[2] - 1.0);
+                    }
+                }
+            }
+            // Strata and mirror bands: none, mirror, glossy 1, 2-4, 5-8, 9-16, over 16.
+            let mut bands = [(0u64, 0u64); 7];
+            for (strata, mirror) in chans[0].iter().zip(&chans[1]) {
+                let (n, m) = (strata.round() as u64, *mirror > 0.5);
+                let band = match (n, m) {
+                    (0, _) => 0,
+                    (_, true) => 1,
+                    (1, _) => 2,
+                    (2..=4, _) => 3,
+                    (5..=8, _) => 4,
+                    (9..=16, _) => 5,
+                    _ => 6,
+                };
+                bands[band].0 += 1;
+                bands[band].1 += n;
+            }
+            eprintln!("TMP bands {bands:?}");
+            let stats: Vec<String> = chans
+                .iter_mut()
+                .map(|c| {
+                    c.sort_by(f32::total_cmp);
+                    let n = c.len().max(1);
+                    let mean = c.iter().sum::<f32>() / n as f32;
+                    let p = |q: f64| c.get(((c.len() as f64 - 1.0) * q) as usize).copied().unwrap_or(0.0);
+                    format!("mean {mean:.2} p50 {:.1} p90 {:.1} max {:.1}", p(0.5), p(0.9), p(1.0))
+                })
+                .collect();
+            let mut lo = [f32::MAX; 4];
+            for px in images.hdr.chunks_exact(8) {
+                for c in 0..4 {
+                    lo[c] = lo[c].min(half(u16::from_le_bytes([px[2 * c], px[2 * c + 1]])));
+                }
+            }
+            eprintln!("TMP count hdr {} min {lo:?} pixels {} | {}", images.hdr.len(), chans[0].len(), stats.join(" | "));
+        }
+        // TMP measurement (uncommitted): every pass label's GPU ms, summed by label.
+        if std::env::var_os("TMP_PASSES").is_some() {
+            let mut sums: Vec<(String, f64)> = Vec::new();
+            for (k, v) in self.engine.images(view_id).map(|i| i.times.passes.clone()).unwrap_or_default() {
+                match sums.iter_mut().find(|(n, _)| *n == k) {
+                    Some(e) => e.1 += v,
+                    None => sums.push((k, v)),
+                }
+            }
+            eprintln!("TMP gpu {:?} passes {}", gpu_ms, format!("{sums:?}"));
+        }
         // The view's opaque ids packed into RGBA8 on this device, and a copy of the same
         // texels for clicks on the frames of a host that asked; otherwise an empty submission.
         // Either is queued behind the frame: its point says when the frame is done.

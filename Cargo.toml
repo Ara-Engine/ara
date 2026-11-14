@@ -141,3 +141,8 @@ ara-gpu = { path = "crates/ara-gpu" }
 accesskit_windows = { git = "https://github.com/Snowy7/stillkit", rev = "5138e95f7c21f6689271c347b4ff2c92a2c17b6a" }
 lightyear_sync = { path = "crates/ara-net/vendor/lightyear_sync" }
 lightyear_transport = { path = "crates/ara-net/vendor/lightyear_transport" }
+
+# LOCAL MEASUREMENT ONLY (uncommitted): Renderlab from the Mac checkout.
+[patch."https://github.com/Ara-Engine/renderlab"]
+renderlab = { path = "/Users/islam/projects/renderlab-ara-gpu" }
+renderlab-asset = { path = "/Users/islam/projects/renderlab-ara-gpu/crates/asset" }
