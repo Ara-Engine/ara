@@ -635,7 +635,8 @@ impl Player {
             self.status()?;
         }
         if self.window.is_none() {
-            std::thread::sleep(Duration::from_micros(500));
+            // TEST (frame-wall grid): yield instead of sleeping; a 500 us sleep rounds up to the system timer tick (1 ms here) and lines every frame's start up on it.
+            std::thread::yield_now();
         }
         Ok(())
     }
