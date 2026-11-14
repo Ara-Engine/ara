@@ -28,7 +28,7 @@ lighting and the generated kit geometry are original Ara work.
 | Cardboard Box 01 (`cardboard_box_01`) | model | Rahul Chaudhary | outpost | <https://polyhaven.com/a/cardboard_box_01> |
 | Classic Laptop (`classic_laptop`) | model | Arrangemonk | outpost | <https://polyhaven.com/a/classic_laptop> |
 | Concrete Block Wall (`concrete_block_wall`) | texture | Charlotte Baglioni | outpost | <https://polyhaven.com/a/concrete_block_wall> |
-| Concrete Floor 02 (`concrete_floor_02`) | texture | Rob Tuytel | showcase | <https://polyhaven.com/a/concrete_floor_02> |
+| Concrete Floor 02 (`concrete_floor_02`) | texture | Rob Tuytel | atelier, showcase | <https://polyhaven.com/a/concrete_floor_02> |
 | Concrete Floor Worn 001 (`concrete_floor_worn_001`) | texture | Dimitrios Savva, Rico Cilliers | outpost | <https://polyhaven.com/a/concrete_floor_worn_001> |
 | Concrete Road Barrier (`concrete_road_barrier`) | model | Amal Kumar | outpost | <https://polyhaven.com/a/concrete_road_barrier> |
 | Concrete Road Barrier 02 (`concrete_road_barrier_02`) | model | Amal Kumar | outpost | <https://polyhaven.com/a/concrete_road_barrier_02> |
@@ -47,26 +47,27 @@ lighting and the generated kit geometry are original Ara work.
 | Dry Ground Rocks (`dry_ground_rocks`) | texture | Rob Tuytel | outpost | <https://polyhaven.com/a/dry_ground_rocks> |
 | Exterior Aircon Unit (`exterior_aircon_unit`) | model | Monsta3D | outpost | <https://polyhaven.com/a/exterior_aircon_unit> |
 | Fabric Leather 02 (`fabric_leather_02`) | texture | Rob Tuytel | showcase | <https://polyhaven.com/a/fabric_leather_02> |
+| Fern 02 (`fern_02`) | model | Rob Tuytel, Rico Cilliers | atelier | <https://polyhaven.com/a/fern_02> |
 | Green Metal Rust (`green_metal_rust`) | texture | Rob Tuytel | outpost | <https://polyhaven.com/a/green_metal_rust> |
 | Hand Truck (`hand_truck`) | model | Mutanzom3D | outpost | <https://polyhaven.com/a/hand_truck> |
 | Hangar Concrete Floor (`hangar_concrete_floor`) | texture | Dimitrios Savva | outpost | <https://polyhaven.com/a/hangar_concrete_floor> |
 | Hanging Industrial Lamp (`hanging_industrial_lamp`) | model | Kuutti Siitonen | outpost | <https://polyhaven.com/a/hanging_industrial_lamp> |
 | Industrial Caged Sconce (`industrial_caged_sconce`) | model | Ulan Cabanilla | outpost | <https://polyhaven.com/a/industrial_caged_sconce> |
 | Industrial Storage Cart (`industrial_storage_cart`) | model | Jule Bielitz | outpost | <https://polyhaven.com/a/industrial_storage_cart> |
-| Antique Camera (`khronos_antique_camera`) | model | UX3D | showcase | <https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/AntiqueCamera> |
-| Flight Helmet (`khronos_flight_helmet`) | model | Microsoft | showcase | <https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/FlightHelmet> |
+| Antique Camera (`khronos_antique_camera`) | model | UX3D | atelier, showcase | <https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/AntiqueCamera> |
+| Flight Helmet (`khronos_flight_helmet`) | model | Microsoft | atelier, showcase | <https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/FlightHelmet> |
 | SciFi Helmet (`khronos_scifi_helmet`) | model | Michael Pavlovich | showcase | <https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/SciFiHelmet> |
 | Water Bottle (`khronos_water_bottle`) | model | Microsoft | showcase | <https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/WaterBottle> |
 | Kloppenheim 02 (Pure Sky) (`kloppenheim_02_puresky`) | HDRI | Greg Zaal, Jarod Guest | outpost | <https://polyhaven.com/a/kloppenheim_02_puresky> |
 | Ladder Sectioned 01 (`ladder_sectioned_01`) | model | MP | outpost | <https://polyhaven.com/a/ladder_sectioned_01> |
-| Lantern 01 (`lantern_01`) | model | Rajil Jose Macatangay | showcase | <https://polyhaven.com/a/Lantern_01> |
-| Mesh2Motion human base animations (Quaternius Universal Animation Library mannequin) (`m2m_human`) | character | Scott Petrovic (Mesh2Motion), Quaternius | outpost, showcase | <https://github.com/mesh2motion/mesh2motion-app> |
-| Marble 01 (`marble_01`) | texture | Rob Tuytel | showcase | <https://polyhaven.com/a/marble_01> |
+| Lantern 01 (`lantern_01`) | model | Rajil Jose Macatangay | atelier, showcase | <https://polyhaven.com/a/Lantern_01> |
+| Mesh2Motion human base animations (Quaternius Universal Animation Library mannequin) (`m2m_human`) | character | Scott Petrovic (Mesh2Motion), Quaternius | atelier, outpost, showcase | <https://github.com/mesh2motion/mesh2motion-app> |
+| Marble 01 (`marble_01`) | texture | Rob Tuytel | atelier, showcase | <https://polyhaven.com/a/marble_01> |
 | Metal Grate Rusty (`metal_grate_rusty`) | texture | Rob Tuytel, Dimitrios Savva | outpost | <https://polyhaven.com/a/metal_grate_rusty> |
 | Metal Jerrycan (`metal_jerrycan`) | model | Sean Buckley | outpost | <https://polyhaven.com/a/metal_jerrycan> |
 | Metal Jerrycan Green (`metal_jerrycan_green`) | model | Ulan Cabanilla | outpost | <https://polyhaven.com/a/metal_jerrycan_green> |
 | Metal Office Desk (`metal_office_desk`) | model | Ulan Cabanilla | outpost | <https://polyhaven.com/a/metal_office_desk> |
-| Metal Plate (`metal_plate`) | texture | Rob Tuytel | outpost, showcase | <https://polyhaven.com/a/metal_plate> |
+| Metal Plate (`metal_plate`) | texture | Rob Tuytel | atelier, outpost, showcase | <https://polyhaven.com/a/metal_plate> |
 | Metal Stool 01 (`metal_stool_01`) | model | Ulan Cabanilla | outpost | <https://polyhaven.com/a/metal_stool_01> |
 | Metal Tool Chest (`metal_tool_chest`) | model | Yann Kervran, John Hutcheson | outpost | <https://polyhaven.com/a/metal_tool_chest> |
 | Metal Toolbox (`metal_toolbox`) | model | Mateusz Sadek | outpost | <https://polyhaven.com/a/metal_toolbox> |
@@ -105,6 +106,8 @@ lighting and the generated kit geometry are original Ara work.
 | Portable Generator (`portable_generator`) | model | James Ray Cock | outpost | <https://polyhaven.com/a/portable_generator> |
 | Portable Searchlight (`portable_searchlight`) | model | Elijah Cragg | outpost | <https://polyhaven.com/a/portable_searchlight> |
 | Portable Welding Cart (`portable_welding_cart`) | model | Georgii Gorbunov | outpost | <https://polyhaven.com/a/portable_welding_cart> |
+| Potted Plant 01 (`potted_plant_01`) | model | Rico Cilliers | atelier | <https://polyhaven.com/a/potted_plant_01> |
+| Potted Plant 02 (`potted_plant_02`) | model | Rico Cilliers | atelier | <https://polyhaven.com/a/potted_plant_02> |
 | Power Box 01 (`power_box_01`) | model | Rico Cilliers, Yann Kervran | outpost | <https://polyhaven.com/a/power_box_01> |
 | Propane Tank (`propane_tank`) | model | Slinc | outpost | <https://polyhaven.com/a/propane_tank> |
 | Quiver Tree 01 (`quiver_tree_01`) | model | James Ray Cock, Dario Barresi, Rico Cilliers | outpost | <https://polyhaven.com/a/quiver_tree_01> |
@@ -117,10 +120,11 @@ lighting and the generated kit geometry are original Ara work.
 | Rollershutter Door (`rollershutter_door`) | model | MP | outpost | <https://polyhaven.com/a/rollershutter_door> |
 | Rusted Wheel Rim 01 (`rusted_wheel_rim_01`) | model | John Hutcheson | outpost | <https://polyhaven.com/a/rusted_wheel_rim_01> |
 | Rusty Corrugated Iron (`rusty_corrugated_iron`) | texture | Charlotte Baglioni | outpost | <https://polyhaven.com/a/rusty_corrugated_iron> |
-| Rusty Metal 02 (`rusty_metal_02`) | texture | Rob Tuytel | outpost, showcase | <https://polyhaven.com/a/rusty_metal_02> |
+| Rusty Metal 02 (`rusty_metal_02`) | texture | Rob Tuytel | atelier, outpost, showcase | <https://polyhaven.com/a/rusty_metal_02> |
 | Sandy Gravel (`sandy_gravel`) | texture | Charlotte Baglioni | outpost | <https://polyhaven.com/a/sandy_gravel> |
 | Security Light (`security_light`) | model | Maximilian Schuster | outpost | <https://polyhaven.com/a/security_light> |
 | Shrub 03 (`shrub_03`) | model | Rico Cilliers | outpost | <https://polyhaven.com/a/shrub_03> |
+| Shrub 04 (`shrub_04`) | model | Rico Cilliers | atelier | <https://polyhaven.com/a/shrub_04> |
 | Sledgehammer 01 (`sledgehammer_01`) | model | Dylan Guzman | outpost | <https://polyhaven.com/a/sledgehammer_01> |
 | Small Lpg Tank (`small_lpg_tank`) | model | Ulan Cabanilla | outpost | <https://polyhaven.com/a/small_lpg_tank> |
 | Small Oil Can 01 (`small_oil_can_01`) | model | Raven van de Werken | outpost | <https://polyhaven.com/a/small_oil_can_01> |
@@ -134,7 +138,7 @@ lighting and the generated kit geometry are original Ara work.
 | Trashbag (`trashbag`) | model | Benny Weimer | outpost | <https://polyhaven.com/a/trashbag> |
 | Utility Box 01 (`utility_box_01`) | model | James Ray Cock | outpost | <https://polyhaven.com/a/utility_box_01> |
 | Utility Box 02 (`utility_box_02`) | model | James Ray Cock | outpost | <https://polyhaven.com/a/utility_box_02> |
-| Vintage Radio Transceiver (`vintage_radio_transceiver`) | model | Mateusz Sadek | outpost, showcase | <https://polyhaven.com/a/vintage_radio_transceiver> |
+| Vintage Radio Transceiver (`vintage_radio_transceiver`) | model | Mateusz Sadek | atelier, outpost, showcase | <https://polyhaven.com/a/vintage_radio_transceiver> |
 | Wild Rooibos Bush (`wild_rooibos_bush`) | model | James Ray Cock, Jenelle van Heerden | outpost | <https://polyhaven.com/a/wild_rooibos_bush> |
 | Wood Table 001 (`wood_table_001`) | texture | Dimitrios Savva, Rico Cilliers | showcase | <https://polyhaven.com/a/wood_table_001> |
 | Wooden Crate 01 (`wooden_crate_01`) | model | James Ray Cock | outpost | <https://polyhaven.com/a/wooden_crate_01> |

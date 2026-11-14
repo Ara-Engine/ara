@@ -1,0 +1,4 @@
+# Ara documents merge record by record (`ara merge`).
+*.scene merge=ara
+*.prefab merge=ara
+* text=auto eol=lf
