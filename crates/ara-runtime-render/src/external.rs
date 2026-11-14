@@ -266,7 +266,7 @@ impl Presenter {
                     .context("presentation device")?
                     .gpu_mut(),
             )?;
-            std::thread::yield_now();
+            frame_wait_yield();
         }
         // The settle frames present one behind when pipelining is on (so a capture times the
         // same loop the player runs); the last one is drawn and waited for, so the still is the
@@ -292,7 +292,7 @@ impl Presenter {
                     if let Some(external) = self.external.as_mut() {
                         let _ = external.finish(gpu)?;
                     }
-                    std::thread::yield_now();
+                    frame_wait_yield();
                 }
                 self.external_pipelined = false;
             }
@@ -407,7 +407,7 @@ fn render_one_behind(
         if let Some(frame) = external.finish(gpu)? {
             drop(frame);
         }
-        std::thread::yield_now();
+        frame_wait_yield();
     }
     if !external.begin(gpu, view)? {
         return external.render(gpu, view);
@@ -419,7 +419,7 @@ fn render_one_behind(
         if let Some(frame) = external.finish(gpu)? {
             return Ok(frame);
         }
-        std::thread::yield_now();
+        frame_wait_yield();
     }
 }
 
@@ -439,4 +439,14 @@ fn timings(frame_ms: f64, passes: &[(&'static str, f64); EXTERNAL_PASSES]) -> Ve
                 .map(|(name, ms)| timing(&format!("External.Pass.{name}"), *ms)),
         )
         .collect()
+}
+
+/// Only called while a submitted frame is pending; idle players never enter this loop.
+fn frame_wait_yield() {
+    static SPIN: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    if *SPIN.get_or_init(|| std::env::var("ARA_PLAYER_NO_SLEEP").as_deref() != Ok("0")) {
+        std::hint::spin_loop();
+    } else {
+        std::thread::yield_now();
+    }
 }
