@@ -401,6 +401,7 @@ impl Player {
     fn frame(&mut self) -> Result<()> {
         ara_gpu::cpu_scope!("Player.frame");
         let profiling = self.profiling.frame_open();
+        let mut rendered = false;
         self.acknowledge_controls()?;
         let warming_window = self.window.is_some() && !self.window_ready;
         if warming_window {
@@ -512,7 +513,7 @@ impl Player {
             // ones when a frame is due (their frame cap), headless ones never.
             let present = self.window.is_some() || self.embed.as_ref().is_some_and(|e| e.due(now));
             if !present {
-                return self.after_frame(warming_window);
+                return self.after_frame(warming_window, false);
             }
             {
                 ara_gpu::cpu_scope!("Player.extract");
@@ -582,7 +583,9 @@ impl Player {
                 });
                 (presented, audio)
             });
-            if let Some(ready) = presented? {
+            let presented = presented?;
+            rendered = presented.is_some();
+            if let Some(ready) = presented {
                 self.link.notify(embed::method::FRAME, ready)?;
                 self.link.flush()?;
             }
@@ -598,7 +601,7 @@ impl Player {
                 self.audio = None;
             }
         }
-        self.after_frame(warming_window)
+        self.after_frame(warming_window, rendered)
     }
 
     fn end_profile_frame(&mut self) {
@@ -613,8 +616,8 @@ impl Player {
     }
 
     /// The end of every loop iteration with a world: the first-window-frame notice,
-    /// C# events, the heartbeat and, without a vsync-paced window, a short sleep.
-    fn after_frame(&mut self, warming_window: bool) -> Result<()> {
+    /// C# events and the heartbeat. Only iterations without a rendered frame sleep.
+    fn after_frame(&mut self, warming_window: bool, rendered: bool) -> Result<()> {
         #[cfg(feature = "tracy")]
         if let Some(client) = ara_gpu::__tracy::Client::running() {
             client.frame_mark();
@@ -634,7 +637,9 @@ impl Player {
         if self.last_status.elapsed() >= Duration::from_millis(250) {
             self.status()?;
         }
-        if self.window.is_none() {
+        if self.window.is_none()
+            && (!rendered || std::env::var("ARA_PLAYER_NO_SLEEP").as_deref() == Ok("0"))
+        {
             std::thread::sleep(Duration::from_micros(500));
         }
         Ok(())

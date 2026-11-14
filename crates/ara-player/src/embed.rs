@@ -401,7 +401,7 @@ pub(crate) fn prewarm(
 
 /// When a frame that began at `started` counts as rendered for the frame cap: one
 /// interval after the last one was *due* when it is on time, not when it began, so each
-/// poll's lateness (the loop sleeps 0.5 ms and Windows rounds up) never accumulates
+/// poll's lateness (idle iterations sleep and Windows rounds up) never accumulates
 /// (a 60 FPS cap showed about 57). Early (dirty) or long-late frames restart the cadence.
 fn paced(last: Option<Instant>, started: Instant, interval: Duration) -> Instant {
     match last {
