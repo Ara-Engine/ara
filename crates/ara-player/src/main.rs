@@ -401,6 +401,7 @@ impl Player {
     fn frame(&mut self) -> Result<()> {
         ara_gpu::cpu_scope!("Player.frame");
         let profiling = self.profiling.frame_open();
+        let mut rendered = false;
         self.acknowledge_controls()?;
         let warming_window = self.window.is_some() && !self.window_ready;
         if warming_window {
@@ -582,7 +583,9 @@ impl Player {
                 });
                 (presented, audio)
             });
-            if let Some(ready) = presented? {
+            let presented = presented?;
+            rendered = presented.is_some();
+            if let Some(ready) = presented {
                 self.link.notify(embed::method::FRAME, ready)?;
                 self.link.flush()?;
             }
@@ -598,7 +601,7 @@ impl Player {
                 self.audio = None;
             }
         }
-        self.after_frame(warming_window, true)
+        self.after_frame(warming_window, rendered)
     }
 
     fn end_profile_frame(&mut self) {
