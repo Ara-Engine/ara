@@ -255,17 +255,6 @@ impl Commands {
                 )
                 .map_err(backend)?;
             self.in_flight = true;
-            // Short frame handoffs should finish before a driver wait puts this thread
-            // to sleep. Bound the spin; a busy or stalled GPU still uses a blocking wait.
-            static SPIN: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-            if *SPIN.get_or_init(|| std::env::var("ARA_PLAYER_NO_SLEEP").as_deref() != Ok("0")) {
-                let started = std::time::Instant::now();
-                while !device.get_fence_status(self.fence).map_err(backend)?
-                    && started.elapsed() < std::time::Duration::from_millis(2)
-                {
-                    std::hint::spin_loop();
-                }
-            }
             device
                 .wait_for_fences(&[self.fence], true, u64::MAX)
                 .map_err(backend)?;
