@@ -327,7 +327,7 @@ impl Bridge {
             if events.ids_lost.iter().any(|lost| lost.request == request) {
                 return Ok(None);
             }
-            frame_wait_yield();
+            std::thread::yield_now();
         }
         Ok(None)
     }
@@ -341,7 +341,7 @@ impl Bridge {
     ) -> Result<ExternalFrame> {
         while self.pending.len() >= self.in_flight_limit {
             self.finish(gpu)?;
-            frame_wait_yield();
+            std::thread::yield_now();
         }
         self.begin(gpu, view)?;
         loop {
@@ -350,7 +350,7 @@ impl Bridge {
             {
                 return Ok(frame);
             }
-            frame_wait_yield();
+            std::thread::yield_now();
         }
     }
 
@@ -895,14 +895,4 @@ fn upload(gpu: &mut GpuDevice, target: &mut Target, rgba8: &[u8]) -> Result<Imag
     gpu.resolve(point)?;
     target.fresh = false;
     Ok(target.image)
-}
-
-/// Pending-frame polls need no scheduler round trip. Idle players keep their own sleeps.
-fn frame_wait_yield() {
-    static SPIN: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    if *SPIN.get_or_init(|| std::env::var("ARA_PLAYER_NO_SLEEP").as_deref() != Ok("0")) {
-        std::hint::spin_loop();
-    } else {
-        std::thread::yield_now();
-    }
 }
