@@ -152,8 +152,14 @@ impl TextureViewBindGroupState {
     /// When this list of states is merged into a tracker, the memory
     /// accesses will be in a constant ascending order.
     pub(crate) fn optimize(&mut self) {
+        // Ara patch (crates/ara-renderlab/vendor/PATCHES.md): equal (view, usage) pairs, which
+        // binding arrays repeat, are kept once. Merging one into a usage scope again changes
+        // nothing, and pairs that differ in view or usage are all kept.
+        self.views.sort_unstable_by_key(|(view, u)| {
+            (view.parent.tracker_index(), u.bits(), Arc::as_ptr(view) as usize)
+        });
         self.views
-            .sort_unstable_by_key(|(view, _)| view.parent.tracker_index());
+            .dedup_by(|(view, u), (kept, kept_u)| Arc::ptr_eq(view, kept) && u == kept_u);
     }
 
     /// Adds the given resource with the given state.

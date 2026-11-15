@@ -53,8 +53,13 @@ impl BufferBindGroupState {
     /// When this list of states is merged into a tracker, the memory
     /// accesses will be in a constant ascending order.
     pub(crate) fn optimize(&mut self) {
+        // Ara patch (crates/ara-renderlab/vendor/PATCHES.md): equal (buffer, usage) pairs, which
+        // binding arrays repeat, are kept once. Merging one into a usage scope again changes
+        // nothing, and pairs that differ in usage are all kept, so conflicts are still found.
         self.buffers
-            .sort_unstable_by_key(|(b, _)| b.tracker_index());
+            .sort_unstable_by_key(|(b, u)| (b.tracker_index(), u.bits()));
+        self.buffers
+            .dedup_by(|(b, u), (kept, kept_u)| Arc::ptr_eq(b, kept) && u == kept_u);
     }
 
     /// Returns an iterator over the tracked buffers. May contain duplicates.

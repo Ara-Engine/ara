@@ -55,3 +55,86 @@ One file, `src/command/ray_tracing.rs`, in `build_acceleration_structures`:
 +                dependencies.push(blas.clone());
 +            }
 ```
+
+# wgpu-core bind-group tracking dedup patch
+
+## Why
+
+wgpu-core 30.0.1 records commands as a pass is encoded and replays them in
+`CommandEncoder::finish`. On every compute dispatch the replay merges each resource of each bound
+group into the dispatch's usage scope and then drains it (`flush_bindings`), so the CPU cost of a
+dispatch grows with the number of entries its bind groups list. A bind group lists every binding
+as written, repeats included. Renderlab's per-draw binding arrays hold one entry for each of
+TRACED_DRAWS (256) draw slots, padded with a stand-in buffer, and draws that share a material,
+texture or mesh repeat the same buffer or view; the previous-frame vertex array repeats the vertex
+array for unskinned draws. One shading dispatch therefore walked about 1,027 geometry buffers, 512
+material buffers and 768 material views on every scene.
+
+The patch keeps each equal (resource, usage) pair once when the bind group is created (in
+`optimize`, which already sorts these lists). Merging an equal pair into a usage scope a second
+time changes nothing, and pairs that differ in usage are all kept, so every usage conflict wgpu
+reports is still reported; no validation or safety check is skipped. Bind-group validation itself
+runs on the descriptor, before these lists are built, and is unchanged.
+
+## Measured
+
+Entries per bind group, padded total against what the patch keeps (RENDERLAB_GROUP_STATS):
+
+| scene | geometry buffers | material buffers | material views |
+|---|---|---|---|
+| Showcase | 1,027 -> 172 | 512 -> 90 | 768 -> 83 |
+| Outpost | 1,027 -> 742 | 512 -> 478 | 768 -> 341 |
+| Glint | 1,027 -> 130 | 512 -> 126 | 768 -> 3 |
+
+In the game, same Renderlab revision (2805ad12) with and without the patch, interleaved, Showcase
+without ray hardware: encode 2.82 -> 2.04 ms and 2.46 -> 1.99 ms (`finish` 1.37 -> 0.89 and
+1.15 -> 0.88); with ray hardware encode 2.27 -> 2.08 and 2.14 -> 2.04 ms. On Outpost the machine's
+run-to-run CPU spread that day (about 1 ms) hid the expected 0.2 ms (a third fewer entries per
+shading dispatch). GPU time and frames unchanged: Showcase's moving frame byte-identical on both
+paths, Outpost's within its own run-to-run differences.
+
+A smaller alternative on Renderlab's side, binding only the frame's draws with
+PARTIALLY_BOUND_BINDING_ARRAY, removes only the padding (nothing on Outpost, 253 draws) and was
+dropped in favour of this patch.
+
+## Exact diff
+
+Two files, `src/track/buffer.rs` and `src/track/texture.rs`, in the bind group states' `optimize`:
+
+```diff
+diff --git a/crates/ara-renderlab/vendor/wgpu-core/src/track/buffer.rs b/crates/ara-renderlab/vendor/wgpu-core/src/track/buffer.rs
+index 8fdbe8101..4a9d26c89 100644
+--- a/crates/ara-renderlab/vendor/wgpu-core/src/track/buffer.rs
++++ b/crates/ara-renderlab/vendor/wgpu-core/src/track/buffer.rs
+@@ -54,6 +54,11 @@ impl BufferBindGroupState {
+     /// accesses will be in a constant ascending order.
+     pub(crate) fn optimize(&mut self) {
++        // Ara patch (crates/ara-renderlab/vendor/PATCHES.md): equal (buffer, usage) pairs, which
++        // binding arrays repeat, are kept once. Merging one into a usage scope again changes
++        // nothing, and pairs that differ in usage are all kept, so conflicts are still found.
+         self.buffers
+-            .sort_unstable_by_key(|(b, _)| b.tracker_index());
++            .sort_unstable_by_key(|(b, u)| (b.tracker_index(), u.bits()));
++        self.buffers
++            .dedup_by(|(b, u), (kept, kept_u)| Arc::ptr_eq(b, kept) && u == kept_u);
+     }
+ 
+diff --git a/crates/ara-renderlab/vendor/wgpu-core/src/track/texture.rs b/crates/ara-renderlab/vendor/wgpu-core/src/track/texture.rs
+index 6cea59290..99738a653 100644
+--- a/crates/ara-renderlab/vendor/wgpu-core/src/track/texture.rs
++++ b/crates/ara-renderlab/vendor/wgpu-core/src/track/texture.rs
+@@ -153,6 +153,12 @@ impl TextureViewBindGroupState {
+     /// accesses will be in a constant ascending order.
+     pub(crate) fn optimize(&mut self) {
++        // Ara patch (crates/ara-renderlab/vendor/PATCHES.md): equal (view, usage) pairs, which
++        // binding arrays repeat, are kept once. Merging one into a usage scope again changes
++        // nothing, and pairs that differ in view or usage are all kept.
++        self.views.sort_unstable_by_key(|(view, u)| {
++            (view.parent.tracker_index(), u.bits(), Arc::as_ptr(view) as usize)
++        });
+         self.views
+-            .sort_unstable_by_key(|(view, _)| view.parent.tracker_index());
++            .dedup_by(|(view, u), (kept, kept_u)| Arc::ptr_eq(view, kept) && u == kept_u);
+     }
+ 
+```
