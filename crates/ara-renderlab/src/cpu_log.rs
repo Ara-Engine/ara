@@ -32,6 +32,8 @@ pub(crate) struct CpuRow {
     render_call: Duration,
     parts: CpuParts,
     nested: CpuNested,
+    /// framecpu measurement: the bridge's own steps, logged by name, not summed.
+    pub(crate) steps: Vec<(&'static str, Duration)>,
 }
 
 fn ms(duration: Duration) -> f64 {
@@ -70,11 +72,18 @@ impl CpuLog {
             render_call,
             parts,
             nested,
+            steps: Vec::new(),
         }
     }
 
     /// Writes the row once the handoff is done.
-    pub(crate) fn finish(&mut self, row: CpuRow, handoff_ms: f64, in_flight: Duration) {
+    pub(crate) fn finish(
+        &mut self,
+        row: CpuRow,
+        handoff_ms: f64,
+        in_flight: Duration,
+        handoff_steps: &[(&'static str, Duration)],
+    ) {
         let itemized: f64 = row.parts.iter().map(|(_, part)| ms(*part)).sum();
         let mut line = format!(
             "{{\"frame\":{},\"wall_ms\":{:.3},\"bridge_ms\":{:.3},\"render_call_ms\":{:.3}",
@@ -88,6 +97,9 @@ impl CpuLog {
         }
         for (name, part) in row.nested {
             line.push_str(&format!(",\"{name}\":{:.3}", ms(part)));
+        }
+        for (name, part) in row.steps.iter().chain(handoff_steps) {
+            line.push_str(&format!(",\"{name}\":{:.3}", ms(*part)));
         }
         line.push_str(&format!(
             ",\"unitemized_ms\":{:.3},\"handoff_ms\":{handoff_ms:.3},\"in_flight_ms\":{:.3}}}\n",

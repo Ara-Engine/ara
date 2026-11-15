@@ -88,6 +88,8 @@ pub(crate) struct SharedHandoff {
     acquire: vk::CommandBuffer,
     release: vk::CommandBuffer,
     fence: vk::Fence,
+    /// framecpu measurement: the CPU wait for the published frame in the last `deliver`.
+    pub(crate) last_wait: std::time::Duration,
     colour: SharedImage,
     /// Object ids for the same frame as [`Self::colour`].
     id: SharedImage,
@@ -377,6 +379,7 @@ impl SharedHandoff {
             acquire: vk::CommandBuffer::null(),
             release: vk::CommandBuffer::null(),
             fence: vk::Fence::null(),
+            last_wait: std::time::Duration::ZERO,
             colour,
             id,
             id_source: None,
@@ -622,7 +625,9 @@ impl SharedHandoff {
     /// Waits for the published frame, copies it into `destination` (an RGBA8 image
     /// of the ring's size on `gpu`, in `CopySource`) and hands the slot back.
     pub fn deliver(&mut self, gpu: &GpuDevice, destination: Image) -> Result<()> {
+        let waited = std::time::Instant::now();
         self.wait_frame()?;
+        self.last_wait = waited.elapsed();
         anyhow::ensure!(self.colour_owed, "no frame was published");
         self.colour_owed = false;
         self.handed_over = true;

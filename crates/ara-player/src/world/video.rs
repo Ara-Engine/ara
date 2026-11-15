@@ -87,13 +87,21 @@ pub(super) fn record(
             let camera = frame.camera.as_mut().context("camera")?;
             (camera.position, camera.forward) = pose(start.position, start.forward, &clip, i);
             let frame = &*frame;
+            // framecpu measurement (ARA_PLAYER_CPU_LOG): the presenter's share of a clip frame.
+            let mut laps = crate::cpu_laps::Laps::start();
             presenter.present_with(frame, || content(frame))?;
+            laps.lap("v_present_with");
+            let stats = presenter.stats();
+            laps.note("v_render", stats.render);
+            laps.note("v_prepare", stats.prepare);
             if i >= WARMUP && keep.as_ref().is_none_or(|kept| kept.contains(&(i - WARMUP))) {
                 presenter
                     .live_image()
                     .context("live frame")?
                     .save(dir.join(format!("{:05}.png", i - WARMUP)))?;
             }
+            laps.lap("v_save");
+            laps.finish();
         }
         Ok(())
     })();

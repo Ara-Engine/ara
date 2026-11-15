@@ -400,6 +400,7 @@ impl Player {
     /// free) or sleep until the next tick is due (headless).
     fn frame(&mut self) -> Result<()> {
         ara_gpu::cpu_scope!("Player.frame");
+        let mut laps = cpu_laps::Laps::start();
         let profiling = self.profiling.frame_open();
         self.acknowledge_controls()?;
         let warming_window = self.window.is_some() && !self.window_ready;
@@ -443,6 +444,7 @@ impl Player {
                 eprintln!("ara-player: input: {e:#}");
             }
             drop(input_scope);
+            laps.lap("p_input");
             let period = Duration::from_secs_f64(1.0 / f64::from(world.runtime.hz()));
             let simulation_scope = profiling.then(|| ara_profile::scope("player.simulation"));
             let advanced = if holding {
@@ -451,6 +453,7 @@ impl Player {
                 world.runtime.advance(elapsed)
             };
             drop(simulation_scope);
+            laps.lap("p_simulation");
             match advanced {
                 Ok(Some(frame)) if frame.ticks > 0 => {
                     self.max_late = self
@@ -499,7 +502,9 @@ impl Player {
                 let result = serde_json::to_value(world.patched(patch.tick, &patch.sets))?;
                 self.link.respond(patch.id, Ok(result))?;
             }
+            laps.lap("p_ui_patches");
             world.sync_graphics(self.presenter.as_mut(), self.window.as_mut())?;
+            laps.lap("p_sync_graphics");
             if let Some(embed) = &mut self.embed {
                 let settings = world
                     .runtime
@@ -518,6 +523,7 @@ impl Player {
                 ara_gpu::cpu_scope!("Player.extract");
                 world.extract_frame(&mut self.frame);
             }
+            laps.lap("p_extract");
             if let (Some(window), Some(presenter)) = (&mut self.window, &mut self.window2d) {
                 let tick = world.runtime.tick();
                 window.prepare_2d(
@@ -543,6 +549,7 @@ impl Player {
             if let Some(presenter) = &mut self.presenter {
                 presenter.set_debug(self.render_debug);
             }
+            laps.lap("p_pre_present");
             let listener = world::listener(&self.frame);
             let simulation = world.runtime.world();
             let (presented, audio) = std::thread::scope(|scope| {
@@ -582,6 +589,11 @@ impl Player {
                 });
                 (presented, audio)
             });
+            laps.lap("p_present");
+            if let Some(presenter) = &self.presenter {
+                laps.note("p_present_render", presenter.stats().render);
+            }
+            laps.finish();
             if let Some(ready) = presented? {
                 self.link.notify(embed::method::FRAME, ready)?;
                 self.link.flush()?;
@@ -1388,5 +1400,56 @@ mod cli_tests {
             serde_json::from_value(serde_json::json!({"shadows": false})).unwrap();
         assert!(partial.ambient_occlusion && !partial.shadows && !partial.full_resolution);
         assert!(partial.volumetric_fog);
+    }
+}
+
+/// framecpu measurement: `ARA_PLAYER_CPU_LOG=<file>` writes one JSON line per presented frame,
+/// the player's steps in ms (`p_outside` is the time since the previous presented frame ended).
+mod cpu_laps {
+    use std::io::Write;
+    use std::sync::Mutex;
+    use std::time::{Duration, Instant};
+    type Out = Option<(std::io::BufWriter<std::fs::File>, Option<Instant>)>;
+    static OUT: Mutex<Out> = Mutex::new(None);
+    static OPENED: std::sync::Once = std::sync::Once::new();
+    pub(crate) struct Laps {
+        start: Instant,
+        at: Instant,
+        laps: Vec<(&'static str, Duration)>,
+    }
+    impl Laps {
+        pub(crate) fn start() -> Self {
+            OPENED.call_once(|| {
+                if let Some(path) = std::env::var_os("ARA_PLAYER_CPU_LOG")
+                    && let Ok(file) = std::fs::File::create(path)
+                {
+                    *OUT.lock().unwrap() = Some((std::io::BufWriter::new(file), None));
+                }
+            });
+            let now = Instant::now();
+            Self { start: now, at: now, laps: Vec::new() }
+        }
+        pub(crate) fn lap(&mut self, name: &'static str) {
+            let now = Instant::now();
+            self.laps.push((name, now - self.at));
+            self.at = now;
+        }
+        pub(crate) fn note(&mut self, name: &'static str, d: Duration) {
+            self.laps.push((name, d));
+        }
+        pub(crate) fn finish(self) {
+            let mut out = OUT.lock().unwrap();
+            let Some((file, last_end)) = out.as_mut() else { return };
+            let end = Instant::now();
+            let outside = last_end.map_or(0.0, |e| self.start.saturating_duration_since(e).as_secs_f64() * 1000.);
+            let mut line = format!("{{\"p_outside\":{outside:.3}");
+            for (name, d) in &self.laps {
+                line.push_str(&format!(",\"{name}\":{:.3}", d.as_secs_f64() * 1000.));
+            }
+            line.push_str(&format!(",\"p_total\":{:.3}}}
+", (end - self.start).as_secs_f64() * 1000.));
+            *last_end = Some(end);
+            let _ = file.write_all(line.as_bytes()).and_then(|()| file.flush());
+        }
     }
 }

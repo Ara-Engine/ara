@@ -402,6 +402,18 @@ impl Bridge {
         // mesh uploaded: when this frame uploads a larger one (a new cut or batch), the
         // foliage is rebuilt for it before the frame renders.
         let nonrt = self.path == ActivePath::NonRt;
+        // framecpu measurement: the bridge's steps before Renderlab's render call.
+        let mut step_at = Instant::now();
+        let mut steps: Vec<(&'static str, Duration)> = vec![("b_pre", step_at - began)];
+        let mut lap = |name: &'static str, steps: &mut Vec<(&'static str, Duration)>| {
+            let now = Instant::now();
+            if let Some(slot) = steps.iter_mut().find(|(n, _)| *n == name) {
+                slot.1 += now - step_at;
+            } else {
+                steps.push((name, now - step_at));
+            }
+            step_at = now;
+        };
         for _ in 0..2 {
             let known = self.scene.largest_triangles();
             let (tiles, assumed) = self.terrain.sync(
@@ -411,6 +423,7 @@ impl Bridge {
                 nonrt.then_some(known),
                 &mut self.gaps,
             )?;
+            lap("b_terrain_sync", &mut steps);
             let (foliage, foliage_key) = self.terrain.foliage();
             self.scene.sync(
                 &mut self.engine,
@@ -420,6 +433,7 @@ impl Bridge {
                 tiles,
                 &mut self.gaps,
             )?;
+            lap("b_scene_sync", &mut steps);
             if !nonrt || self.scene.largest_triangles() <= assumed {
                 break;
             }
@@ -427,8 +441,11 @@ impl Bridge {
         // Terrain tiles follow the frame's draws in the editor's id numbering.
         self.terrain
             .tag(&mut self.engine, frame.draws.len() as u32 + 1)?;
+        lap("b_terrain_tag", &mut steps);
         self.decals.sync(&mut self.engine, frame, &mut self.gaps)?;
+        lap("b_decals", &mut steps);
         self.effects.sync(&mut self.engine, frame, &mut self.gaps)?;
+        lap("b_effects", &mut steps);
 
         let (stops, metered) = lighting::exposure_stops(view, &mut self.metering);
         let (settings, look) =
@@ -492,11 +509,12 @@ impl Bridge {
         }
         self.ensure_target(gpu, view.size)?;
         let camera = lighting::camera(frame)?;
+        lap("b_settings", &mut steps);
         let called = Instant::now();
         let report = self.engine.render_view(view_id, &camera)?;
         let render_call = called.elapsed();
         let rendered = report.frame;
-        let cpu_row = self.cpu_log.as_mut().map(|log| {
+        let mut cpu_row = self.cpu_log.as_mut().map(|log| {
             let cpu = &report.cpu;
             log.begin(
                 began,
@@ -583,6 +601,10 @@ impl Bridge {
             }
         }
 
+        if let Some(row) = &mut cpu_row {
+            steps.push(("b_after_render", called.elapsed() - render_call));
+            row.steps = steps;
+        }
         self.pending.push_back(Pending {
             frame: rendered,
             view: view_id,
@@ -656,22 +678,32 @@ impl Bridge {
         // or the CPU copy's readback and upload.
         let started = Instant::now();
         let mut id_texels = None;
+        let mut handoff_steps: Vec<(&'static str, Duration)> = Vec::new();
         let image = if let Some(shared) = &mut target.shared {
             if !taken.published {
                 // Only reached when the slot was busy and the frame before it never delivered
                 // (it timed out); the output may already hold a later frame.
                 shared.publish(&self.engine, taken.view)?;
             }
+            let t = Instant::now();
             settle(gpu, target.image, &mut target.fresh)?;
+            handoff_steps.push(("h_settle", t.elapsed()));
+            let t = Instant::now();
             shared.deliver(gpu, target.image)?;
+            handoff_steps.push(("h_deliver", t.elapsed()));
+            handoff_steps.push(("h_fence_wait", shared.last_wait));
+            let t = Instant::now();
             if shared.id_pending() {
                 crate::shared::PresentedId::copy_from(&mut target.id, shared, gpu, target.size)?;
             }
+            handoff_steps.push(("h_id", t.elapsed()));
+            let t = Instant::now();
             // The slot is free: the next frame waiting for it goes out now.
             if let Some(next) = self.pending.iter_mut().find(|p| !p.published) {
                 shared.publish(&self.engine, next.view)?;
                 next.published = true;
             }
+            handoff_steps.push(("h_publish_next", t.elapsed()));
             target.image
         } else {
             let (colour, ids) = taken
@@ -696,7 +728,7 @@ impl Bridge {
             )
         });
         if let (Some(log), Some(row)) = (&mut self.cpu_log, cpu_row) {
-            log.finish(row, handoff_ms, in_flight);
+            log.finish(row, handoff_ms, in_flight, &handoff_steps);
         }
 
         Ok(Some(ExternalFrame {
