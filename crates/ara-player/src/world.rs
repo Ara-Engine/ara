@@ -167,6 +167,51 @@ impl World {
     pub fn pending_model(&self, asset: &str) -> bool {
         self.loading_models.is_pending(asset, &self.pins)
     }
+    /// framecpu measurement: `ARA_EXTRACT_PROBE=<ticks>` steps the simulation that many ticks
+    /// before a capture, timing each tick and each `extract_frame`, and counting the draws, the
+    /// draws whose transform changed and those whose identity or order changed since the
+    /// previous extract, one JSON line per tick to `ARA_EXTRACT_PROBE_LOG`.
+    fn extract_probe(&mut self, frame: &mut RenderFrame) -> Result<()> {
+        let Some(ticks) = std::env::var("ARA_EXTRACT_PROBE").ok().and_then(|v| v.parse::<u32>().ok()) else {
+            return Ok(());
+        };
+        let Some(path) = std::env::var_os("ARA_EXTRACT_PROBE_LOG") else {
+            return Ok(());
+        };
+        use std::io::Write;
+        let mut out = std::io::BufWriter::new(std::fs::File::create(path)?);
+        let mut last: Vec<(u64, [u32; 16])> = Vec::new();
+        for _ in 0..ticks {
+            let t = std::time::Instant::now();
+            self.runtime.step(1, &[])?;
+            let step = t.elapsed();
+            let t = std::time::Instant::now();
+            self.extract_frame(frame);
+            let extract = t.elapsed();
+            let now: Vec<(u64, [u32; 16])> = frame
+                .draws
+                .iter()
+                .map(|d| (d.entity, d.world.to_cols_array().map(f32::to_bits)))
+                .collect();
+            let moved = now.iter().zip(&last).filter(|(a, b)| a.0 == b.0 && a.1 != b.1).count();
+            let reordered = now.iter().zip(&last).filter(|(a, b)| a.0 != b.0).count()
+                + now.len().abs_diff(last.len());
+            let skinned = frame.draws.iter().filter(|d| d.skin.is_some()).count();
+            writeln!(
+                out,
+                "{{\"step_ms\":{:.3},\"extract_ms\":{:.3},\"draws\":{},\"moved\":{moved},\"reordered\":{reordered},\"skinned\":{skinned},\"lights\":{},\"decals\":{},\"palettes\":{}}}",
+                step.as_secs_f64() * 1000.,
+                extract.as_secs_f64() * 1000.,
+                now.len(),
+                frame.lights.len(),
+                frame.decals.len(),
+                frame.palettes.len(),
+            )?;
+            last = now;
+        }
+        Ok(())
+    }
+
     pub fn extract_frame(&mut self, frame: &mut RenderFrame) {
         if let Some(ui) = &self.ui
             && matches!(self.runtime, Play::Mirror(..))
@@ -838,6 +883,7 @@ impl World {
                     params.camera.as_deref(),
                 )?
             } else {
+                self.extract_probe(frame)?;
                 self.extract_frame(frame);
                 if let Some(camera) = &params.camera {
                     frame.camera = Some(
