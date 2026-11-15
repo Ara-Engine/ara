@@ -887,7 +887,64 @@ impl Scene {
             }
         }
         self.log_textures();
+        if std::env::var("ARA_SYNC_VERIFY").is_ok_and(|v| v == "1") {
+            self.verify_unchanged(frame);
+        }
         Ok(true)
+    }
+
+    /// `ARA_SYNC_VERIFY=1`: the tags `tag` would want for `frame` (the same computation) against
+    /// the tags in force, and every own draw against its object.
+    fn verify_unchanged(&self, frame: &RenderFrame) {
+        static CHECKED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        static BAD: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let ids: HashMap<u64, u32> = frame
+            .draws
+            .iter()
+            .enumerate()
+            .map(|(n, draw)| (draw.entity, n as u32 + 1))
+            .collect();
+        let mut wanted = Tags::new();
+        for (entity, object) in &self.objects {
+            if let Some(id) = ids.get(entity) {
+                wanted.insert((false, *entity), (object.id, vec![(0, u32::MAX, *id)]));
+            }
+        }
+        for (material, batch) in &self.batches {
+            let mut first = 0u32;
+            let mut ranges = Vec::new();
+            for (entity, triangles) in &batch.layout {
+                if let (Some(id), true) = (ids.get(entity), *triangles > 0) {
+                    ranges.push((first, *triangles, *id));
+                }
+                first += triangles;
+            }
+            wanted.insert((true, *material), (batch.id, ranges));
+        }
+        let mut bad = 0u64;
+        if wanted != self.tags {
+            bad += 1;
+            eprintln!("SYNC_VERIFY: tags differ ({} wanted, {} in force)", wanted.len(), self.tags.len());
+        }
+        if let Some(remembered) = &self.remembered {
+            for (draw, seen) in frame.draws.iter().zip(&remembered.draws) {
+                if seen.fate != Placed::Own {
+                    continue;
+                }
+                match self.objects.get(&draw.entity) {
+                    Some(object) if object.world == cleaned(&draw.world).to_cols_array() => {}
+                    _ => {
+                        bad += 1;
+                        eprintln!("SYNC_VERIFY: own draw {} has no matching object", draw.entity);
+                    }
+                }
+            }
+        }
+        let checked = CHECKED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+        let total = BAD.fetch_add(bad, std::sync::atomic::Ordering::Relaxed) + bad;
+        if let Some(path) = std::env::var_os("ARA_SYNC_VERIFY_LOG") {
+            let _ = std::fs::write(path, format!("checked {checked} mismatches {total} tags {}\n", self.tags.len()));
+        }
     }
 
     /// Gives Renderlab's objects the editor's ids: a draw's id is its index in the frame's
