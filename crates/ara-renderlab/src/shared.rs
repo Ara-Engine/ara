@@ -553,6 +553,8 @@ impl SharedHandoff {
         let id = self.id_source.clone();
         let mut acquire = Vec::new();
         if self.handed_over {
+            // The presenter's copy-out read the slot: it completes before the slot is taken back.
+            self.colour.imported.settle()?;
             // Take the slot back (matching the presenter's release), then discard its
             // contents into the layout wgpu tracks it in.
             acquire.extend(reclaim(self.colour.image, self.family));
@@ -627,8 +629,16 @@ impl SharedHandoff {
         self.colour_owed = false;
         self.handed_over = true;
         // SAFETY: The release completed above, the presenter's device has not
-        // acquired the slot, and `destination` is idle between presents.
-        unsafe { self.colour.imported.copy_out_image(gpu, 0, destination)? };
+        // acquired the slot, and `destination` is idle between presents. Unwaited, the
+        // presenter's later work is ordered after the copy on its queue, and the next
+        // `copy_frame` settles it before taking the slot back.
+        unsafe {
+            if crate::shared::handoff_waits() {
+                self.colour.imported.copy_out_image(gpu, 0, destination)?
+            } else {
+                self.colour.imported.copy_out_image_unwaited(gpu, 0, destination)?
+            }
+        };
         self.settle_latch();
         Ok(())
     }
@@ -702,6 +712,13 @@ impl Drop for SharedHandoff {
             }
         }
     }
+}
+
+/// `ARA_RENDERLAB_HANDOFF_WAIT=1`: the presenter's copy-out waits on the CPU, and the next
+/// frame is published as soon as the slot is delivered (the hand-off before it moved).
+pub(crate) fn handoff_waits() -> bool {
+    static WAIT: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *WAIT.get_or_init(|| std::env::var("ARA_RENDERLAB_HANDOFF_WAIT").is_ok_and(|v| v == "1"))
 }
 
 /// `ARA_RENDERLAB_SCENE_IDS=pattern` asks the bridge to stage the synthetic id image.

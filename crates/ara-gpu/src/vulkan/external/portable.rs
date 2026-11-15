@@ -60,6 +60,19 @@ impl ImportedSurface {
         // SAFETY: forwarded caller contract for the native image of `destination`.
         unsafe { self.copy_out(slot, destination) }
     }
+    /// [`Self::copy_out_image`] without waiting for the copy ([`Self::copy_out_unwaited`]).
+    /// # Safety
+    /// As [`Self::copy_out_image`].
+    pub unsafe fn copy_out_image_unwaited(
+        &mut self,
+        gpu: &VulkanDevice,
+        slot: u32,
+        destination: Image,
+    ) -> Result<()> {
+        let destination = gpu.native_image(destination)?;
+        // SAFETY: forwarded caller contract for the native image of `destination`.
+        unsafe { self.copy_out_unwaited(slot, destination) }
+    }
     /// Read an owned slot as packed RGBA8 rows ([`Self::read`]).
     /// # Safety
     /// This thread owns the import's graphics queue.

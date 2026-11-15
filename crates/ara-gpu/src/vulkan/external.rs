@@ -230,8 +230,40 @@ impl Commands {
     /// # Safety
     /// Everything `record` references is live; no other thread uses the queue.
     unsafe fn run(&mut self, record: impl FnOnce(&ash::Device, vk::CommandBuffer)) -> Result<()> {
+        // SAFETY: forwarded caller contract.
+        unsafe {
+            self.submit(record)?;
+            self.wait()
+        }
+    }
+
+    /// Waits for the last submission, if one is still in flight.
+    /// # Safety
+    /// No other thread uses the queue.
+    unsafe fn wait(&mut self) -> Result<()> {
+        if self.in_flight {
+            // SAFETY: The fence belongs to the last submission.
+            unsafe {
+                self.device
+                    .wait_for_fences(&[self.fence], true, u64::MAX)
+                    .map_err(backend)?;
+            }
+            self.in_flight = false;
+        }
+        Ok(())
+    }
+
+    /// Records with `record` and submits on the graphics queue without waiting: the next
+    /// submission (or [`Self::wait`]) waits for it first.
+    /// # Safety
+    /// Everything `record` references stays live until the work completes; no other
+    /// thread uses the queue.
+    unsafe fn submit(&mut self, record: impl FnOnce(&ash::Device, vk::CommandBuffer)) -> Result<()> {
+        // SAFETY: The previous submission is waited for first, so the pool is idle.
+        unsafe {
+            self.wait()?;
+        }
         let device = &self.device;
-        // SAFETY: The previous run waited for its fence, so the pool is idle.
         unsafe {
             device
                 .reset_command_pool(self.pool, vk::CommandPoolResetFlags::empty())
@@ -255,10 +287,6 @@ impl Commands {
                 )
                 .map_err(backend)?;
             self.in_flight = true;
-            device
-                .wait_for_fences(&[self.fence], true, u64::MAX)
-                .map_err(backend)?;
-            self.in_flight = false;
         }
         Ok(())
     }
@@ -835,6 +863,25 @@ impl ImportedSurface {
     /// has not acquired it; this device's work on `destination` completed; this
     /// thread owns the queue.
     pub unsafe fn copy_out(&mut self, slot: u32, destination: vk::Image) -> Result<()> {
+        // SAFETY: forwarded caller contract.
+        unsafe {
+            self.copy_out_unwaited(slot, destination)?;
+            self.commands.wait()
+        }
+    }
+
+    /// Waits for a copy [`Self::copy_out_unwaited`] submitted, if it is still running.
+    pub fn settle(&mut self) -> Result<()> {
+        // SAFETY: Only this surface's own fence is waited on.
+        unsafe { self.commands.wait() }
+    }
+
+    /// [`Self::copy_out`] without waiting for the copy: this device's later work on its
+    /// queue is ordered after it by the copy's closing barrier, and the producer must
+    /// [`Self::settle`] before it takes the slot back.
+    /// # Safety
+    /// As [`Self::copy_out`].
+    pub unsafe fn copy_out_unwaited(&mut self, slot: u32, destination: vk::Image) -> Result<()> {
         if slot as usize >= SLOTS || self.owned[slot as usize] {
             return Err(GpuError::Contract(format!(
                 "slot {slot} is outside 0..{SLOTS} or already acquired by this device"
@@ -849,7 +896,7 @@ impl ImportedSurface {
         // SAFETY: Caller contract; the slot's barriers are the protocol's acquire and
         // release, and `destination` returns to its resting layout.
         unsafe {
-            self.commands.run(|device, command| {
+            self.commands.submit(|device, command| {
                 let barriers = |list: &[vk::ImageMemoryBarrier2<'_>]| {
                     device.cmd_pipeline_barrier2(
                         command,

@@ -485,6 +485,15 @@ impl Bridge {
             self.readbacks.discard();
         }
         self.ensure_target(gpu, view.size)?;
+        // The oldest frame still waiting for the slot goes out before this one renders over
+        // the view's output (`finish` leaves it to here when the hand-off does not wait).
+        if let Some(shared) = self.target.as_mut().and_then(|t| t.shared.as_mut())
+            && shared.idle()
+            && let Some(next) = self.pending.iter_mut().find(|p| !p.published)
+        {
+            shared.publish(&self.engine, next.view)?;
+            next.published = true;
+        }
         let rendered = self
             .engine
             .render_view(view_id, &lighting::camera(frame)?)?
@@ -633,8 +642,11 @@ impl Bridge {
             if shared.id_pending() {
                 crate::shared::PresentedId::copy_from(&mut target.id, shared, gpu, target.size)?;
             }
-            // The slot is free: the next frame waiting for it goes out now.
-            if let Some(next) = self.pending.iter_mut().find(|p| !p.published) {
+            // The slot is free: the next frame waiting for it goes out now, or (unwaited
+            // hand-off) at the next `begin`, by when the presenter's copy-out has finished.
+            if crate::shared::handoff_waits()
+                && let Some(next) = self.pending.iter_mut().find(|p| !p.published)
+            {
                 shared.publish(&self.engine, next.view)?;
                 next.published = true;
             }
