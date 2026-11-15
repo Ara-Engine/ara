@@ -86,16 +86,19 @@ Entries per bind group, padded total against what the patch keeps (RENDERLAB_GRO
 | Outpost | 1,027 -> 742 | 512 -> 478 | 768 -> 341 |
 | Glint | 1,027 -> 130 | 512 -> 126 | 768 -> 3 |
 
-In the game, same Renderlab revision (2805ad12) with and without the patch, interleaved, Showcase
-without ray hardware: encode 2.82 -> 2.04 ms and 2.46 -> 1.99 ms (`finish` 1.37 -> 0.89 and
-1.15 -> 0.88); with ray hardware encode 2.27 -> 2.08 and 2.14 -> 2.04 ms. On Outpost the machine's
-run-to-run CPU spread that day (about 1 ms) hid the expected 0.2 ms (a third fewer entries per
-shading dispatch). GPU time and frames unchanged: Showcase's moving frame byte-identical on both
+In the game, same Renderlab revision (2805ad12) with and without the patch, interleaved in five
+quiet-machine rounds: Showcase encode 0.07-0.17 ms lower with ray hardware and 0.10-0.15 ms lower
+without (an earlier 0.5-0.8 ms reading came from rounds where the unpatched process happened to run
+in a slow CPU state); Outpost not measurably different (its round-to-round spread that day was about
+1 ms). Splitting each stage's `finish` showed Outpost's shading dispatch replay unchanged
+(0.175 -> 0.176 ms) despite a third fewer entries, so these entries are not what that dispatch's
+replay is made of. GPU time and frames unchanged: Showcase's moving frame byte-identical on both
 paths, Outpost's within its own run-to-run differences.
 
-A smaller alternative on Renderlab's side, binding only the frame's draws with
-PARTIALLY_BOUND_BINDING_ARRAY, removes only the padding (nothing on Outpost, 253 draws) and was
-dropped in favour of this patch.
+Status: NOT RECOMMENDED for merging. Binding only the frame's draws on Renderlab's side
+(PARTIALLY_BOUND_BINDING_ARRAY, Renderlab branch t3/shade-13) removes the padding, which is most of
+the repeats on Showcase and Glint, and measured the same or better there (encode -0.1 to -0.3 ms)
+without a vendored change; neither moves Outpost. This section and diff are kept for the record.
 
 ## Exact diff
 
