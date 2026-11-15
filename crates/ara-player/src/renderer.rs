@@ -55,8 +55,8 @@ pub(crate) fn install(presenter: &mut Presenter, cache: &Path) -> Result<()> {
         cpu_copy_handoff: std::env::var("ARA_RENDERLAB_HANDOFF").is_ok_and(|value| value == "copy"),
         // `ARA_RENDERLAB_SKY=constant` measures what a sky map costs in Renderlab.
         constant_sky: std::env::var("ARA_RENDERLAB_SKY").is_ok_and(|value| value == "constant"),
-        // The player draws no Scene overlays: no id pass.
-        scene_ids: false,
+        // The player draws no Scene overlays: no id pass (framecpu measurement: ARA_PLAYER_SCENE_IDS=1 draws it).
+        scene_ids: std::env::var("ARA_PLAYER_SCENE_IDS").is_ok_and(|v| v == "1"),
     };
     presenter.set_external_pipelined(pipeline);
     Renderlab::new(&options)
