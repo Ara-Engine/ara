@@ -36,6 +36,15 @@ The sources are licensed under MIT OR Apache-2.0. Both original license files
 are included in each crate directory. The local clock changes and exact diff
 are documented in [PATCHES.md](crates/ara-net/vendor/PATCHES.md).
 
+## Vendored wgpu-core 30.0.1
+
+`crates/ara-renderlab/vendor/wgpu-core` contains the complete wgpu-core 30.0.1 crate
+source by the gfx-rs developers, from
+[upstream commit 40f4a34](https://github.com/gfx-rs/wgpu/tree/40f4a34ebaf56f9a046231f54125ad046239d3f3).
+The source is licensed under MIT OR Apache-2.0. Both original license files are
+included in the crate directory. The one local change and its exact diff are
+documented in [PATCHES.md](crates/ara-renderlab/vendor/PATCHES.md).
+
 ## BC6H format tables (bcdec)
 
 The BC6H layout, partition and anchor tables in
