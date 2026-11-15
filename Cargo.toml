@@ -141,3 +141,7 @@ ara-gpu = { path = "crates/ara-gpu" }
 accesskit_windows = { git = "https://github.com/Snowy7/stillkit", rev = "5138e95f7c21f6689271c347b4ff2c92a2c17b6a" }
 lightyear_sync = { path = "crates/ara-net/vendor/lightyear_sync" }
 lightyear_transport = { path = "crates/ara-net/vendor/lightyear_transport" }
+# wgpu-core 30.0.1 with one fix from wgpu's development branch: each BLAS is recorded once per
+# TLAS, so a submit no longer walks one entry per instance per TLAS use
+# (crates/ara-renderlab/vendor/PATCHES.md). Remove with the first wgpu release that has it.
+wgpu-core = { path = "crates/ara-renderlab/vendor/wgpu-core" }
