@@ -160,6 +160,86 @@ pub(crate) struct Scene {
     largest: usize,
     /// What each blended material's base-colour map does with its alpha.
     coverage: Coverage,
+    /// The frame draws the last full `sync` placed (`Self::sync_unchanged`).
+    remembered: Option<Remembered>,
+}
+
+/// What the last full [`Scene::sync`] saw, so a frame whose draws differ from it only in
+/// own objects' transforms and skin poses (a moving camera, animated or moved objects)
+/// skips rebuilding the groups, batch plan, live set, batch hashes and id tags: everything
+/// those depend on is in [`Fingerprint`], and the same model, material and paint `Arc`s
+/// give the same geometry and material keys (`Coverage` keys its answers by the same bytes).
+struct Remembered {
+    static_key: u64,
+    reserved: usize,
+    draws: Vec<Remember>,
+}
+
+/// One frame draw as the last full `sync` placed it.
+struct Remember {
+    fingerprint: Fingerprint,
+    world: [u32; 16],
+    drawable: bool,
+    fate: Placed,
+}
+
+/// What the last full `sync` did with a frame draw.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Placed {
+    /// Not drawn: a singular transform or no room even in a batch.
+    No,
+    Own,
+    Merged,
+}
+
+/// Everything about a draw that `sync`'s grouping, keys and tags read, except its transform
+/// and its skin palette: equal fingerprints give equal groups, keys, fates and ids.
+#[derive(Clone, PartialEq)]
+struct Fingerprint {
+    entity: u64,
+    /// The model generation (0 for a shape), the primitive (or the shape) and a shape's size.
+    geometry: (usize, u64, [u32; 3]),
+    material: usize,
+    paint: usize,
+    scalars: [u32; 9],
+    emissive_factor: Option<[u32; 3]>,
+    skin: Option<usize>,
+    casts_shadows: bool,
+    receives_decals: bool,
+}
+
+fn fingerprint(draw: &Draw) -> Fingerprint {
+    let mut scalars = [0u32; 9];
+    for (slot, value) in scalars.iter_mut().zip(
+        draw.color
+            .iter()
+            .chain([draw.roughness, draw.metallic].iter())
+            .chain(draw.emissive.iter()),
+    ) {
+        *slot = value.to_bits();
+    }
+    Fingerprint {
+        entity: draw.entity,
+        geometry: match &draw.geometry {
+            Geometry::Shape { shape, size } => (0, *shape as u64, size.map(f32::to_bits)),
+            Geometry::Model { model, primitive } => {
+                (std::sync::Arc::as_ptr(model) as usize, *primitive as u64, [0; 3])
+            }
+        },
+        material: draw.material.as_ref().map_or(0, |m| std::sync::Arc::as_ptr(m) as usize),
+        paint: draw.paint.as_ref().map_or(0, |p| p.as_ptr() as usize),
+        scalars,
+        emissive_factor: draw.emissive_factor.map(|f| f.map(f32::to_bits)),
+        skin: draw.skin.as_ref().map(|r| r.len()),
+        casts_shadows: draw.casts_shadows,
+        receives_decals: draw.receives_decals,
+    }
+}
+
+/// `ARA_RENDERLAB_SYNC_FAST=0` runs the full `sync` every frame.
+fn sync_fast() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("ARA_RENDERLAB_SYNC_FAST").map_or(true, |v| v != "0"))
 }
 
 /// What a draw's blended material shows through, and where: the alpha class
@@ -604,6 +684,10 @@ impl Scene {
         reserved: usize,
         gaps: &mut Gaps,
     ) -> Result<()> {
+        if sync_fast() && self.sync_unchanged(engine, frame, static_key, reserved, gaps)? {
+            return Ok(());
+        }
+        self.remembered = None;
         let budget = MAX_GROUPS.saturating_sub(reserved);
         let settled = self.static_key == Some(static_key);
         self.coverage.prune();
@@ -651,14 +735,23 @@ impl Scene {
                 groups.len() - 1
             });
             groups[group].objects += 1;
-            keyed.push((draw, mesh, material, placed.is_some(), group));
+            keyed.push((draw, mesh, material, placed.is_some(), group, fixed));
         }
         let fates = batch::plan(&groups, budget);
 
         let mut live = HashSet::with_capacity(keyed.len());
         let mut merged: HashMap<u64, Vec<&Draw>> = HashMap::new();
         let mut dropped = 0usize;
-        for (draw, mesh, material, placed, group) in keyed {
+        // The frame draws' fates in order, for `Remembered`.
+        let mut frame_fates = Vec::with_capacity(frame.draws.len());
+        for (draw, mesh, material, placed, group, fixed) in keyed {
+            if !fixed {
+                frame_fates.push(match fates[group] {
+                    Fate::Dropped => Placed::No,
+                    Fate::Merged => Placed::Merged,
+                    Fate::Own => Placed::Own,
+                });
+            }
             match fates[group] {
                 Fate::Dropped => {
                     dropped += 1;
@@ -718,7 +811,83 @@ impl Scene {
         }
         self.sync_batches(engine, merged, gaps)?;
         self.log_textures();
-        self.tag(engine, frame)
+        self.tag(engine, frame)?;
+        let mut fates = frame_fates.into_iter();
+        let draws = frame
+            .draws
+            .iter()
+            .map(|draw| {
+                let drawable = drawable(&draw.world);
+                Remember {
+                    fingerprint: fingerprint(draw),
+                    world: draw.world.to_cols_array().map(f32::to_bits),
+                    drawable,
+                    fate: if drawable {
+                        fates.next().unwrap_or(Placed::No)
+                    } else {
+                        Placed::No
+                    },
+                }
+            })
+            .collect();
+        self.remembered = Some(Remembered {
+            static_key,
+            reserved,
+            draws,
+        });
+        Ok(())
+    }
+
+    /// The frame's draws are the last full `sync`'s in every [`Fingerprint`] (and the static
+    /// draws and terrain reservation are the same): only own objects' transforms and skin
+    /// poses are applied, through `place` as the full path does. False, with nothing
+    /// changed, when anything else differs or a batch member or a singular draw moved.
+    fn sync_unchanged(
+        &mut self,
+        engine: &mut Engine,
+        frame: &RenderFrame,
+        static_key: u64,
+        reserved: usize,
+        gaps: &mut Gaps,
+    ) -> Result<bool> {
+        let Some(remembered) = &self.remembered else {
+            return Ok(false);
+        };
+        if remembered.static_key != static_key
+            || remembered.reserved != reserved
+            || self.static_key != Some(static_key)
+            || remembered.draws.len() != frame.draws.len()
+        {
+            return Ok(false);
+        }
+        // Own draws to place again: moved, or skinned (a pose is sent every frame).
+        let mut again = Vec::new();
+        for (i, (draw, seen)) in frame.draws.iter().zip(&remembered.draws).enumerate() {
+            if seen.fingerprint != fingerprint(draw) {
+                return Ok(false);
+            }
+            let moved = draw.world.to_cols_array().map(f32::to_bits) != seen.world;
+            if moved && (seen.fate == Placed::Merged || drawable(&draw.world) != seen.drawable) {
+                return Ok(false);
+            }
+            if seen.fate == Placed::Own && (moved || draw.skin.is_some()) {
+                again.push(i);
+            }
+        }
+        for i in again {
+            let draw = &frame.draws[i];
+            let (mesh, material) = self
+                .objects
+                .get(&draw.entity)
+                .map(|o| (o.mesh, o.material))
+                .context("a remembered own draw has its object")?;
+            self.place(engine, frame, draw, mesh, material, gaps)?;
+            if let Some(remembered) = &mut self.remembered {
+                remembered.draws[i].world = draw.world.to_cols_array().map(f32::to_bits);
+            }
+        }
+        self.log_textures();
+        Ok(true)
     }
 
     /// Gives Renderlab's objects the editor's ids: a draw's id is its index in the frame's
