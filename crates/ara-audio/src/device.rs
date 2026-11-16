@@ -111,6 +111,58 @@ impl OfflineBackend {
         self.buffer
     }
 }
+/// A real-time sink that plays nowhere: it takes submitted PCM at the sample rate and drops
+/// it, so the mixer and everything feeding it run as they would with a device while nothing
+/// reaches the speakers (the player's `ARA_AUDIO_SILENT=1`, for gates on a machine in use).
+pub struct NullBackend {
+    rate: u32,
+    started: std::time::Instant,
+    submitted: u64,
+}
+impl NullBackend {
+    /// A sink consuming `rate` frames a second from now.
+    pub fn new(rate: u32) -> Self {
+        Self {
+            rate,
+            started: std::time::Instant::now(),
+            submitted: 0,
+        }
+    }
+    /// The start-up line's description.
+    pub fn summary(&self) -> String {
+        format!("silent (ARA_AUDIO_SILENT): mixing at {} Hz into no device", self.rate)
+    }
+}
+impl DeviceBackend for NullBackend {
+    fn sample_rate(&self) -> u32 {
+        self.rate
+    }
+    fn poll(&mut self) -> Result<DeviceEvent> {
+        Ok(DeviceEvent::Ready)
+    }
+    fn submit(&mut self, samples: &[f32]) -> Result<()> {
+        if !samples.len().is_multiple_of(2) {
+            return Err(AudioError::Invalid("stereo buffer length"));
+        }
+        self.submitted += (samples.len() / 2) as u64;
+        Ok(())
+    }
+    fn queued_frames(&self) -> Result<usize> {
+        let played = (self.started.elapsed().as_secs_f64() * f64::from(self.rate)) as u64;
+        Ok(self.submitted.saturating_sub(played) as usize)
+    }
+    fn latency(&self) -> Result<Latency> {
+        let queued_frames = self.queued_frames()?;
+        Ok(Latency {
+            queued_frames,
+            estimated_output_ms: queued_frames as f64 * 1000.0 / f64::from(self.rate),
+        })
+    }
+    fn recover(&mut self) -> Result<DeviceEvent> {
+        Ok(DeviceEvent::Ready)
+    }
+}
+
 impl DeviceBackend for OfflineBackend {
     fn sample_rate(&self) -> u32 {
         self.rate
@@ -435,5 +487,23 @@ mod summary_tests {
             format.summary("Speakers (Realtek)", "wasapi", 48_000),
             "\"Speakers (Realtek)\" via wasapi: 44100 Hz, 2 channels, 441-frame buffer; mixing at 48000 Hz"
         );
+    }
+}
+
+#[cfg(test)]
+mod null_tests {
+    use super::{DeviceBackend, NullBackend};
+
+    /// The silent sink takes PCM like a device and drains it at the sample rate, so a mixer
+    /// pumped against it runs in real time; odd (non-stereo) buffers are refused like a device's.
+    #[test]
+    fn the_silent_sink_drains_at_its_rate() {
+        let mut sink = NullBackend::new(48_000);
+        sink.submit(&vec![0.0; 2 * 4_800]).unwrap();
+        let queued = sink.queued_frames().unwrap();
+        assert!(queued > 4_000 && queued <= 4_800, "{queued}");
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        assert_eq!(sink.queued_frames().unwrap(), 0);
+        assert!(sink.submit(&[0.0; 3]).is_err());
     }
 }

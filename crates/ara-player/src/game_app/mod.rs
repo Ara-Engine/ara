@@ -259,7 +259,7 @@ struct App {
     lobby: Option<lobby::Lobby>,
     port: u16,
     frame: RenderFrame,
-    audio: Option<(crate::world::Audio, ara_audio::device::SdlBackend)>,
+    audio: Option<(crate::world::Audio, crate::AudioOut)>,
     quit: bool,
     bot: Option<bot::Bot>,
     route: Vec<String>,
