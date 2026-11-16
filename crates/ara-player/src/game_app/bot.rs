@@ -4,7 +4,10 @@ use ara_components::Transform;
 use ara_runtime::components::PlayerControl;
 use ara_sim::Identity;
 use serde_json::{Value, json};
-use std::{collections::BTreeSet, fs::OpenOptions};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fs::OpenOptions,
+};
 mod avoidance;
 mod capture;
 mod metrics;
@@ -28,12 +31,51 @@ pub(super) struct Bot {
 /// `--bot-route`: actions at ticks counted from the run's first tick, and how often to print
 /// the player's entity. `{"inputs": [{"tick": 60, "action": "Move", "axis": [0, 1], "hold": 240},
 /// {"tick": 600, "action": "Jump", "button": true, "hold": 6}], "every": 30}`
+/// The bot runs once a frame, and a slow frame passes several ticks, so inputs are scheduled
+/// up to `AHEAD` ticks before they are due and land on their exact tick (a replay's inputs then
+/// replay as recorded); one that is already due when seen (a frame over `AHEAD` ticks) lands on
+/// the next tick and counts as `late` in the probe lines.
 #[derive(serde::Deserialize)]
 pub(super) struct Route {
     inputs: Vec<RouteInput>,
     every: u64,
     #[serde(skip)]
     first: Option<u64>,
+    /// The first input not scheduled yet (inputs are sorted by tick on load).
+    #[serde(skip)]
+    next: usize,
+    /// The route tick of the next probe line.
+    #[serde(skip)]
+    probe: u64,
+    #[serde(skip)]
+    late: usize,
+}
+impl Route {
+    const AHEAD: u64 = 60;
+    /// The inputs to schedule at route tick `at`, each with the ticks after the next one it
+    /// lands on (`Play::input`'s `after`): every input due by `at + AHEAD`, once.
+    fn due(&mut self, at: u64) -> Vec<(u64, &RouteInput)> {
+        let end = self.inputs[self.next..]
+            .iter()
+            .position(|i| i.tick > at + Self::AHEAD)
+            .map_or(self.inputs.len(), |n| self.next + n);
+        let due = &self.inputs[self.next..end];
+        self.late += due.iter().filter(|i| i.tick <= at).count();
+        self.next = end;
+        due.iter()
+            .map(|i| (i.tick.saturating_sub(at + 1), i))
+            .collect()
+    }
+    /// Whether route tick `at` prints a probe line: the first tick at or past each multiple
+    /// of `every`.
+    fn probe_due(&mut self, at: u64) -> bool {
+        if at < self.probe {
+            return false;
+        }
+        let every = self.every.max(1);
+        self.probe = (at / every + 1) * every;
+        true
+    }
 }
 #[derive(serde::Deserialize)]
 struct RouteInput {
@@ -88,7 +130,9 @@ impl Bot {
     }
     pub(super) fn with_route(mut self, path: Option<&std::path::Path>) -> Result<Self> {
         if let Some(path) = path {
-            self.route = Some(serde_json::from_slice(&std::fs::read(path)?)?);
+            let mut route: Route = serde_json::from_slice(&std::fs::read(path)?)?;
+            route.inputs.sort_by_key(|i| i.tick);
+            self.route = Some(route);
         }
         Ok(self)
     }
@@ -100,11 +144,9 @@ impl Bot {
         let start = *route.first.get_or_insert(tick);
         let at = tick - start;
         let player = world.runtime.player();
-        let inputs: Vec<Injection> = route
-            .inputs
-            .iter()
-            .filter(|i| i.tick == at)
-            .map(|i| Injection {
+        let mut by_tick = BTreeMap::<u64, Vec<Injection>>::new();
+        for (after, i) in route.due(at) {
+            by_tick.entry(after).or_default().push(Injection {
                 player,
                 action: i.action.clone(),
                 value: match (i.axis, i.button) {
@@ -112,12 +154,13 @@ impl Bot {
                     (None, button) => ActionValue::Button(button.unwrap_or(true)),
                 },
                 hold_ticks: i.hold,
-            })
-            .collect();
-        if !inputs.is_empty() {
-            world.runtime.input(0, inputs)?;
+            });
         }
-        if at % route.every.max(1) == 0 {
+        for (after, inputs) in by_tick {
+            world.runtime.input(after, inputs)?;
+        }
+        if route.probe_due(at) {
+            let late = route.late;
             let found = world.runtime.world().iter_entities().find_map(|e| {
                 e.get::<PlayerControl>().filter(|c| c.player == player.0)?;
                 let transform = e.get::<Transform>()?;
@@ -135,7 +178,7 @@ impl Bot {
                 eprintln!(
                     "bot_probe {}",
                     json!({"tick": at, "entity": id, "position": position, "rotation": rotation,
-                           "linear": linear, "angular": angular, "Ball": ball})
+                           "linear": linear, "angular": angular, "Ball": ball, "late": late})
                 );
             } else {
                 eprintln!("bot_probe {}", json!({"tick": at, "entity": null}));
@@ -578,4 +621,34 @@ fn write_report(path: &std::path::Path, report: &Value) -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Frames that pass several ticks still land every input on its own tick, once, and
+    /// probes keep to the tick grid.
+    #[test]
+    fn route_inputs_land_on_their_ticks_when_frames_skip_ticks() {
+        let mut route: Route = serde_json::from_value(json!({"every": 30, "inputs": (0..50u64)
+            .map(|k| json!({"tick": 4 + 4 * k, "action": "Move", "axis": [0, 1], "hold": 4}))
+            .collect::<Vec<_>>()})).unwrap();
+        let (mut landed, mut probes) = (vec![], vec![]);
+        for at in (0..400u64).step_by(7) {
+            landed.extend(route.due(at).into_iter().map(|(after, i)| (at + 1 + after, i.tick)));
+            if route.probe_due(at) {
+                probes.push(at);
+            }
+        }
+        assert_eq!(landed.len(), 50);
+        assert!(landed.iter().all(|(on, tick)| on == tick), "{landed:?}");
+        assert_eq!(route.late, 0);
+        assert_eq!(probes[..4], [0, 35, 63, 91]);
+        // A frame longer than the look-ahead lands what it skipped on the next tick, counted late.
+        let mut route: Route = serde_json::from_value(json!({"every": 30, "inputs": [
+            {"tick": 10, "action": "Jump", "button": true, "hold": 2}]})).unwrap();
+        assert_eq!(route.due(200).iter().map(|(after, _)| *after).collect::<Vec<_>>(), [0]);
+        assert_eq!(route.late, 1);
+    }
 }
