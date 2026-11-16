@@ -568,14 +568,21 @@ impl AudioPresenter {
         for ((entity, source, _), evaluation) in sources.iter().zip(&evaluations) {
             let mut loaded = true;
             if let Some(&voice) = self.voices.get(entity) {
-                self.engine.command(
+                // A one-shot that played out keeps its entry, so it does not start again; its voice
+                // is gone from the engine (UnknownHandle), and that is not a failure of the world.
+                // Glint's eight non-looping "Sound pin" sources end a second into a run, and the
+                // error ended the game when the next update set their parameters.
+                match self.engine.command(
                     voice,
                     VoiceCommand::Set {
                         at_frame,
                         parameters: evaluation.parameters,
                         ramp_frames: RAMP,
                     },
-                )?;
+                ) {
+                    Ok(()) | Err(AudioError::UnknownHandle) => {}
+                    Err(e) => return Err(e),
+                }
             } else if let Some(graph) = graph_sources.get(entity)
                 && let Some(reference) = &graph.graph
             {
@@ -675,5 +682,40 @@ impl AudioPresenter {
         ara_audio::capture::capture_audio_prepared(&mut self.engine, seconds, &mut || {
             voices.refill()
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A non-looping source that has played out keeps updating without an error (Glint's
+    /// "Sound pin" one-shots ended the game a second into every run: the next update's
+    /// parameter command met a finished voice) and does not start again.
+    #[test]
+    fn a_finished_one_shot_does_not_fail_later_updates() {
+        let mut presenter =
+            AudioPresenter::new(&Workspace::new(ara_doc::refs::AssetIndex::new())).unwrap();
+        let mut world = World::new();
+        world.spawn((
+            Identity("pin".into()),
+            AudioSource {
+                clip: Some(AssetRef("@audio/pin.wav#as_pin".into())),
+                looping: false,
+                spatial: false,
+                ..Default::default()
+            },
+        ));
+        let listener = AudioListener::default();
+        let frame = ara_audio::Frame { left: 0.1, right: 0.1 };
+        let mut clips = |_: &AssetRef| Clip::new(48_000, vec![frame; 64], 1 << 20);
+        presenter.update(&world, &listener, &mut clips).unwrap();
+        let voice = presenter.voices["pin"];
+        presenter.engine.render_frames(4_800).unwrap();
+        for _ in 0..3 {
+            presenter.update(&world, &listener, &mut clips).unwrap();
+            presenter.engine.render_frames(480).unwrap();
+        }
+        assert_eq!(presenter.voices["pin"], voice, "the one-shot did not start again");
     }
 }
