@@ -22,6 +22,26 @@ pub(super) struct Bot {
     won_at: Option<u64>,
     began: Instant,
     capture: Option<capture::Worker>,
+    route: Option<Route>,
+}
+
+/// `--bot-route`: actions at ticks counted from the run's first tick, and how often to print
+/// the player's entity. `{"inputs": [{"tick": 60, "action": "Move", "axis": [0, 1], "hold": 240},
+/// {"tick": 600, "action": "Jump", "button": true, "hold": 6}], "every": 30}`
+#[derive(serde::Deserialize)]
+pub(super) struct Route {
+    inputs: Vec<RouteInput>,
+    every: u64,
+    #[serde(skip)]
+    first: Option<u64>,
+}
+#[derive(serde::Deserialize)]
+struct RouteInput {
+    tick: u64,
+    action: String,
+    axis: Option<[f32; 2]>,
+    button: Option<bool>,
+    hold: u32,
 }
 
 pub(super) fn component(runtime: &ara_runtime::Runtime, id: &str, name: &str) -> Value {
@@ -63,7 +83,65 @@ impl Bot {
             won_at: None,
             began: Instant::now(),
             capture: None,
+            route: None,
         }
+    }
+    pub(super) fn with_route(mut self, path: Option<&std::path::Path>) -> Result<Self> {
+        if let Some(path) = path {
+            self.route = Some(serde_json::from_slice(&std::fs::read(path)?)?);
+        }
+        Ok(self)
+    }
+    /// The route's tick: inject what is due, and every `every` ticks print the player's entity:
+    /// position, rotation, linear and angular velocity, and its script components' `Ball`-style
+    /// state when present (`bot_probe` lines on stderr).
+    fn drive_route(&mut self, world: &mut World, tick: u64) -> Result<()> {
+        let route = self.route.as_mut().unwrap();
+        let start = *route.first.get_or_insert(tick);
+        let at = tick - start;
+        let player = world.runtime.player();
+        let inputs: Vec<Injection> = route
+            .inputs
+            .iter()
+            .filter(|i| i.tick == at)
+            .map(|i| Injection {
+                player,
+                action: i.action.clone(),
+                value: match (i.axis, i.button) {
+                    (Some(axis), _) => ActionValue::Axis2(axis),
+                    (None, button) => ActionValue::Button(button.unwrap_or(true)),
+                },
+                hold_ticks: i.hold,
+            })
+            .collect();
+        if !inputs.is_empty() {
+            world.runtime.input(0, inputs)?;
+        }
+        if at % route.every.max(1) == 0 {
+            let found = world.runtime.world().iter_entities().find_map(|e| {
+                e.get::<PlayerControl>().filter(|c| c.player == player.0)?;
+                let transform = e.get::<Transform>()?;
+                let velocity = e.get::<ara_physics::Velocity>();
+                Some((
+                    e.get::<Identity>()?.0.clone(),
+                    transform.position,
+                    transform.rotation,
+                    velocity.map(|v| v.linear),
+                    velocity.map(|v| v.angular),
+                ))
+            });
+            if let Some((id, position, rotation, linear, angular)) = found {
+                let ball = component(&world.runtime, &id, "Ball");
+                eprintln!(
+                    "bot_probe {}",
+                    json!({"tick": at, "entity": id, "position": position, "rotation": rotation,
+                           "linear": linear, "angular": angular, "Ball": ball})
+                );
+            } else {
+                eprintln!("bot_probe {}", json!({"tick": at, "entity": null}));
+            }
+        }
+        Ok(())
     }
     pub(super) fn drive(&mut self, world: &mut World) -> Result<()> {
         if matches!(&world.runtime,Play::Host(h) if h.dedicated()) {
@@ -74,6 +152,9 @@ impl Bot {
             return Ok(());
         }
         self.last_input = tick;
+        if self.route.is_some() {
+            return self.drive_route(world, tick);
+        }
         let player = world.runtime.player();
         let Some((identity, position)) = world.runtime.world().iter_entities().find_map(|e| {
             e.get::<PlayerControl>().filter(|c| c.player == player.0)?;

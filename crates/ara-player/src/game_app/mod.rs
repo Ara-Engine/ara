@@ -52,6 +52,11 @@ pub(crate) struct Options {
     /// Per-run scratch evidence/report directory for bots.
     #[arg(long, hide = true)]
     evidence: Option<PathBuf>,
+    /// A fixed input route for the bot instead of its co-op route (`bot::Route`, JSON): actions
+    /// injected at ticks after the run starts, through the same injection path keys take, with
+    /// the player's entity printed to stderr as `bot_probe` lines. For gates and diagnosis.
+    #[arg(long, hide = true, requires = "bot")]
+    bot_route: Option<PathBuf>,
 }
 
 /// Exported games with native menus open them on ordinary double-click launches.
@@ -187,7 +192,9 @@ pub(crate) fn run(args: Args) -> Result<()> {
         bot: args
             .game
             .bot
-            .then(|| bot::Bot::new(args.game.evidence.clone())),
+            .then(|| bot::Bot::new(args.game.evidence.clone()))
+            .map(|bot| bot.with_route(args.game.bot_route.as_deref()))
+            .transpose()?,
         route: vec![],
         rebinding: None,
         ui_audio,
