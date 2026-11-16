@@ -31,7 +31,7 @@ glam30 = { workspace = true }
 # (the root manifest's `[patch]`), so the device it renders on is the presenter's type.
 # The same revision as elsewhere: one package, with the backend's feature on Apple.
 [target.'cfg(target_vendor = "apple")'.dependencies]
-renderlab = { git = "https://github.com/Ara-Engine/renderlab", rev = "85ff5033e17cf4721304db43e3c287d6d4881ccd", features = ["backend-ara"] }
+renderlab = { git = "https://github.com/Ara-Engine/renderlab", rev = "b8cad694f1ba284ee77b4aa823d12ca660c193d6", features = ["backend-ara"] }
 
 # Elsewhere Renderlab renders through wgpu on its own Vulkan device.
 # Pinned: the engine builds against a frozen renderer while it is improved
@@ -39,7 +39,7 @@ renderlab = { git = "https://github.com/Ara-Engine/renderlab", rev = "85ff5033e1
 [target.'cfg(not(target_vendor = "apple"))'.dependencies]
 # One revision for both targets: Renderlab main (the view API, the emitter curl work, the object ids
 # and the Metal backend's multi-view port, its object ids (#43) and empty scenes (#44)).
-renderlab = { git = "https://github.com/Ara-Engine/renderlab", rev = "85ff5033e17cf4721304db43e3c287d6d4881ccd" }
+renderlab = { git = "https://github.com/Ara-Engine/renderlab", rev = "b8cad694f1ba284ee77b4aa823d12ca660c193d6" }
 # The shared-image handoff reaches Renderlab's raw Vulkan device through wgpu-hal, with
 # the ash that wgpu-hal itself binds. Neither appears in this crate's public surface.
 wgpu = { version = "30.0.1", default-features = false, features = ["vulkan"] }
