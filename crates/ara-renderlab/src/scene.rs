@@ -125,6 +125,9 @@ struct Batch {
     /// Each member in mesh order: its draw's entity and its triangle count, so the batch's
     /// object ids can name each member's primitives (`Scene::tag`).
     layout: Vec<(u64, u32)>,
+    /// The transform bits the object is drawn at when the mesh is built relative to its first
+    /// member (`anchored_batches`); world-space batches are drawn at the identity.
+    anchor: Option<[u32; 16]>,
 }
 
 /// Renderlab handles for everything the frame draws.
@@ -238,6 +241,21 @@ fn fingerprint(draw: &Draw) -> Fingerprint {
         casts_shadows: draw.casts_shadows,
         receives_decals: draw.receives_decals,
     }
+}
+
+/// Whether a static batch whose members have all moved is built relative to its first member
+/// and drawn at that member's transform: a rigid move (Outpost's walking player, 14 parts in
+/// two batches) then moves the batch's object instead of rebuilding its mesh every frame.
+/// `ARA_RENDERLAB_BATCH_ANCHOR=0` builds every batch in world space.
+fn anchored_batches() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("ARA_RENDERLAB_BATCH_ANCHOR").map_or(true, |v| v != "0"))
+}
+
+/// A member's transform relative to its batch's anchor, rounded to 1e-4 so that a rigid move
+/// (whose relative transforms differ only in rounding) gives the same batch content.
+fn relative_bits(relative: &glam34::Mat4) -> [i32; 16] {
+    relative.to_cols_array().map(|v| (v * 1e4).round() as i32)
 }
 
 /// `ARA_RENDERLAB_SYNC_FAST=0` runs the full `sync` every frame.
@@ -960,21 +978,36 @@ impl Scene {
             self.remove_batch(engine, material)?;
         }
         for (material, members) in merged {
-            let content = members
-                .iter()
-                .fold(fnv(FNV, &material.to_le_bytes()), |h, draw| {
+            let anchor = (anchored_batches()
+                && members.iter().all(|d| self.moved.contains(&d.entity)))
+            .then(|| cleaned(&members[0].world));
+            let to_anchor = anchor.map(|a| a.inverse());
+            let content = members.iter().fold(
+                fnv(FNV, &[material.to_le_bytes(), [u8::from(anchor.is_some()); 8]].concat()),
+                |h, draw| {
                     let h = fnv(h, &geometry_key(draw, &mut self.coverage).to_le_bytes());
                     let h = fnv(h, &draw.entity.to_le_bytes());
-                    cleaned(&draw.world)
-                        .to_cols_array()
-                        .iter()
-                        .fold(h, |h, v| fnv(h, &v.to_bits().to_le_bytes()))
-                });
-            if self
-                .batches
-                .get(&material)
-                .is_some_and(|b| b.content == content)
+                    match to_anchor {
+                        Some(to) => relative_bits(&(to * cleaned(&draw.world)))
+                            .iter()
+                            .fold(h, |h, v| fnv(h, &v.to_le_bytes())),
+                        None => cleaned(&draw.world)
+                            .to_cols_array()
+                            .iter()
+                            .fold(h, |h, v| fnv(h, &v.to_bits().to_le_bytes())),
+                    }
+                },
+            );
+            if let Some(batch) = self.batches.get_mut(&material)
+                && batch.content == content
             {
+                let bits = anchor.map(|a| a.to_cols_array().map(f32::to_bits));
+                if let Some(bits) = bits
+                    && batch.anchor != Some(bits)
+                {
+                    engine.set_transform(batch.id, Mat4::from_cols_array(&bits.map(f32::from_bits)))?;
+                    batch.anchor = Some(bits);
+                }
                 continue;
             }
             self.remove_batch(engine, material)?;
@@ -989,7 +1022,7 @@ impl Scene {
                 }
                 let before = indices.len();
                 batch::append_world(
-                    &cleaned(&draw.world),
+                    &to_anchor.map_or(cleaned(&draw.world), |to| to * cleaned(&draw.world)),
                     &source,
                     &triangles,
                     &mut vertices,
@@ -1006,7 +1039,8 @@ impl Scene {
             let (mesh, tangents) = upload(engine, &label, &vertices, &indices, wanted, gaps)?;
             let material_slot = fnv(material, &[u8::from(tangents)]);
             let material_id = self.material(engine, first, material_slot, tangents, gaps)?;
-            let id = engine.spawn(mesh, material_id, Mat4::IDENTITY)?;
+            let at = anchor.map_or(Mat4::IDENTITY, |a| Mat4::from_cols_array(&a.to_cols_array()));
+            let id = engine.spawn(mesh, material_id, at)?;
             self.batches.insert(
                 material,
                 Batch {
@@ -1015,6 +1049,7 @@ impl Scene {
                     mesh,
                     material_slot,
                     layout,
+                    anchor: anchor.map(|a| a.to_cols_array().map(f32::to_bits)),
                 },
             );
         }
