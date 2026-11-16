@@ -250,6 +250,7 @@ type Moving<'w, 's> = Query<
         Option<&'static RigidBody>,
         Option<&'static PlayerControl>,
         Option<&'static ChildOf>,
+        Has<CharacterController>,
     ),
     (
         Without<NavAgent>,
@@ -259,13 +260,16 @@ type Moving<'w, 's> = Query<
 
 /// After physics: writes moving bodies' and characters' poses to `Transform` and
 /// records what was written. Characters face their `PlayerControl.yaw` (the
-/// controller capsule stays upright). Static bodies keep their authored transform.
+/// controller capsule stays upright). A player-controlled rigid body without a character
+/// controller (Glint's ball) keeps the rotation physics gave it: facing it upright threw
+/// its spin away every tick, so the ball never visibly rolled. Static bodies keep their
+/// authored transform.
 pub fn pull_poses(mut commands: Commands, mut bodies: Moving, parents: Query<&WorldPose>) {
-    for (entity, pose, mut transform, synced, body, control, parent) in &mut bodies {
+    for (entity, pose, mut transform, synced, body, control, parent, character) in &mut bodies {
         if !body.is_some_and(|b| b.motion == MotionType::Static) {
             let scale = Vec3::from_array(transform.scale);
             let mut world = Pose::from_physics(pose, scale);
-            if let Some(control) = control {
+            if let Some(control) = control.filter(|_| character) {
                 world.rotation = crate::math::yaw_rotation(control.yaw);
             }
             let local = match parent.and_then(|p| parents.get(p.parent()).ok()) {
