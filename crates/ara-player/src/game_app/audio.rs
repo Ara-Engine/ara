@@ -3,13 +3,12 @@ use super::*;
 use ara_audio::{
     AudioEngine, Clip, Playback, VoiceParameters,
     codec::{MediaDecoder, decode_clip},
-    device::SdlBackend,
 };
 
 pub(super) struct UiAudio {
     engine: AudioEngine,
     clip: Clip,
-    device: SdlBackend,
+    device: crate::AudioOut,
 }
 impl UiAudio {
     pub(super) fn open(bytes: &[u8]) -> Result<Option<Self>> {

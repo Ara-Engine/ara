@@ -170,11 +170,64 @@ const AUDIO_WATERMARK: usize = 2048;
 /// Opens the default audio output for `what` ("play", "menu") and says so on stderr: the
 /// device, its driver and format on success, the reason on failure. A player without a
 /// device runs silent, so the line is the only way to tell the two apart from a log.
-fn open_audio(what: &str) -> Option<ara_audio::device::SdlBackend> {
+/// The player's audio output: the default device, or with `ARA_AUDIO_SILENT=1` a sink that
+/// mixes in real time and plays nowhere, so the audio presenter still runs (gates on a
+/// machine whose owner needs his speakers).
+pub(crate) enum AudioOut {
+    Device(ara_audio::device::SdlBackend),
+    Silent(ara_audio::device::NullBackend),
+}
+impl AudioOut {
+    fn backend(&self) -> &dyn ara_audio::device::DeviceBackend {
+        match self {
+            Self::Device(d) => d,
+            Self::Silent(d) => d,
+        }
+    }
+    fn backend_mut(&mut self) -> &mut dyn ara_audio::device::DeviceBackend {
+        match self {
+            Self::Device(d) => d,
+            Self::Silent(d) => d,
+        }
+    }
+}
+impl ara_audio::device::DeviceBackend for AudioOut {
+    fn sample_rate(&self) -> u32 {
+        self.backend().sample_rate()
+    }
+    fn minimum_queue_frames(&self) -> usize {
+        self.backend().minimum_queue_frames()
+    }
+    fn maximum_queue_frames(&self) -> usize {
+        self.backend().maximum_queue_frames()
+    }
+    fn poll(&mut self) -> ara_audio::Result<ara_audio::device::DeviceEvent> {
+        self.backend_mut().poll()
+    }
+    fn submit(&mut self, interleaved: &[f32]) -> ara_audio::Result<()> {
+        self.backend_mut().submit(interleaved)
+    }
+    fn queued_frames(&self) -> ara_audio::Result<usize> {
+        self.backend().queued_frames()
+    }
+    fn latency(&self) -> ara_audio::Result<ara_audio::device::Latency> {
+        self.backend().latency()
+    }
+    fn recover(&mut self) -> ara_audio::Result<ara_audio::device::DeviceEvent> {
+        self.backend_mut().recover()
+    }
+}
+
+fn open_audio(what: &str) -> Option<AudioOut> {
+    if std::env::var_os("ARA_AUDIO_SILENT").is_some_and(|v| v != "0") {
+        let sink = ara_audio::device::NullBackend::new(48_000);
+        eprintln!("ara-player: audio ({what}): {}", sink.summary());
+        return Some(AudioOut::Silent(sink));
+    }
     match ara_audio::device::SdlBackend::open(48_000) {
         Ok(device) => {
             eprintln!("ara-player: audio ({what}): {}", device.summary());
-            Some(device)
+            Some(AudioOut::Device(device))
         }
         Err(error) => {
             eprintln!("ara-player: no audio ({what}): {error}");
@@ -204,7 +257,7 @@ struct Player {
     presenter2d: Option<Presenter2d>,
     window2d: Option<Presenter2d>,
     /// Live audio of windowed players: the world's presenter and the SDL device.
-    audio: Option<(world::Audio, ara_audio::device::SdlBackend)>,
+    audio: Option<(world::Audio, AudioOut)>,
     frame: RenderFrame,
     world: Option<World>,
     pending_imports: Option<ara_play::ImportState>,
