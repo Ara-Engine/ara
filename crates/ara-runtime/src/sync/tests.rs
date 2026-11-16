@@ -18,6 +18,55 @@ fn check(world: &mut World, schedule: &mut Schedule) {
     }
 }
 
+/// A player-controlled dynamic body keeps its physics rotation (it rolls); a character
+/// controller faces its `PlayerControl.yaw` upright.
+#[test]
+fn only_characters_are_turned_upright_to_their_facing() {
+    let mut world = World::new();
+    // A quarter turn about +X: a rolling ball's spin, not a heading.
+    let roll = Quat::from_rotation_x(std::f32::consts::FRAC_PI_2);
+    let pose = PhysicsPose {
+        position: [1.0, 0.5, 2.0],
+        rotation: ara_schema::Quat(roll.to_array()),
+    };
+    let control = PlayerControl {
+        yaw: 30.0,
+        ..Default::default()
+    };
+    let dynamic = RigidBody {
+        motion: MotionType::Dynamic,
+        ..Default::default()
+    };
+    let ball = world
+        .spawn((pose, Transform::default(), dynamic, control.clone()))
+        .id();
+    let character = world
+        .spawn((pose, Transform::default(), CharacterController::default(), control))
+        .id();
+    let mut schedule = Schedule::default();
+    schedule.add_systems(pull_poses);
+    schedule.run(&mut world);
+    let rotation = |e| {
+        let t = world.get::<Transform>(e).expect("transform");
+        Quat::from_euler(
+            glam::EulerRot::XYZ,
+            t.rotation[0].to_radians(),
+            t.rotation[1].to_radians(),
+            t.rotation[2].to_radians(),
+        )
+    };
+    assert!(
+        rotation(ball).angle_between(roll) < 1e-3,
+        "the ball keeps its roll: {:?} against {roll:?} ({:?})",
+        rotation(ball),
+        world.get::<Transform>(ball)
+    );
+    assert!(
+        rotation(character).angle_between(crate::math::yaw_rotation(30.0)) < 1e-3,
+        "the character faces its yaw, upright"
+    );
+}
+
 #[test]
 fn cached_poses_follow_reparenting_missing_transforms_and_recycled_entities() {
     let mut world = World::new();
