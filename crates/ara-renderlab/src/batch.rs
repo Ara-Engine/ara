@@ -16,16 +16,17 @@ pub(crate) struct Group {
     /// Objects drawing the group.
     pub objects: usize,
     /// Some entity of the group has moved since it first drew (`Scene::moved`). A batch's
-    /// mesh is rebuilt whenever a member moves, which on the non-RT path also repacks every
-    /// mesh's software rays and clears Renderlab's lighting cache, so such groups merge last.
+    /// mesh is rebuilt whenever a member moves (on the non-RT path that also repacks every
+    /// mesh's software rays), so such groups stay out of batches while the budget allows it.
     pub moving: bool,
 }
 
-/// Whether groups that moved merge last (`Group::moving`); `ARA_RENDERLAB_BATCH_MOVING_LAST=0`
-/// merges them as any other group, by object count.
-fn moving_last() -> bool {
+/// Whether groups that moved stay out of batches, or merge last when the budget needs them
+/// (`Group::moving`). Outpost's player is 14 rigid parts in two batches, both rebuilt every
+/// walking frame. `ARA_RENDERLAB_BATCH_MOVING=0` merges them as any other group.
+fn keep_moving_out() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var("ARA_RENDERLAB_BATCH_MOVING_LAST").map_or(true, |v| v != "0"))
+    *ON.get_or_init(|| std::env::var("ARA_RENDERLAB_BATCH_MOVING").map_or(true, |v| v != "0"))
 }
 
 /// What a frame does with each group (`plan`).
@@ -40,12 +41,30 @@ pub(crate) enum Fate {
 }
 
 /// Decides which groups merge and which, as a last resort, are left out, so that at
-/// most `budget` groups (own groups plus one per batch) remain. Materials with the
-/// most mergeable groups merge first, and within a material groups that never moved before
-/// moving ones, then the groups with the fewest objects; a material merges only when that
-/// saves groups (two or more join it).
+/// most `budget` groups (own groups plus one per batch) remain. Groups that moved stay
+/// out of batches unless that leaves something out. Materials with the most mergeable
+/// groups merge first, and within a material groups that never moved before moving ones,
+/// then the groups with the fewest objects; a material merges only when that saves groups
+/// (two or more join it).
 /// Groups left out are the last to appear.
 pub(crate) fn plan(groups: &[Group], budget: usize) -> Vec<Fate> {
+    if keep_moving_out() && groups.iter().any(|g| g.moving && g.mergeable) {
+        let still: Vec<Group> = groups
+            .iter()
+            .map(|g| Group {
+                mergeable: g.mergeable && !g.moving,
+                ..*g
+            })
+            .collect();
+        let fates = plan_groups(&still, budget);
+        if !fates.contains(&Fate::Dropped) {
+            return fates;
+        }
+    }
+    plan_groups(groups, budget)
+}
+
+fn plan_groups(groups: &[Group], budget: usize) -> Vec<Fate> {
     let mut fates = vec![Fate::Own; groups.len()];
     let mut count = groups.len();
     if count <= budget {
@@ -65,7 +84,7 @@ pub(crate) fn plan(groups: &[Group], budget: usize) -> Vec<Fate> {
         if count <= budget {
             break;
         }
-        let moving = |i: usize| moving_last() && groups[i].moving;
+        let moving = |i: usize| keep_moving_out() && groups[i].moving;
         members.sort_by_key(|i| (moving(*i), groups[*i].objects, *i));
         // Merging j of a material's groups replaces them with one batch: saves j - 1.
         let take = (count - budget + 1).min(members.len());
@@ -158,6 +177,20 @@ mod tests {
         groups[1].moving = true;
         let fates = plan(&groups, 3);
         assert_eq!(fates, [Fate::Own, Fate::Own, Fate::Merged, Fate::Merged]);
+    }
+
+    #[test]
+    fn moving_groups_stay_out_while_others_can_merge() {
+        // A moving material of two groups, and a still one of three; four groups must become
+        // three. Merging the still material fits, so the moving groups keep their own.
+        let mut groups = [group(1, 1), group(1, 1), group(2, 1), group(2, 1), group(2, 1)];
+        groups[0].moving = true;
+        groups[1].moving = true;
+        let fates = plan(&groups, 3);
+        assert_eq!(fates, [Fate::Own, Fate::Own, Fate::Merged, Fate::Merged, Fate::Merged]);
+        // With only the moving material to merge, they merge rather than be left out.
+        let fates = plan(&groups[..3], 2);
+        assert_eq!(fates, [Fate::Merged, Fate::Merged, Fate::Own]);
     }
 
     #[test]
