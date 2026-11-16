@@ -15,6 +15,17 @@ pub(crate) struct Group {
     pub mergeable: bool,
     /// Objects drawing the group.
     pub objects: usize,
+    /// Some entity of the group has moved since it first drew (`Scene::moved`). A batch's
+    /// mesh is rebuilt whenever a member moves, which on the non-RT path also repacks every
+    /// mesh's software rays and clears Renderlab's lighting cache, so such groups merge last.
+    pub moving: bool,
+}
+
+/// Whether groups that moved merge last (`Group::moving`); `ARA_RENDERLAB_BATCH_MOVING_LAST=0`
+/// merges them as any other group, by object count.
+fn moving_last() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("ARA_RENDERLAB_BATCH_MOVING_LAST").map_or(true, |v| v != "0"))
 }
 
 /// What a frame does with each group (`plan`).
@@ -30,8 +41,9 @@ pub(crate) enum Fate {
 
 /// Decides which groups merge and which, as a last resort, are left out, so that at
 /// most `budget` groups (own groups plus one per batch) remain. Materials with the
-/// most mergeable groups merge first, and within a material the groups with the fewest
-/// objects; a material merges only when that saves groups (two or more join it).
+/// most mergeable groups merge first, and within a material groups that never moved before
+/// moving ones, then the groups with the fewest objects; a material merges only when that
+/// saves groups (two or more join it).
 /// Groups left out are the last to appear.
 pub(crate) fn plan(groups: &[Group], budget: usize) -> Vec<Fate> {
     let mut fates = vec![Fate::Own; groups.len()];
@@ -53,7 +65,8 @@ pub(crate) fn plan(groups: &[Group], budget: usize) -> Vec<Fate> {
         if count <= budget {
             break;
         }
-        members.sort_by_key(|i| (groups[*i].objects, *i));
+        let moving = |i: usize| moving_last() && groups[i].moving;
+        members.sort_by_key(|i| (moving(*i), groups[*i].objects, *i));
         // Merging j of a material's groups replaces them with one batch: saves j - 1.
         let take = (count - budget + 1).min(members.len());
         for i in &members[..take] {
@@ -132,7 +145,19 @@ mod tests {
             material,
             mergeable: true,
             objects,
+            moving: false,
         }
+    }
+
+    #[test]
+    fn moving_groups_merge_after_still_ones() {
+        // Four one-object groups of one material, the first two moving; four groups must
+        // become three, so two merge: the two still ones, though the moving ones come first.
+        let mut groups = [group(1, 1), group(1, 1), group(1, 1), group(1, 1)];
+        groups[0].moving = true;
+        groups[1].moving = true;
+        let fates = plan(&groups, 3);
+        assert_eq!(fates, [Fate::Own, Fate::Own, Fate::Merged, Fate::Merged]);
     }
 
     #[test]

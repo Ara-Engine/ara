@@ -162,6 +162,10 @@ pub(crate) struct Scene {
     coverage: Coverage,
     /// The frame draws the last full `sync` placed (`Self::sync_unchanged`).
     remembered: Option<Remembered>,
+    /// Each frame draw's last transform bits, and the entities that have moved since they
+    /// first drew: a group holding one merges into a static batch last (`batch::Group::moving`).
+    last_world: HashMap<u64, [u32; 16]>,
+    moved: std::collections::HashSet<u64>,
 }
 
 /// What the last full [`Scene::sync`] saw, so a frame whose draws differ from it only in
@@ -731,10 +735,18 @@ impl Scene {
                         && !see_through(draw, &mut self.coverage)
                         && cut(draw, &mut self.coverage).is_none(),
                     objects: 0,
+                    moving: false,
                 });
                 groups.len() - 1
             });
             groups[group].objects += 1;
+            if !fixed {
+                let world = cleaned(&draw.world).to_cols_array().map(f32::to_bits);
+                if self.last_world.insert(draw.entity, world).is_some_and(|old| old != world) {
+                    self.moved.insert(draw.entity);
+                }
+                groups[group].moving |= self.moved.contains(&draw.entity);
+            }
             keyed.push((draw, mesh, material, placed.is_some(), group, fixed));
         }
         let fates = batch::plan(&groups, budget);
