@@ -11290,7 +11290,7 @@ checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
 [[package]]
 name = "renderlab"
 version = "0.1.3"
-source = "git+https://github.com/Ara-Engine/renderlab?rev=d64a3d6acce239a52c386ddd93fafdbef986527b#d64a3d6acce239a52c386ddd93fafdbef986527b"
+source = "git+https://github.com/Ara-Engine/renderlab?rev=d372555ccec36307eda4586eabcbf889b6c9d6f3#d372555ccec36307eda4586eabcbf889b6c9d6f3"
 dependencies = [
  "anyhow",
  "ara-gpu",
@@ -11310,7 +11310,7 @@ dependencies = [
 [[package]]
 name = "renderlab-asset"
 version = "0.1.3"
-source = "git+https://github.com/Ara-Engine/renderlab?rev=d64a3d6acce239a52c386ddd93fafdbef986527b#d64a3d6acce239a52c386ddd93fafdbef986527b"
+source = "git+https://github.com/Ara-Engine/renderlab?rev=d372555ccec36307eda4586eabcbf889b6c9d6f3#d372555ccec36307eda4586eabcbf889b6c9d6f3"
 
 [[package]]
 name = "reqwest"
