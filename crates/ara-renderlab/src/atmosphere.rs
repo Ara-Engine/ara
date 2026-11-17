@@ -80,8 +80,12 @@ pub(crate) fn fog(fog: &AraFog, gaps: &mut Gaps) -> (HeightFog, Option<Volumetri
         anisotropy: fog.anisotropy.clamp(-0.99, 0.99),
         ..HeightFog::default()
     };
+    // The volumetric fog lights the authored medium: Renderlab's default `extra_density` (its own
+    // viewer's haze) would add extinction the scene never set, nearly doubling a light fog near
+    // the camera. Ara's fog has no such field.
     let volumetric = fog.volumetric.then(|| VolumetricFog {
         distance: fog.volumetric_distance.max(1.),
+        extra_density: 0.,
         ..VolumetricFog::default()
     });
     (height, volumetric)
@@ -118,5 +122,7 @@ mod tests {
         );
         assert!((h.falloff - 0.02).abs() < 1e-6);
         assert_eq!(v.is_some(), AraFog::default().volumetric);
+        // The volumetric fog's medium is the authored height fog alone.
+        assert!(v.is_none_or(|v| v.extra_density == 0.));
     }
 }
