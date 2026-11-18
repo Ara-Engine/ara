@@ -28,8 +28,17 @@ pub(super) fn context(root: &Path, producer: &str) -> Result<Value, Diagnostic> 
         producer.to_owned(),
     );
     let path = checked_output(root, ".ara/scripts/diagnostic-bindings.json")?;
+    // Derived metadata: a file that does not parse (one left as zeros by a write cut short
+    // before this one synced its data) starts the counters over instead of failing every
+    // compile (ARA1003).
     let mut bindings: BTreeMap<String, u64> = match std::fs::read(&path) {
-        Ok(bytes) => serde_json::from_slice(&bytes).map_err(io)?,
+        Ok(bytes) => serde_json::from_slice(&bytes).unwrap_or_else(|error| {
+            eprintln!(
+                "warning: {} does not parse ({error}); its binding counters start over",
+                path.display()
+            );
+            BTreeMap::new()
+        }),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => BTreeMap::new(),
         Err(error) => return Err(io(error)),
     };
@@ -44,7 +53,14 @@ pub(super) fn context(root: &Path, producer: &str) -> Result<Value, Diagnostic> 
         let instance = ara_doc::IdGen::from_entropy().asset_id("cp").to_string();
         let temporary = path.with_extension(format!("json.{instance}.tmp"));
         let value = serde_json::to_value(bindings).map_err(io)?;
-        std::fs::write(&temporary, ara_json::to_canonical_string(&value)).map_err(io)?;
+        // The data reaches the disk before the rename publishes it, so the file is the old one
+        // or the new one, never a renamed file whose data was not yet written.
+        {
+            use std::io::Write;
+            let mut file = std::fs::File::create(&temporary).map_err(io)?;
+            file.write_all(ara_json::to_canonical_string(&value).as_bytes()).map_err(io)?;
+            file.sync_all().map_err(io)?;
+        }
         std::fs::rename(temporary, path).map_err(io)?;
         owners.insert(
             key.clone(),

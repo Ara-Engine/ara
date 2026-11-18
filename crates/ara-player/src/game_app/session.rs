@@ -130,6 +130,8 @@ impl App {
                     ara_graphics_settings::WindowMode::Fullscreen => 2,
                 };
                 world.start(true, prepared.build_ms)?;
+                // The world's scene is new to the presenter: prepare it on the next tick.
+                self.scene_loaded = true;
                 if let Some(ui) = &world.ui {
                     let (size, scale) = match &self.window {
                         Some(window) => (window.window_size()?, window.pixel_density()),
