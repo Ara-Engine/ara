@@ -369,33 +369,11 @@ impl Bridge {
         self.in_flight_limit
     }
 
-    /// Starts drawing `view` and returns without waiting for the GPU: the scene is synced and the
-    /// frame, its ids and the meter's pass are submitted, and its handoff queued behind it.
-    /// [`Self::finish`] takes the oldest result. Up to [`MAX_IN_FLIGHT`] frames are in flight (the
-    /// CPU records the next while the GPU draws the last); it is an error to begin another
-    /// before one is taken.
-    pub fn begin(&mut self, gpu: &mut GpuDevice, view: &ExternalView<'_>) -> Result<()> {
-        let begin_started = Instant::now();
-        anyhow::ensure!(
-            self.pending.len() < self.in_flight_limit,
-            "{} frames are in flight: finish one before beginning another",
-            self.in_flight_limit
-        );
-        let began = Instant::now();
+    /// The engine's scene, settings, view, sky and lights for `view`: the part of a frame that
+    /// is not drawing. Returns the engine view and the exposure (stops, and the meter's
+    /// reading when automatic). Frames (`begin`) and `prepare` call it.
+    fn sync(&mut self, view: &ExternalView<'_>) -> Result<(ViewId, f32, Option<f32>)> {
         let frame = view.frame;
-        // The meter's readings of earlier frames, the previous one's included: the bridge
-        // waited for that frame and its histogram pass is queued right behind it, so the
-        // reading is done by now. They are taken before this frame's exposure is chosen, so
-        // a cut's reading is applied one frame later, as it was when the meter read the
-        // frame back. Readings that finish while automatic exposure is off are dropped, not
-        // kept for when it comes back on.
-        let automatic = view.look.ev100.is_none();
-        for reading in self.readbacks.poll(self.engine.device(), &mut self.gaps) {
-            if automatic {
-                self.metering
-                    .observe(view.look, reading.meter, reading.stops, &reading.histogram);
-            }
-        }
         self.report_unsupported(view);
         // Terrain tiles take at most three quarters of the mesh-material groups
         // (`TERRAIN_GROUPS`); entity draws and foliage share the rest. On the non-RT path foliage is capped by the largest
@@ -475,6 +453,56 @@ impl Bridge {
             self.engine.set_lights(&lights)?;
             self.applied.lights = lights;
         }
+        Ok((view_id, stops, metered))
+    }
+
+    /// Makes the scene in `view` ready to draw without drawing it: the scene is synced as a
+    /// frame syncs it, then Renderlab creates every pipeline its frames would otherwise compile
+    /// on first use (`Engine::prepare_pipelines`). No frame is rendered and no history moves.
+    /// The host calls it once a new scene is loaded, keeping its last presented image.
+    pub fn prepare(&mut self, view: &ExternalView<'_>) -> Result<()> {
+        let started = Instant::now();
+        self.sync(view)?;
+        let synced = started.elapsed();
+        let report = self.engine.prepare_pipelines()?;
+        eprintln!(
+            "ARA_RENDERLAB_PREPARE: scene synced in {:.0} ms, {} render and {} compute pipelines created in {:.0} ms",
+            synced.as_secs_f64() * 1e3,
+            report.render_pipelines,
+            report.compute_pipelines,
+            report.cpu.as_secs_f64() * 1e3,
+        );
+        Ok(())
+    }
+
+    /// Starts drawing `view` and returns without waiting for the GPU: the scene is synced and the
+    /// frame, its ids and the meter's pass are submitted, and its handoff queued behind it.
+    /// [`Self::finish`] takes the oldest result. Up to [`MAX_IN_FLIGHT`] frames are in flight (the
+    /// CPU records the next while the GPU draws the last); it is an error to begin another
+    /// before one is taken.
+    pub fn begin(&mut self, gpu: &mut GpuDevice, view: &ExternalView<'_>) -> Result<()> {
+        let begin_started = Instant::now();
+        anyhow::ensure!(
+            self.pending.len() < self.in_flight_limit,
+            "{} frames are in flight: finish one before beginning another",
+            self.in_flight_limit
+        );
+        let began = Instant::now();
+        let frame = view.frame;
+        // The meter's readings of earlier frames, the previous one's included: the bridge
+        // waited for that frame and its histogram pass is queued right behind it, so the
+        // reading is done by now. They are taken before this frame's exposure is chosen, so
+        // a cut's reading is applied one frame later, as it was when the meter read the
+        // frame back. Readings that finish while automatic exposure is off are dropped, not
+        // kept for when it comes back on.
+        let automatic = view.look.ev100.is_none();
+        for reading in self.readbacks.poll(self.engine.device(), &mut self.gaps) {
+            if automatic {
+                self.metering
+                    .observe(view.look, reading.meter, reading.stops, &reading.histogram);
+            }
+        }
+        let (view_id, stops, metered) = self.sync(view)?;
 
         // A view that jumps (a camera cut, a teleport) shares nothing with the history
         // Renderlab accumulated: it starts over, as before a capture.

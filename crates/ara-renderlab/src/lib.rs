@@ -147,6 +147,12 @@ impl ExternalRenderer for Renderlab {
         self.bridge.render(gpu, view)
     }
 
+    // Apple's engine (ara-gpu) has no prepare step yet; it keeps the default.
+    #[cfg(not(target_vendor = "apple"))]
+    fn prepare(&mut self, _gpu: &mut GpuDevice, view: &ExternalView<'_>) -> Result<()> {
+        self.bridge.prepare(view)
+    }
+
     fn cut(&mut self) {
         self.bridge.cut();
     }

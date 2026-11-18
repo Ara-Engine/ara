@@ -189,6 +189,8 @@ pub(crate) fn run(args: Args) -> Result<()> {
         frame: device::warm_frame(),
         audio: None,
         quit: false,
+        scene_loaded: false,
+        clock_restart: false,
         bot: args
             .game
             .bot
@@ -236,7 +238,9 @@ pub(crate) fn run(args: Args) -> Result<()> {
         rust_patches.frame_boundary();
         let now = Instant::now();
         app.tick(now.duration_since(previous))?;
-        previous = now;
+        // A tick that prepared a new scene took as long as the preparation: that is no game
+        // time, so the next tick measures from its end (no catch-up ticks).
+        previous = if std::mem::take(&mut app.clock_restart) { Instant::now() } else { now };
         frames += 1;
         if app.window.is_none() {
             std::thread::sleep(Duration::from_millis(2));
@@ -268,6 +272,11 @@ struct App {
     frame: RenderFrame,
     audio: Option<(crate::world::Audio, crate::AudioOut)>,
     quit: bool,
+    /// Set when a loaded world starts (its scene is new to the presenter): the next world
+    /// tick prepares the scene before it advances or presents.
+    scene_loaded: bool,
+    /// Set by the tick that prepared a scene: the loop restarts its clock after it.
+    clock_restart: bool,
     bot: Option<bot::Bot>,
     route: Vec<String>,
     rebinding: Option<String>,
@@ -348,6 +357,16 @@ impl App {
         if let Some(world) = &mut self.world {
             if let (Some(lobby), Play::Host(host)) = (&mut self.lobby, &mut world.runtime) {
                 lobby.poll(host)?;
+            }
+            if std::mem::take(&mut self.scene_loaded) && self.window.is_some() {
+                // The new scene's pipelines are created now, while the window still shows the
+                // last presented image, so its first frames compile nothing.
+                world.extract_frame(&mut self.frame);
+                let took = self
+                    .presenter
+                    .prepare_scene(&self.frame, || world.fidelity_content(&self.frame))?;
+                eprintln!("ARA_SCENE_PREPARED: {:.0} ms", took.as_secs_f64() * 1e3);
+                self.clock_restart = true;
             }
             let inputs = self.mapper.injections(world.runtime.player());
             if !inputs.is_empty() {
