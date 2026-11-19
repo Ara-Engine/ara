@@ -268,6 +268,9 @@ struct Player {
     max_late: Duration,
     /// Whether the world's first windowed frame (the full scene upload) was presented.
     uploaded: bool,
+    /// Set when a world starts (its scene is new to the presenter): the next presenting frame
+    /// prepares the scene before it presents.
+    scene_loaded: bool,
     stop: bool,
     /// Scene-dependent landscape/VFX pipelines warm on the first window frame.
     window_ready: bool,
@@ -379,6 +382,7 @@ fn run(args: Args, launched: Instant) -> Result<()> {
         last_advance: Instant::now(),
         max_late: Duration::ZERO,
         uploaded: false,
+        scene_loaded: false,
         stop: false,
         window_ready: false,
         profiling: profiling::Recorder::default(),
@@ -566,6 +570,19 @@ impl Player {
             let present = self.window.is_some() || self.embed.as_ref().is_some_and(|e| e.due(now));
             if !present {
                 return self.after_frame(warming_window);
+            }
+            // A new scene: its pipelines are created before its first present, while the last
+            // presented image stays up (embedded Play publishes nothing until it is lit). The
+            // time it takes is no game time: the next frame's elapsed starts after it.
+            if std::mem::take(&mut self.scene_loaded)
+                && self.window2d.is_none()
+                && let Some(presenter) = &mut self.presenter
+            {
+                busy(&mut self.link, "prepare")?;
+                world.extract_frame(&mut self.frame);
+                let took = presenter.prepare_scene(&self.frame, || world.fidelity_content(&self.frame))?;
+                eprintln!("ARA_SCENE_PREPARED: {:.0} ms", took.as_secs_f64() * 1e3);
+                self.last_advance = Instant::now();
             }
             {
                 ara_gpu::cpu_scope!("Player.extract");
@@ -1299,6 +1316,7 @@ impl Player {
             embed.begin_entry();
         }
         self.last_advance = Instant::now();
+        self.scene_loaded = true;
         self.world = Some(world);
         Ok(started)
     }

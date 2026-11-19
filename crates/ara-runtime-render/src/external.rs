@@ -83,6 +83,13 @@ pub trait ExternalRenderer: Send {
     fn name(&self) -> &str;
     /// Draws `view` and returns its completed image on `gpu`.
     fn render(&mut self, gpu: &mut GpuDevice, view: &ExternalView<'_>) -> Result<ExternalFrame>;
+    /// Makes the scene in `view` ready to draw without drawing it: everything a frame of it
+    /// would otherwise create on first use, such as pipelines. The host calls it once a new
+    /// scene is loaded ([`Presenter::prepare_scene`]) and keeps its last presented image
+    /// meanwhile. The default does nothing.
+    fn prepare(&mut self, _gpu: &mut GpuDevice, _view: &ExternalView<'_>) -> Result<()> {
+        Ok(())
+    }
     /// The next frame starts without temporal history (a capture or camera cut).
     fn cut(&mut self);
     /// Frames a still capture renders before it reads back, so temporal
@@ -155,6 +162,72 @@ impl Presenter {
         self.external.as_deref().map(ExternalRenderer::name)
     }
 
+    /// Makes `frame`'s scene ready to draw without drawing it ([`ExternalRenderer::prepare`]):
+    /// call it once a new scene is loaded, before its first present. Nothing is presented,
+    /// so the window keeps the last published image; returns how long it took. `resolve` is
+    /// `present_with`'s. Without an external renderer it only ensures the device.
+    pub fn prepare_scene(
+        &mut self,
+        frame: &RenderFrame,
+        resolve: impl FnOnce() -> Result<Content>,
+    ) -> Result<std::time::Duration> {
+        let started = Instant::now();
+        self.ensure_device()?;
+        if self.external.is_none() {
+            return Ok(started.elapsed());
+        }
+        self.resolve_external_content(frame, resolve, started)?;
+        let look = self.frame_look(frame);
+        let debug_switches = self.debug
+            != RenderDebug {
+                exposure: self.debug.exposure,
+                ..Default::default()
+            };
+        let (foliage_percent, terrain_detail) =
+            (self.user_content_budget().1, self.user_terrain_detail());
+        let gpu = self
+            .device
+            .as_mut()
+            .context("presentation device")?
+            .gpu_mut();
+        let external = self.external.as_mut().context("external renderer")?;
+        external.prepare(
+            gpu,
+            &ExternalView {
+                frame,
+                size: self.size,
+                look: &look,
+                environment: self.environment.as_ref(),
+                foliage_parts: &self.external_foliage,
+                terrain_materials: &self.external_terrain_materials,
+                debug_switches,
+                foliage_percent,
+                terrain_detail,
+            },
+        )?;
+        Ok(started.elapsed())
+    }
+
+    /// The environment map, foliage parts and terrain layer materials for `frame`, resolved
+    /// when its draw count changes: the draw count stands in for a structural change, so
+    /// ordinary motion never resolves content.
+    fn resolve_external_content(
+        &mut self,
+        frame: &RenderFrame,
+        resolve: impl FnOnce() -> Result<Content>,
+        started: Instant,
+    ) -> Result<()> {
+        if self.external_draws != Some(frame.draws.len()) {
+            let content = resolve()?;
+            self.stats.prepare = started.elapsed();
+            self.environment = content.environment;
+            self.external_foliage = content.foliage_parts;
+            self.external_terrain_materials = content.terrain_materials;
+            self.external_draws = Some(frame.draws.len());
+        }
+        Ok(())
+    }
+
     /// Renders `frame` with the external renderer and publishes its image.
     /// `resolve` runs only when the draw count changes, for the environment map, the
     /// foliage parts and the terrain layer materials.
@@ -170,16 +243,7 @@ impl Presenter {
             self.external.is_some(),
             "no renderer is installed on this presenter"
         );
-        // The draw count stands in for a structural change: ordinary motion never
-        // resolves content.
-        if self.external_draws != Some(frame.draws.len()) {
-            let content = resolve()?;
-            self.stats.prepare = started.elapsed();
-            self.environment = content.environment;
-            self.external_foliage = content.foliage_parts;
-            self.external_terrain_materials = content.terrain_materials;
-            self.external_draws = Some(frame.draws.len());
-        }
+        self.resolve_external_content(frame, resolve, started)?;
         let look = self.frame_look(frame);
         let size = self.size;
         // The exposure lock reaches the external renderer through the look.
