@@ -241,6 +241,13 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
             Some(device) => Some((world.audio_presenter()?, device)),
             None => None,
         };
+        // The scene's pipelines are created before its first present; the loop's clock starts
+        // after it, so the time it takes is no game time.
+        if !is_2d {
+            world.runtime.extract(&mut frame);
+            let took = presenter.prepare_scene(&frame, || world.fidelity_content(&frame))?;
+            eprintln!("ARA_SCENE_PREPARED: {:.0} ms", took.as_secs_f64() * 1e3);
+        }
         let mut previous = Instant::now();
         let mut frames = 0;
         #[cfg(feature = "hotpatch")]
