@@ -103,15 +103,10 @@ impl App {
             phase: 0.,
         };
         backdrop.frame(&mut self.frame, Duration::ZERO)?;
-        // The title scene is new to the presenter too: prepared before its first present,
-        // and the loop's clock restarts after it.
-        if self.window.is_some() {
-            let took = self
-                .presenter
-                .prepare_scene(&self.frame, || backdrop.world.fidelity_content(&self.frame))?;
-            eprintln!("ARA_SCENE_PREPARED: title, {:.0} ms", took.as_secs_f64() * 1e3);
-            self.clock_restart = true;
-        }
+        // The title scene is not prepared: prepare builds every program's variants, which a cold
+        // start compiled up front for 4-9 s more before the first title frame (19 Nov, Outpost and
+        // Glint, both paths), longer than the title frames' own first-use compiles. Warm it was
+        // level. Revisit once prepare compiles in parallel.
         self.backdrop = Some(backdrop);
         if let Some(action) = self.bot_start.take() {
             if let Some(directory) = self.evidence.clone() {
