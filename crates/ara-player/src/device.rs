@@ -264,7 +264,10 @@ impl Windowed {
         resolve: impl FnOnce() -> Result<ara_runtime_render::fidelity::native::Content>,
     ) -> Result<()> {
         ara_gpu::cpu_scope!("Player.window_present");
+        let __t0 = Instant::now();
+        let mut __steps: Vec<(&str, f64)> = Vec::new();
         self.pace_graphics();
+        __steps.push(("pace", __t0.elapsed().as_secs_f64() * 1e3));
         let started = Instant::now();
         let size = self.window.size()?;
         if size.contains(&0) {
@@ -281,6 +284,7 @@ impl Windowed {
             self.recreate(presenter)?;
             presenter.resize(size)?;
         }
+        __steps.push(("resize", __t0.elapsed().as_secs_f64() * 1e3));
         // The UI composite and the window copy of the frame in flight may still read
         // the image this frame's scene rewrites; on Metal they run on queues of their
         // own, so the scene waits for them on the GPU.
@@ -293,6 +297,9 @@ impl Windowed {
             }
         }
         presenter.present_with(frame, resolve)?;
+        __steps.push(("scene", __t0.elapsed().as_secs_f64() * 1e3));
+        __steps.push(("scene.resolve", presenter.stats().prepare.as_secs_f64() * 1e3));
+        __steps.push(("scene.render", presenter.stats().render.as_secs_f64() * 1e3));
         let cpu = started.elapsed() - presenter.stats().render;
         let gpu = presenter
             .gpu()
@@ -315,6 +322,7 @@ impl Windowed {
             // shares its native device; both are live.
             unsafe { present.set_frames_in_flight(gpu, true)? };
         }
+        __steps.push(("presentation_setup", __t0.elapsed().as_secs_f64() * 1e3));
         // The game UI (if any) composites the scene into its own target and presents it.
         if let Some(surface) = &mut self.game_ui {
             surface.set_frames_in_flight(true)?;
@@ -322,6 +330,7 @@ impl Windowed {
                 return Ok(());
             }
         }
+        __steps.push(("game_ui", __t0.elapsed().as_secs_f64() * 1e3));
         let result = match &mut self.present {
             // SAFETY: the renderer, or the game UI over it, submitted its CopySource image
             // ahead of the blit on this queue; both owners are live.
@@ -345,6 +354,10 @@ impl Windowed {
             } else {
                 return Err(error);
             }
+        }
+        __steps.push(("window_present", __t0.elapsed().as_secs_f64() * 1e3));
+        if __t0.elapsed().as_millis() > 200 {
+            eprintln!("present_step {}", __steps.iter().map(|(n, ms)| format!("{n}={ms:.1}")).collect::<Vec<_>>().join(" "));
         }
         self.frames += 1;
         self.frame_times
