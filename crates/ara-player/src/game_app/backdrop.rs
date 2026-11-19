@@ -103,6 +103,15 @@ impl App {
             phase: 0.,
         };
         backdrop.frame(&mut self.frame, Duration::ZERO)?;
+        // The title scene is new to the presenter too: prepared before its first present,
+        // and the loop's clock restarts after it.
+        if self.window.is_some() {
+            let took = self
+                .presenter
+                .prepare_scene(&self.frame, || backdrop.world.fidelity_content(&self.frame))?;
+            eprintln!("ARA_SCENE_PREPARED: title, {:.0} ms", took.as_secs_f64() * 1e3);
+            self.clock_restart = true;
+        }
         self.backdrop = Some(backdrop);
         if let Some(action) = self.bot_start.take() {
             if let Some(directory) = self.evidence.clone() {
