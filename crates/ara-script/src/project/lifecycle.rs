@@ -85,3 +85,25 @@ fn next(value: u64) -> Result<u64, Diagnostic> {
         .checked_add(1)
         .ok_or_else(|| io("compiler lifecycle sequence exhausted"))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A bindings file left as zeros (a write cut short before its data reached the disk) no
+    /// longer fails the compile (ARA1003): the counters start over and the file is rewritten.
+    #[test]
+    fn a_zeroed_bindings_file_starts_its_counters_over() {
+        let root = std::env::temp_dir().join(format!("ara-bindings-{}", std::process::id()));
+        let scripts = root.join(".ara/scripts");
+        std::fs::create_dir_all(&scripts).unwrap();
+        let file = scripts.join("diagnostic-bindings.json");
+        std::fs::write(&file, [0u8; 22]).unwrap();
+        let context = context(&root, "zeroed-producer").unwrap();
+        assert_eq!(context["binding"], 1);
+        let written: BTreeMap<String, u64> =
+            serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+        assert_eq!(written.get("zeroed-producer"), Some(&1));
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+}
