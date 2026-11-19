@@ -92,6 +92,7 @@ impl App {
         self.progress = None;
         match result {
             Ok(prepared) => {
+                let __load = std::time::Instant::now();
                 let mut world = prepared.world.map_runtime(|runtime| {
                     Play::new(runtime, prepared.role, prepared.net.as_ref())
                 })?;
@@ -102,7 +103,9 @@ impl App {
                     self.graphics.size.as_deref(),
                     self.graphics.windowed,
                 )?;
+                eprintln!("load_step {} {:.1}", "attach_and_configure", __load.elapsed().as_secs_f64() * 1e3);
                 world.sync_graphics(Some(&mut self.presenter), self.window.as_mut())?;
+                eprintln!("load_step {} {:.1}", "sync_graphics", __load.elapsed().as_secs_f64() * 1e3);
                 if self.graphics.save_on_start {
                     world
                         .runtime
@@ -129,7 +132,9 @@ impl App {
                     ara_graphics_settings::WindowMode::Borderless => 1,
                     ara_graphics_settings::WindowMode::Fullscreen => 2,
                 };
+                eprintln!("load_step {} {:.1}", "graphics_settings", __load.elapsed().as_secs_f64() * 1e3);
                 world.start(true, prepared.build_ms)?;
+                eprintln!("load_step {} {:.1}", "world_start", __load.elapsed().as_secs_f64() * 1e3);
                 // The world's scene is new to the presenter: prepare it on the next tick.
                 self.scene_loaded = true;
                 if let Some(ui) = &world.ui {
@@ -145,6 +150,7 @@ impl App {
                     self.init_settings()?;
                     self.settings_labels()?;
                 }
+                eprintln!("load_step {} {:.1}", "game_ui", __load.elapsed().as_secs_f64() * 1e3);
                 if self.bot.is_some() && !matches!(world.runtime, Play::Mirror(..)) {
                     if let Some(bot) = &self.bot {
                         bot.profile_hash(&world)?;
@@ -154,6 +160,7 @@ impl App {
                     )?;
                     world.runtime.play_mut().record()?;
                 }
+                eprintln!("load_step {} {:.1}", "bot_hash_and_record", __load.elapsed().as_secs_f64() * 1e3);
                 if prepared.role == Role::Host || prepared.role == Role::Dedicated {
                     self.lobby = Some(lobby::Lobby::bind(
                         self.port,
@@ -169,6 +176,7 @@ impl App {
                 {
                     self.audio = Some((world.audio_presenter()?, device));
                 }
+                eprintln!("load_step {} {:.1}", "lobby_and_audio", __load.elapsed().as_secs_f64() * 1e3);
                 let address = format!("Crew channel: 127.0.0.1:{}", self.port);
                 if let Some(surface) = self.surface() {
                     surface.label("lobby-address", &address)?;

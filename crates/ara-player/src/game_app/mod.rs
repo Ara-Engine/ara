@@ -336,7 +336,12 @@ impl App {
         {
             surface.label("loading-progress", &latest)?;
         }
+        let __tick = Instant::now();
+        let __loading = self.loading.is_some();
         self.poll_loading()?;
+        if __loading && self.loading.is_none() {
+            eprintln!("load_step {} {:.1}", "poll_loading_total", __tick.elapsed().as_secs_f64() * 1e3);
+        }
         if self.screen == Screen::Loading
             && self
                 .world
@@ -404,6 +409,9 @@ impl App {
                 surface.screen(self.screen)?;
             }
         }
+        if __tick.elapsed().as_millis() > 200 {
+            eprintln!("load_step {} {:.1}", "tick_world_block", __tick.elapsed().as_secs_f64() * 1e3);
+        }
         let mut finished = None;
         if let Some(mut bot) = self.bot.take() {
             if let Some(world) = &mut self.world
@@ -444,6 +452,9 @@ impl App {
             } else {
                 window.present(&mut self.presenter, &self.frame, || Ok(Default::default()))?;
             }
+        }
+        if __tick.elapsed().as_millis() > 200 {
+            eprintln!("load_step {} {:.1}", "tick_after_present", __tick.elapsed().as_secs_f64() * 1e3);
         }
         if let (Some(world), Some((audio, device))) = (&mut self.world, &mut self.audio) {
             let inputs = world.audio_inputs()?;
