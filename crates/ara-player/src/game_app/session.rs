@@ -20,6 +20,7 @@ impl App {
             .name("outpost-load".into())
             .spawn(move || {
                 let result = (|| {
+                    eprintln!("load_worker start {}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis());
                     let ticket = address.as_deref().map(lobby::join).transpose()?;
                     let mut completed = None;
                     let content = if project {
@@ -38,6 +39,7 @@ impl App {
                     } else {
                         content::exported(&root)?
                     };
+                    eprintln!("load_worker content {}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis());
                     let net = match role {
                         Role::Local => None,
                         Role::Host | Role::Dedicated => {
@@ -65,6 +67,7 @@ impl App {
                     };
                     let (world, build_ms) =
                         World::prepare_game(content.scene, net.as_ref(), content.source)?;
+                    eprintln!("load_worker world {}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis());
                     Ok(Prepared {
                         world,
                         build_ms,

@@ -357,7 +357,7 @@ impl Windowed {
         }
         __steps.push(("window_present", __t0.elapsed().as_secs_f64() * 1e3));
         if __t0.elapsed().as_millis() > 200 {
-            eprintln!("present_step {}", __steps.iter().map(|(n, ms)| format!("{n}={ms:.1}")).collect::<Vec<_>>().join(" "));
+            eprintln!("present_step at={} {}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis(), __steps.iter().map(|(n, ms)| format!("{n}={ms:.1}")).collect::<Vec<_>>().join(" "));
         }
         self.frames += 1;
         self.frame_times
