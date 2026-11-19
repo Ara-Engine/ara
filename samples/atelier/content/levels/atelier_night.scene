@@ -1,0 +1,708 @@
+{
+  "$schema": "ara://schema/scene/1",
+  "id": "sc_atelier02",
+  "versions": {
+    "PostProcessVolume": 2
+  },
+  "records": {
+    "e_camnight0": {
+      "name": "Camera night 0",
+      "order": "ar",
+      "Camera": {
+        "fov": 62
+      },
+      "Transform": {
+        "position": [5.4, 1.75, 3],
+        "rotation": [-7.907163, 77.79261, 7.7305574]
+      }
+    },
+    "e_camnightdolly0": {
+      "name": "Camera nightdolly 0",
+      "order": "as",
+      "Camera": {
+        "priority": 10
+      },
+      "Transform": {
+        "position": [0.5, 1.5, 8],
+        "rotation": [0.71616006, 3.5760555, -0.044671677]
+      }
+    },
+    "e_camnightdolly1": {
+      "name": "Camera nightdolly 1",
+      "order": "at",
+      "Camera": {
+        "priority": 10
+      },
+      "Transform": {
+        "position": [0.3, 1.5, 4.5],
+        "rotation": [1.2730305, 3.8131368, -0.08467379]
+      }
+    },
+    "e_camnightlantern0": {
+      "name": "Camera nightlantern 0",
+      "order": "au",
+      "Camera": {
+        "fov": 30,
+        "priority": 10
+      },
+      "Transform": {
+        "position": [4.2, 3.3, 1.9],
+        "rotation": [-30.037836, 24.671597, 13.569567]
+      }
+    },
+    "e_camprop": {
+      "name": "Antique camera",
+      "order": "aY",
+      "MeshRenderer": {
+        "model": "@third_party/khronos_antique_camera/AntiqueCamera.gltf#as_khronosantiquecamera"
+      },
+      "Transform": {
+        "position": [-0.308, 0.765, -5.946],
+        "rotation": [0, 25, 0],
+        "scale": [0.11, 0.11, 0.11]
+      }
+    },
+    "e_courtyard": {
+      "name": "Courtyard dressing",
+      "order": "aA",
+      "MeshRenderer": {
+        "model": "@kit/atelier_courtyard.gltf#as_kitateliercourtyard"
+      },
+      "Transform": {}
+    },
+    "e_dust": {
+      "name": "Dust motes in the sun shaft",
+      "order": "aq",
+      "Transform": {
+        "position": [-1, 0.8, -1.6]
+      },
+      "VisualEffect": {
+        "effect": "dust",
+        "scale": 1.4
+      }
+    },
+    "e_env": {
+      "name": "Gradient sky and fixed exposure",
+      "order": "a0",
+      "Environment": {
+        "sky": [0.20000000298023224, 0.36000001430511475, 0.8500000238418579, 1],
+        "horizon": [0.7200000286102295, 0.8199999928474426, 0.949999988079071, 1],
+        "ground": [0.4000000059604645, 0.4000000059604645, 0.38999998569488525, 1],
+        "intensity": 0.029999999329447746
+      },
+      "PostProcessVolume": {
+        "overrides": [
+          {
+            "exposure": "manual",
+            "ev100": 5
+          },
+          {
+            "module": "toneMapping",
+            "toneMapping": "agxMediumHighContrast"
+          }
+        ]
+      }
+    },
+    "e_furniture": {
+      "name": "Furniture",
+      "order": "a9",
+      "MeshRenderer": {
+        "model": "@kit/atelier_furniture.gltf#as_kitatelierfurniture"
+      },
+      "Transform": {}
+    },
+    "e_helmet": {
+      "name": "Flight helmet",
+      "order": "aZ",
+      "MeshRenderer": {
+        "model": "@third_party/khronos_flight_helmet/FlightHelmet.gltf#as_khronosflighthelmet"
+      },
+      "Transform": {
+        "position": [-2.463, 2.22, -8.682],
+        "rotation": [0, 200, 0],
+        "scale": [0.9, 0.9, 0.9]
+      }
+    },
+    "e_lamps": {
+      "name": "Lamp shades and bulbs",
+      "order": "aB",
+      "MeshRenderer": {
+        "model": "@kit/atelier_lamps.gltf#as_kitatelierlamps",
+        "emissive": [6000, 6000, 6000],
+        "castShadows": false
+      },
+      "Transform": {}
+    },
+    "e_lantern": {
+      "name": "Lantern",
+      "order": "ab",
+      "MeshRenderer": {
+        "model": "@third_party/lantern_01/Lantern_01_2k.gltf#as_lantern01"
+      },
+      "Transform": {
+        "position": [-5.6, 0.48, 4],
+        "rotation": [0, 20, 0],
+        "scale": [1.6, 1.6, 1.6]
+      }
+    },
+    "e_lanternglass": {
+      "name": "Wall lantern glass",
+      "order": "aC",
+      "MeshRenderer": {
+        "model": "@kit/atelier_lantern_glass.gltf#as_kitatelierlanternglass",
+        "emissive": [5000, 5000, 5000],
+        "castShadows": false
+      },
+      "Transform": {}
+    },
+    "e_lcup": {
+      "name": "Table lamp glow",
+      "order": "a7",
+      "Light": {
+        "color": [1, 0.800000011920929, 0.550000011920929, 1],
+        "intensity": 120,
+        "range": 3,
+        "sourceRadius": 0.10000000149011612
+      },
+      "Transform": {
+        "position": [0.65, 0.877, -6.03]
+      }
+    },
+    "e_lfloor": {
+      "name": "Floor lamp reading spot",
+      "order": "a3",
+      "Light": {
+        "kind": "spot",
+        "color": [1, 0.800000011920929, 0.5799999833106995, 1],
+        "intensity": 450,
+        "range": 6,
+        "innerAngle": 25,
+        "outerAngle": 45,
+        "sourceRadius": 0.03999999910593033
+      },
+      "Transform": {
+        "position": [-3.4, 1.7, -5.7],
+        "rotation": [-47.290604, -18.733858, -19.184677]
+      }
+    },
+    "e_llantern": {
+      "name": "Courtyard wall lantern",
+      "order": "a6",
+      "Light": {
+        "color": [1, 0.7799999713897705, 0.5, 1],
+        "intensity": 600,
+        "range": 8,
+        "sourceRadius": 0.07000000029802322
+      },
+      "Transform": {
+        "position": [3.3, 2.4, 0.68]
+      }
+    },
+    "e_lnight0": {
+      "name": "Night lantern 0",
+      "order": "aF",
+      "Light": {
+        "color": [1, 0.7799999713897705, 0.5, 1],
+        "intensity": 600,
+        "range": 8,
+        "sourceRadius": 0.07000000029802322
+      },
+      "Transform": {
+        "position": [-3.3, 2.4, 0.68]
+      }
+    },
+    "e_lnight1": {
+      "name": "Night lantern 1",
+      "order": "aG",
+      "Light": {
+        "color": [1, 0.7799999713897705, 0.5, 1],
+        "intensity": 600,
+        "range": 8,
+        "sourceRadius": 0.07000000029802322
+      },
+      "Transform": {
+        "position": [-6.8, 1.995, 1.6]
+      }
+    },
+    "e_lnight10": {
+      "name": "Night lantern 10",
+      "order": "aP",
+      "Light": {
+        "color": [1, 0.7799999713897705, 0.5, 1],
+        "intensity": 600,
+        "range": 8,
+        "sourceRadius": 0.07000000029802322
+      },
+      "Transform": {
+        "position": [6.8, 1.995, 8]
+      }
+    },
+    "e_lnight11": {
+      "name": "Night lantern 11",
+      "order": "aQ",
+      "Light": {
+        "color": [1, 0.7799999713897705, 0.5, 1],
+        "intensity": 600,
+        "range": 8,
+        "sourceRadius": 0.07000000029802322
+      },
+      "Transform": {
+        "position": [-5.25, 1.995, 8.8]
+      }
+    },
+    "e_lnight12": {
+      "name": "Night lantern 12",
+      "order": "aR",
+      "Light": {
+        "color": [1, 0.7799999713897705, 0.5, 1],
+        "intensity": 600,
+        "range": 8,
+        "sourceRadius": 0.07000000029802322
+      },
+      "Transform": {
+        "position": [-3.75, 1.995, 8.8]
+      }
+    },
+    "e_lnight13": {
+      "name": "Night lantern 13",
+      "order": "aS",
+      "Light": {
+        "color": [1, 0.7799999713897705, 0.5, 1],
+        "intensity": 600,
+        "range": 8,
+        "sourceRadius": 0.07000000029802322
+      },
+      "Transform": {
+        "position": [-2.25, 1.995, 8.8]
+      }
+    },
+    "e_lnight14": {
+      "name": "Night lantern 14",
+      "order": "aT",
+      "Light": {
+        "color": [1, 0.7799999713897705, 0.5, 1],
+        "intensity": 600,
+        "range": 8,
+        "sourceRadius": 0.07000000029802322
+      },
+      "Transform": {
+        "position": [-0.75, 1.995, 8.8]
+      }
+    },
+    "e_lnight15": {
+      "name": "Night lantern 15",
+      "order": "aU",
+      "Light": {
+        "color": [1, 0.7799999713897705, 0.5, 1],
+        "intensity": 600,
+        "range": 8,
+        "sourceRadius": 0.07000000029802322
+      },
+      "Transform": {
+        "position": [0.75, 1.995, 8.8]
+      }
+    },
+    "e_lnight16": {
+      "name": "Night lantern 16",
+      "order": "aV",
+      "Light": {
+        "color": [1, 0.7799999713897705, 0.5, 1],
+        "intensity": 600,
+        "range": 8,
+        "sourceRadius": 0.07000000029802322
+      },
+      "Transform": {
+        "position": [2.25, 1.995, 8.8]
+      }
+    },
+    "e_lnight17": {
+      "name": "Night lantern 17",
+      "order": "aW",
+      "Light": {
+        "color": [1, 0.7799999713897705, 0.5, 1],
+        "intensity": 600,
+        "range": 8,
+        "sourceRadius": 0.07000000029802322
+      },
+      "Transform": {
+        "position": [3.75, 1.995, 8.8]
+      }
+    },
+    "e_lnight18": {
+      "name": "Night lantern 18",
+      "order": "aX",
+      "Light": {
+        "color": [1, 0.7799999713897705, 0.5, 1],
+        "intensity": 600,
+        "range": 8,
+        "sourceRadius": 0.07000000029802322
+      },
+      "Transform": {
+        "position": [5.25, 1.995, 8.8]
+      }
+    },
+    "e_lnight2": {
+      "name": "Night lantern 2",
+      "order": "aH",
+      "Light": {
+        "color": [1, 0.7799999713897705, 0.5, 1],
+        "intensity": 600,
+        "range": 8,
+        "sourceRadius": 0.07000000029802322
+      },
+      "Transform": {
+        "position": [-6.8, 1.995, 3.2]
+      }
+    },
+    "e_lnight3": {
+      "name": "Night lantern 3",
+      "order": "aI",
+      "Light": {
+        "color": [1, 0.7799999713897705, 0.5, 1],
+        "intensity": 600,
+        "range": 8,
+        "sourceRadius": 0.07000000029802322
+      },
+      "Transform": {
+        "position": [-6.8, 1.995, 4.8]
+      }
+    },
+    "e_lnight4": {
+      "name": "Night lantern 4",
+      "order": "aJ",
+      "Light": {
+        "color": [1, 0.7799999713897705, 0.5, 1],
+        "intensity": 600,
+        "range": 8,
+        "sourceRadius": 0.07000000029802322
+      },
+      "Transform": {
+        "position": [-6.8, 1.995, 6.4]
+      }
+    },
+    "e_lnight5": {
+      "name": "Night lantern 5",
+      "order": "aK",
+      "Light": {
+        "color": [1, 0.7799999713897705, 0.5, 1],
+        "intensity": 600,
+        "range": 8,
+        "sourceRadius": 0.07000000029802322
+      },
+      "Transform": {
+        "position": [-6.8, 1.995, 8]
+      }
+    },
+    "e_lnight6": {
+      "name": "Night lantern 6",
+      "order": "aL",
+      "Light": {
+        "color": [1, 0.7799999713897705, 0.5, 1],
+        "intensity": 600,
+        "range": 8,
+        "sourceRadius": 0.07000000029802322
+      },
+      "Transform": {
+        "position": [6.8, 1.995, 1.6]
+      }
+    },
+    "e_lnight7": {
+      "name": "Night lantern 7",
+      "order": "aM",
+      "Light": {
+        "color": [1, 0.7799999713897705, 0.5, 1],
+        "intensity": 600,
+        "range": 8,
+        "sourceRadius": 0.07000000029802322
+      },
+      "Transform": {
+        "position": [6.8, 1.995, 3.2]
+      }
+    },
+    "e_lnight8": {
+      "name": "Night lantern 8",
+      "order": "aN",
+      "Light": {
+        "color": [1, 0.7799999713897705, 0.5, 1],
+        "intensity": 600,
+        "range": 8,
+        "sourceRadius": 0.07000000029802322
+      },
+      "Transform": {
+        "position": [6.8, 1.995, 4.8]
+      }
+    },
+    "e_lnight9": {
+      "name": "Night lantern 9",
+      "order": "aO",
+      "Light": {
+        "color": [1, 0.7799999713897705, 0.5, 1],
+        "intensity": 600,
+        "range": 8,
+        "sourceRadius": 0.07000000029802322
+      },
+      "Transform": {
+        "position": [6.8, 1.995, 6.4]
+      }
+    },
+    "e_lpendant": {
+      "name": "Pendant over the table",
+      "order": "a2",
+      "Light": {
+        "color": [1, 0.8199999928474426, 0.6000000238418579, 1],
+        "intensity": 900,
+        "range": 9,
+        "sourceRadius": 0.10000000149011612
+      },
+      "Transform": {
+        "position": [0.2, 2.5, -6]
+      }
+    },
+    "e_lpicture": {
+      "name": "Picture light",
+      "order": "a4",
+      "Light": {
+        "kind": "spot",
+        "color": [1, 0.8999999761581421, 0.75, 1],
+        "intensity": 350,
+        "range": 3.5,
+        "innerAngle": 30,
+        "outerAngle": 55,
+        "sourceRadius": 0.019999999552965164
+      },
+      "Transform": {
+        "position": [1.6, 2.65, -8.7],
+        "rotation": [-74.13427, 0, 0]
+      }
+    },
+    "e_lshelf": {
+      "name": "Shelf LED strip",
+      "order": "a5",
+      "Light": {
+        "color": [1, 0.9300000071525574, 0.800000011920929, 1],
+        "intensity": 300,
+        "range": 3,
+        "sourceRadius": 0.009999999776482582
+      },
+      "Transform": {
+        "position": [-2.4, 1.2, -8.65]
+      }
+    },
+    "e_mannequin": {
+      "name": "Mannequin (idle)",
+      "order": "ap",
+      "Animator": {
+        "idle": "Idle_Talking"
+      },
+      "MeshRenderer": {
+        "model": "@third_party/m2m_human/human-base-animations.glb#as_m2mhuman",
+        "materialOverrides": [
+          {
+            "material": "@materials/humanpalette0.graph#gr_humanpalette0"
+          }
+        ]
+      },
+      "Transform": {
+        "position": [-4.7, 0, 3.3],
+        "rotation": [0, 105, 0]
+      }
+    },
+    "e_nightglass": {
+      "name": "Night lantern glass",
+      "order": "aE",
+      "MeshRenderer": {
+        "model": "@kit/atelier_night_glass.gltf#as_kitateliernightglass",
+        "emissive": [5000, 5000, 5000],
+        "castShadows": false
+      },
+      "Transform": {}
+    },
+    "e_nightkit": {
+      "name": "Night lanterns",
+      "order": "aD",
+      "MeshRenderer": {
+        "model": "@kit/atelier_night.gltf#as_kitateliernight"
+      },
+      "Transform": {}
+    },
+    "e_plant0": {
+      "name": "Plant",
+      "order": "ac",
+      "MeshRenderer": {
+        "model": "@third_party/shrub_04/shrub_04_1k.gltf#as_shrub04"
+      },
+      "Transform": {
+        "position": [5.433, 0.626, 2.202]
+      }
+    },
+    "e_plant1": {
+      "name": "Plant",
+      "order": "ad",
+      "MeshRenderer": {
+        "model": "@third_party/fern_02/fern_02_1k.gltf#as_fern02"
+      },
+      "Transform": {
+        "position": [5.066, 0.651, 3.357],
+        "rotation": [0, 40, 0]
+      }
+    },
+    "e_plant10": {
+      "name": "Plant",
+      "order": "am",
+      "MeshRenderer": {
+        "model": "@third_party/potted_plant_01/potted_plant_01_1k.gltf#as_pottedplant01"
+      },
+      "Transform": {
+        "position": [4.296, 0.015, 1.129],
+        "rotation": [0, 140, 0],
+        "scale": [1.1, 1.1, 1.1]
+      }
+    },
+    "e_plant11": {
+      "name": "Plant",
+      "order": "an",
+      "MeshRenderer": {
+        "model": "@third_party/potted_plant_02/potted_plant_02_1k.gltf#as_pottedplant02"
+      },
+      "Transform": {
+        "position": [-4.341, 0, 1.294],
+        "rotation": [0, 310, 0]
+      }
+    },
+    "e_plant12": {
+      "name": "Plant",
+      "order": "ao",
+      "MeshRenderer": {
+        "model": "@third_party/potted_plant_01/potted_plant_01_1k.gltf#as_pottedplant01"
+      },
+      "Transform": {
+        "position": [-5.942, 0.014, 5.329],
+        "rotation": [0, 20, 0]
+      }
+    },
+    "e_plant2": {
+      "name": "Plant",
+      "order": "ae",
+      "MeshRenderer": {
+        "model": "@third_party/shrub_04/shrub_04_1k.gltf#as_shrub04"
+      },
+      "Transform": {
+        "position": [5.651, 0.627, 5.89],
+        "rotation": [0, 80, 0],
+        "scale": [1.1, 1.1, 1.1]
+      }
+    },
+    "e_plant3": {
+      "name": "Plant",
+      "order": "af",
+      "MeshRenderer": {
+        "model": "@third_party/fern_02/fern_02_1k.gltf#as_fern02"
+      },
+      "Transform": {
+        "position": [5.172, 0.651, 6.446],
+        "rotation": [0, 10, 0]
+      }
+    },
+    "e_plant4": {
+      "name": "Plant",
+      "order": "ag",
+      "MeshRenderer": {
+        "model": "@third_party/fern_02/fern_02_1k.gltf#as_fern02"
+      },
+      "Transform": {
+        "position": [-2.752, 0.651, 1.917],
+        "rotation": [0, 120, 0]
+      }
+    },
+    "e_plant5": {
+      "name": "Plant",
+      "order": "ah",
+      "MeshRenderer": {
+        "model": "@third_party/shrub_04/shrub_04_1k.gltf#as_shrub04"
+      },
+      "Transform": {
+        "position": [2.359, 0.625, 1.302],
+        "scale": [0.9, 0.9, 0.9]
+      }
+    },
+    "e_plant6": {
+      "name": "Plant",
+      "order": "ai",
+      "MeshRenderer": {
+        "model": "@third_party/potted_plant_01/potted_plant_01_1k.gltf#as_pottedplant01"
+      },
+      "Transform": {
+        "position": [3.242, 0.014, -8.429],
+        "rotation": [0, 200, 0]
+      }
+    },
+    "e_plant7": {
+      "name": "Plant",
+      "order": "aj",
+      "MeshRenderer": {
+        "model": "@third_party/potted_plant_02/potted_plant_02_1k.gltf#as_pottedplant02"
+      },
+      "Transform": {
+        "position": [-3.314, 0, -0.844],
+        "rotation": [0, 30, 0]
+      }
+    },
+    "e_plant8": {
+      "name": "Plant",
+      "order": "ak",
+      "MeshRenderer": {
+        "model": "@third_party/shrub_04/shrub_04_1k.gltf#as_shrub04"
+      },
+      "Transform": {
+        "position": [-3.156, 0.625, 1.486],
+        "rotation": [0, 60, 0],
+        "scale": [0.8, 0.8, 0.8]
+      }
+    },
+    "e_plant9": {
+      "name": "Plant",
+      "order": "al",
+      "MeshRenderer": {
+        "model": "@third_party/fern_02/fern_02_1k.gltf#as_fern02"
+      },
+      "Transform": {
+        "position": [3.573, 0.647, 1.531],
+        "rotation": [0, 200, 0],
+        "scale": [0.9, 0.9, 0.9]
+      }
+    },
+    "e_radio": {
+      "name": "Radio",
+      "order": "aa",
+      "MeshRenderer": {
+        "model": "@third_party/vintage_radio_transceiver/vintage_radio_transceiver_2k.gltf#as_vintageradiotransceiver"
+      },
+      "Transform": {
+        "position": [-1.748, 1.191, -8.651],
+        "rotation": [0, 170, 0],
+        "scale": [0.8, 0.8, 0.8]
+      }
+    },
+    "e_shell": {
+      "name": "Room and courtyard",
+      "order": "a8",
+      "MeshRenderer": {
+        "model": "@kit/atelier_shell.gltf#as_kitateliershell"
+      },
+      "Transform": {}
+    },
+    "e_sun": {
+      "name": "Moon",
+      "order": "a1",
+      "Light": {
+        "kind": "directional",
+        "color": [0.75, 0.8500000238418579, 1, 1],
+        "intensity": 0.25
+      },
+      "Transform": {
+        "position": [0, 40, 30],
+        "rotation": [-108.43488, -17.548376, -137.8695]
+      }
+    }
+  }
+}

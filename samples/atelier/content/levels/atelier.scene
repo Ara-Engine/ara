@@ -1,0 +1,553 @@
+{
+  "$schema": "ara://schema/scene/1",
+  "id": "sc_atelier01",
+  "versions": {
+    "PostProcessVolume": 2
+  },
+  "records": {
+    "e_camcut0": {
+      "name": "Camera cut 0",
+      "order": "ab",
+      "Camera": {
+        "fov": 46,
+        "priority": 10
+      },
+      "Transform": {
+        "position": [-5, 1.2, 7.5],
+        "rotation": [3.2245224, -35.11145, 1.8559558]
+      }
+    },
+    "e_camcut1": {
+      "name": "Camera cut 1",
+      "order": "ac",
+      "Camera": {
+        "fov": 46,
+        "priority": 10
+      },
+      "Transform": {
+        "position": [-3, 1.2, 7.5],
+        "rotation": [3.2245224, -35.11145, 1.8559558]
+      }
+    },
+    "e_camcut2": {
+      "name": "Camera cut 2",
+      "order": "ad",
+      "Camera": {
+        "fov": 40,
+        "priority": 10
+      },
+      "Transform": {
+        "position": [-0.4, 1.4, -0.6],
+        "rotation": [-4.130856, 33.62131, 2.290012]
+      }
+    },
+    "e_camcut3": {
+      "name": "Camera cut 3",
+      "order": "ae",
+      "Camera": {
+        "fov": 40,
+        "priority": 10
+      },
+      "Transform": {
+        "position": [-0.9, 1.4, -0.9],
+        "rotation": [-4.9532566, 24.934843, 2.0925171]
+      }
+    },
+    "e_camdolly0": {
+      "name": "Camera dolly 0",
+      "order": "aZ",
+      "Camera": {
+        "fov": 50,
+        "priority": 10
+      },
+      "Transform": {
+        "position": [0.2, 1.5, 6.5],
+        "rotation": [-1.0912166, 3.2698963, 0.062249932]
+      }
+    },
+    "e_camdolly1": {
+      "name": "Camera dolly 1",
+      "order": "aa",
+      "Camera": {
+        "fov": 50,
+        "priority": 10
+      },
+      "Transform": {
+        "position": [-0.2, 1.5, -1.2],
+        "rotation": [-4.5139885, 11.852828, 0.929008]
+      }
+    },
+    "e_camglow0": {
+      "name": "Camera glow 0",
+      "order": "af",
+      "Camera": {
+        "fov": 34,
+        "priority": 10
+      },
+      "Transform": {
+        "position": [1.85, 1.3, -5.7],
+        "rotation": [-49.304447, 57.868458, 44.55786]
+      }
+    },
+    "e_camlantern0": {
+      "name": "Camera lantern 0",
+      "order": "ah",
+      "Camera": {
+        "fov": 30,
+        "priority": 10
+      },
+      "Transform": {
+        "position": [4.2, 3.3, 1.9],
+        "rotation": [-30.037836, 24.671597, 13.569567]
+      }
+    },
+    "e_camprop": {
+      "name": "Antique camera",
+      "order": "aF",
+      "MeshRenderer": {
+        "model": "@third_party/khronos_antique_camera/AntiqueCamera.gltf#as_khronosantiquecamera"
+      },
+      "Transform": {
+        "position": [-0.308, 0.765, -5.946],
+        "rotation": [0, 25, 0],
+        "scale": [0.11, 0.11, 0.11]
+      }
+    },
+    "e_camshadow0": {
+      "name": "Camera shadow 0",
+      "order": "ag",
+      "Camera": {
+        "fov": 26,
+        "priority": 10
+      },
+      "Transform": {
+        "position": [-8.5, 1.29, 6],
+        "rotation": [4.2435703, 10.176583, -0.7510956]
+      }
+    },
+    "e_camstill0": {
+      "name": "Camera still 0",
+      "order": "aY",
+      "Camera": {
+        "fov": 46
+      },
+      "Transform": {
+        "position": [3.1, 1.5, -0.6],
+        "rotation": [1.3019532, 46.265644, -0.94080704]
+      }
+    },
+    "e_courtyard": {
+      "name": "Courtyard dressing",
+      "order": "aC",
+      "MeshRenderer": {
+        "model": "@kit/atelier_courtyard.gltf#as_kitateliercourtyard"
+      },
+      "Transform": {}
+    },
+    "e_dust": {
+      "name": "Dust motes in the sun shaft",
+      "order": "aX",
+      "Transform": {
+        "position": [-1, 0.8, -1.6]
+      },
+      "VisualEffect": {
+        "effect": "dust",
+        "scale": 1.4
+      }
+    },
+    "e_env": {
+      "name": "Gradient sky and fixed exposure",
+      "order": "a0",
+      "Environment": {
+        "sky": [0.20000000298023224, 0.36000001430511475, 0.8500000238418579, 1],
+        "horizon": [0.7200000286102295, 0.8199999928474426, 0.949999988079071, 1],
+        "ground": [0.4000000059604645, 0.4000000059604645, 0.38999998569488525, 1],
+        "intensity": 9000
+      },
+      "PostProcessVolume": {
+        "overrides": [
+          {
+            "exposure": "manual",
+            "ev100": 10
+          },
+          {
+            "module": "toneMapping",
+            "toneMapping": "agxMediumHighContrast"
+          }
+        ]
+      }
+    },
+    "e_furniture": {
+      "name": "Furniture",
+      "order": "aB",
+      "MeshRenderer": {
+        "model": "@kit/atelier_furniture.gltf#as_kitatelierfurniture"
+      },
+      "Transform": {}
+    },
+    "e_helmet": {
+      "name": "Flight helmet",
+      "order": "aG",
+      "MeshRenderer": {
+        "model": "@third_party/khronos_flight_helmet/FlightHelmet.gltf#as_khronosflighthelmet"
+      },
+      "Transform": {
+        "position": [-2.463, 2.22, -8.682],
+        "rotation": [0, 200, 0],
+        "scale": [0.9, 0.9, 0.9]
+      }
+    },
+    "e_lamps": {
+      "name": "Lamp shades and bulbs",
+      "order": "aD",
+      "MeshRenderer": {
+        "model": "@kit/atelier_lamps.gltf#as_kitatelierlamps",
+        "emissive": [6000, 6000, 6000],
+        "castShadows": false
+      },
+      "Transform": {}
+    },
+    "e_lantern": {
+      "name": "Lantern",
+      "order": "aI",
+      "MeshRenderer": {
+        "model": "@third_party/lantern_01/Lantern_01_2k.gltf#as_lantern01"
+      },
+      "Transform": {
+        "position": [-5.6, 0.48, 4],
+        "rotation": [0, 20, 0],
+        "scale": [1.6, 1.6, 1.6]
+      }
+    },
+    "e_lanternev": {
+      "name": "Exposure for the lantern still",
+      "order": "a2",
+      "PostProcessVolume": {
+        "shape": "box",
+        "priority": 10,
+        "overrides": [
+          {
+            "exposure": "manual",
+            "ev100": 13
+          }
+        ]
+      },
+      "Transform": {
+        "position": [4.2, 3.3, 1.9],
+        "scale": [2, 2, 2]
+      }
+    },
+    "e_lanternglass": {
+      "name": "Wall lantern glass",
+      "order": "aE",
+      "MeshRenderer": {
+        "model": "@kit/atelier_lantern_glass.gltf#as_kitatelierlanternglass",
+        "emissive": [5000, 5000, 5000],
+        "castShadows": false
+      },
+      "Transform": {}
+    },
+    "e_lcup": {
+      "name": "Table lamp glow",
+      "order": "a9",
+      "Light": {
+        "color": [1, 0.800000011920929, 0.550000011920929, 1],
+        "intensity": 120,
+        "range": 3,
+        "sourceRadius": 0.10000000149011612
+      },
+      "Transform": {
+        "position": [0.65, 0.877, -6.03]
+      }
+    },
+    "e_lfloor": {
+      "name": "Floor lamp reading spot",
+      "order": "a5",
+      "Light": {
+        "kind": "spot",
+        "color": [1, 0.800000011920929, 0.5799999833106995, 1],
+        "intensity": 450,
+        "range": 6,
+        "innerAngle": 25,
+        "outerAngle": 45,
+        "sourceRadius": 0.03999999910593033
+      },
+      "Transform": {
+        "position": [-3.4, 1.7, -5.7],
+        "rotation": [-47.290604, -18.733858, -19.184677]
+      }
+    },
+    "e_llantern": {
+      "name": "Courtyard wall lantern",
+      "order": "a8",
+      "Light": {
+        "color": [1, 0.7799999713897705, 0.5, 1],
+        "intensity": 600,
+        "range": 8,
+        "sourceRadius": 0.07000000029802322
+      },
+      "Transform": {
+        "position": [3.3, 2.4, 0.68]
+      }
+    },
+    "e_lpendant": {
+      "name": "Pendant over the table",
+      "order": "a4",
+      "Light": {
+        "color": [1, 0.8199999928474426, 0.6000000238418579, 1],
+        "intensity": 900,
+        "range": 9,
+        "sourceRadius": 0.10000000149011612
+      },
+      "Transform": {
+        "position": [0.2, 2.5, -6]
+      }
+    },
+    "e_lpicture": {
+      "name": "Picture light",
+      "order": "a6",
+      "Light": {
+        "kind": "spot",
+        "color": [1, 0.8999999761581421, 0.75, 1],
+        "intensity": 350,
+        "range": 3.5,
+        "innerAngle": 30,
+        "outerAngle": 55,
+        "sourceRadius": 0.019999999552965164
+      },
+      "Transform": {
+        "position": [1.6, 2.65, -8.7],
+        "rotation": [-74.13427, 0, 0]
+      }
+    },
+    "e_lshelf": {
+      "name": "Shelf LED strip",
+      "order": "a7",
+      "Light": {
+        "color": [1, 0.9300000071525574, 0.800000011920929, 1],
+        "intensity": 300,
+        "range": 3,
+        "sourceRadius": 0.009999999776482582
+      },
+      "Transform": {
+        "position": [-2.4, 1.2, -8.65]
+      }
+    },
+    "e_mannequin": {
+      "name": "Mannequin (idle)",
+      "order": "aW",
+      "Animator": {
+        "idle": "Idle_Talking"
+      },
+      "MeshRenderer": {
+        "model": "@third_party/m2m_human/human-base-animations.glb#as_m2mhuman",
+        "materialOverrides": [
+          {
+            "material": "@materials/humanpalette0.graph#gr_humanpalette0"
+          }
+        ]
+      },
+      "Transform": {
+        "position": [-4.7, 0, 3.3],
+        "rotation": [0, 105, 0]
+      }
+    },
+    "e_plant0": {
+      "name": "Plant",
+      "order": "aJ",
+      "MeshRenderer": {
+        "model": "@third_party/shrub_04/shrub_04_1k.gltf#as_shrub04"
+      },
+      "Transform": {
+        "position": [5.433, 0.626, 2.202]
+      }
+    },
+    "e_plant1": {
+      "name": "Plant",
+      "order": "aK",
+      "MeshRenderer": {
+        "model": "@third_party/fern_02/fern_02_1k.gltf#as_fern02"
+      },
+      "Transform": {
+        "position": [5.066, 0.651, 3.357],
+        "rotation": [0, 40, 0]
+      }
+    },
+    "e_plant10": {
+      "name": "Plant",
+      "order": "aT",
+      "MeshRenderer": {
+        "model": "@third_party/potted_plant_01/potted_plant_01_1k.gltf#as_pottedplant01"
+      },
+      "Transform": {
+        "position": [4.296, 0.015, 1.129],
+        "rotation": [0, 140, 0],
+        "scale": [1.1, 1.1, 1.1]
+      }
+    },
+    "e_plant11": {
+      "name": "Plant",
+      "order": "aU",
+      "MeshRenderer": {
+        "model": "@third_party/potted_plant_02/potted_plant_02_1k.gltf#as_pottedplant02"
+      },
+      "Transform": {
+        "position": [-4.341, 0, 1.294],
+        "rotation": [0, 310, 0]
+      }
+    },
+    "e_plant12": {
+      "name": "Plant",
+      "order": "aV",
+      "MeshRenderer": {
+        "model": "@third_party/potted_plant_01/potted_plant_01_1k.gltf#as_pottedplant01"
+      },
+      "Transform": {
+        "position": [-5.942, 0.014, 5.329],
+        "rotation": [0, 20, 0]
+      }
+    },
+    "e_plant2": {
+      "name": "Plant",
+      "order": "aL",
+      "MeshRenderer": {
+        "model": "@third_party/shrub_04/shrub_04_1k.gltf#as_shrub04"
+      },
+      "Transform": {
+        "position": [5.651, 0.627, 5.89],
+        "rotation": [0, 80, 0],
+        "scale": [1.1, 1.1, 1.1]
+      }
+    },
+    "e_plant3": {
+      "name": "Plant",
+      "order": "aM",
+      "MeshRenderer": {
+        "model": "@third_party/fern_02/fern_02_1k.gltf#as_fern02"
+      },
+      "Transform": {
+        "position": [5.172, 0.651, 6.446],
+        "rotation": [0, 10, 0]
+      }
+    },
+    "e_plant4": {
+      "name": "Plant",
+      "order": "aN",
+      "MeshRenderer": {
+        "model": "@third_party/fern_02/fern_02_1k.gltf#as_fern02"
+      },
+      "Transform": {
+        "position": [-2.752, 0.651, 1.917],
+        "rotation": [0, 120, 0]
+      }
+    },
+    "e_plant5": {
+      "name": "Plant",
+      "order": "aO",
+      "MeshRenderer": {
+        "model": "@third_party/shrub_04/shrub_04_1k.gltf#as_shrub04"
+      },
+      "Transform": {
+        "position": [2.359, 0.625, 1.302],
+        "scale": [0.9, 0.9, 0.9]
+      }
+    },
+    "e_plant6": {
+      "name": "Plant",
+      "order": "aP",
+      "MeshRenderer": {
+        "model": "@third_party/potted_plant_01/potted_plant_01_1k.gltf#as_pottedplant01"
+      },
+      "Transform": {
+        "position": [3.242, 0.014, -8.429],
+        "rotation": [0, 200, 0]
+      }
+    },
+    "e_plant7": {
+      "name": "Plant",
+      "order": "aQ",
+      "MeshRenderer": {
+        "model": "@third_party/potted_plant_02/potted_plant_02_1k.gltf#as_pottedplant02"
+      },
+      "Transform": {
+        "position": [-3.314, 0, -0.844],
+        "rotation": [0, 30, 0]
+      }
+    },
+    "e_plant8": {
+      "name": "Plant",
+      "order": "aR",
+      "MeshRenderer": {
+        "model": "@third_party/shrub_04/shrub_04_1k.gltf#as_shrub04"
+      },
+      "Transform": {
+        "position": [-3.156, 0.625, 1.486],
+        "rotation": [0, 60, 0],
+        "scale": [0.8, 0.8, 0.8]
+      }
+    },
+    "e_plant9": {
+      "name": "Plant",
+      "order": "aS",
+      "MeshRenderer": {
+        "model": "@third_party/fern_02/fern_02_1k.gltf#as_fern02"
+      },
+      "Transform": {
+        "position": [3.573, 0.647, 1.531],
+        "rotation": [0, 200, 0],
+        "scale": [0.9, 0.9, 0.9]
+      }
+    },
+    "e_radio": {
+      "name": "Radio",
+      "order": "aH",
+      "MeshRenderer": {
+        "model": "@third_party/vintage_radio_transceiver/vintage_radio_transceiver_2k.gltf#as_vintageradiotransceiver"
+      },
+      "Transform": {
+        "position": [-1.748, 1.191, -8.651],
+        "rotation": [0, 170, 0],
+        "scale": [0.8, 0.8, 0.8]
+      }
+    },
+    "e_shadowev": {
+      "name": "Exposure for the shadow still",
+      "order": "a1",
+      "PostProcessVolume": {
+        "shape": "box",
+        "priority": 10,
+        "overrides": [
+          {
+            "exposure": "manual",
+            "ev100": 12
+          }
+        ]
+      },
+      "Transform": {
+        "position": [-8.5, 1.29, 6],
+        "scale": [2, 2, 2]
+      }
+    },
+    "e_shell": {
+      "name": "Room and courtyard",
+      "order": "aA",
+      "MeshRenderer": {
+        "model": "@kit/atelier_shell.gltf#as_kitateliershell"
+      },
+      "Transform": {}
+    },
+    "e_sun": {
+      "name": "Sun",
+      "order": "a3",
+      "Light": {
+        "kind": "directional",
+        "color": [1, 0.9100000262260437, 0.7599999904632568, 1],
+        "intensity": 45000
+      },
+      "Transform": {
+        "position": [0, 40, 30],
+        "rotation": [-29.315851, 26.704145, 14.162673]
+      }
+    }
+  }
+}
