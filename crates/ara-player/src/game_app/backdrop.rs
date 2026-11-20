@@ -18,11 +18,13 @@ pub(super) struct Prepared {
 
 impl Backdrop {
     fn load(root: &std::path::Path, project: bool) -> Result<Prepared> {
+        eprintln!("cold_step backdrop_load_start {}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis());
         let mut content = if project {
             content::project(root, |_| Ok(()))?
         } else {
             content::exported(root)?
         };
+        eprintln!("cold_step backdrop_content {}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis());
         let menu = content
             .scene
             .documents
@@ -34,6 +36,7 @@ impl Backdrop {
         content.scene.ui = None;
         let (mut world, _) = World::prepare_game(content.scene, None, content.source)?;
         world.runtime.resume()?;
+        eprintln!("cold_step backdrop_world {}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis());
         let point = |identity: &str| {
             world
                 .runtime
@@ -103,6 +106,7 @@ impl App {
             phase: 0.,
         };
         backdrop.frame(&mut self.frame, Duration::ZERO)?;
+        eprintln!("cold_step backdrop_adopted {}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis());
         // The title scene is not prepared: prepare builds every program's variants, which a cold
         // start compiled up front for 4-9 s more before the first title frame (19 Nov, Outpost and
         // Glint, both paths), longer than the title frames' own first-use compiles. Warm it was

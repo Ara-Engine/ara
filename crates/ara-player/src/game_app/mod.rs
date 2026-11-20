@@ -81,6 +81,7 @@ pub(crate) fn has_menu(args: &Args) -> Result<bool> {
 }
 
 pub(crate) fn run(args: Args) -> Result<()> {
+    eprintln!("cold_step run_start {}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis());
     let mut settings = Settings::load()?;
     if let Some(ara_runtime_render::QualityChoice::Preset(preset)) = args.quality {
         use ara_runtime_render::QualityPreset;
@@ -118,6 +119,7 @@ pub(crate) fn run(args: Args) -> Result<()> {
             .context("this game has no native UI")?,
         None => content::ui(&root)?,
     };
+    eprintln!("cold_step ui_content {}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis());
     let no_window = args.game.dedicated || args.standalone.headless;
     let (window, mut presenter) = if no_window {
         (
@@ -151,7 +153,9 @@ pub(crate) fn run(args: Args) -> Result<()> {
         )?);
         (Some(window), presenter)
     };
+    eprintln!("cold_step window_and_device {}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis());
     crate::renderer::install(&mut presenter, &args.gpu_cache)?;
+    eprintln!("cold_step renderlab_installed {}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis());
     let headless_ui = if window.is_none() {
         Some(Surface::plain(&ui, settings.size(), 1.)?)
     } else {
@@ -162,6 +166,7 @@ pub(crate) fn run(args: Args) -> Result<()> {
     } else {
         None
     };
+    eprintln!("cold_step ui_audio {}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis());
     let mut app = App {
         graphics: crate::graphics::LaunchOverrides {
             save_on_start: false,
