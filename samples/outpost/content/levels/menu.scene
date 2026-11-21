@@ -3584,6 +3584,7 @@
       },
       "MeshRenderer": {
         "model": "@third_party/street_lamp_01/street_lamp_01_1k.gltf#as_streetlamp01",
+        "primitive": 0,
         "emissive": [4000, 3800, 3400],
         "emissiveFactor": [1, 1, 1],
         "emissiveMaterials": [
@@ -3592,6 +3593,44 @@
         ]
       },
       "RigidBody": {},
+      "Transform": {
+        "position": [73, 0.05, 79],
+        "rotation": [0, 225, 0]
+      }
+    },
+    "e_flood0bulb": {
+      "name": "Floodlight bulb",
+      "order": "b32",
+      "MeshRenderer": {
+        "model": "@third_party/street_lamp_01/street_lamp_01_1k.gltf#as_streetlamp01",
+        "primitive": 2,
+        "emissive": [4000, 3800, 3400],
+        "emissiveFactor": [1, 1, 1],
+        "emissiveMaterials": [
+          "street_lamp_01_bulb",
+          "street_lamp_01_glass"
+        ],
+        "castShadows": false
+      },
+      "Transform": {
+        "position": [73, 0.05, 79],
+        "rotation": [0, 225, 0]
+      }
+    },
+    "e_flood0glass": {
+      "name": "Floodlight glass",
+      "order": "b31",
+      "MeshRenderer": {
+        "model": "@third_party/street_lamp_01/street_lamp_01_1k.gltf#as_streetlamp01",
+        "primitive": 1,
+        "emissive": [4000, 3800, 3400],
+        "emissiveFactor": [1, 1, 1],
+        "emissiveMaterials": [
+          "street_lamp_01_bulb",
+          "street_lamp_01_glass"
+        ],
+        "castShadows": false
+      },
       "Transform": {
         "position": [73, 0.05, 79],
         "rotation": [0, 225, 0]
@@ -3606,6 +3645,7 @@
       },
       "MeshRenderer": {
         "model": "@third_party/street_lamp_01/street_lamp_01_1k.gltf#as_streetlamp01",
+        "primitive": 0,
         "emissive": [4000, 3800, 3400],
         "emissiveFactor": [1, 1, 1],
         "emissiveMaterials": [
@@ -3614,6 +3654,44 @@
         ]
       },
       "RigidBody": {},
+      "Transform": {
+        "position": [119, 0.05, 79],
+        "rotation": [0, 135, 0]
+      }
+    },
+    "e_flood1bulb": {
+      "name": "Floodlight bulb",
+      "order": "b34",
+      "MeshRenderer": {
+        "model": "@third_party/street_lamp_01/street_lamp_01_1k.gltf#as_streetlamp01",
+        "primitive": 2,
+        "emissive": [4000, 3800, 3400],
+        "emissiveFactor": [1, 1, 1],
+        "emissiveMaterials": [
+          "street_lamp_01_bulb",
+          "street_lamp_01_glass"
+        ],
+        "castShadows": false
+      },
+      "Transform": {
+        "position": [119, 0.05, 79],
+        "rotation": [0, 135, 0]
+      }
+    },
+    "e_flood1glass": {
+      "name": "Floodlight glass",
+      "order": "b33",
+      "MeshRenderer": {
+        "model": "@third_party/street_lamp_01/street_lamp_01_1k.gltf#as_streetlamp01",
+        "primitive": 1,
+        "emissive": [4000, 3800, 3400],
+        "emissiveFactor": [1, 1, 1],
+        "emissiveMaterials": [
+          "street_lamp_01_bulb",
+          "street_lamp_01_glass"
+        ],
+        "castShadows": false
+      },
       "Transform": {
         "position": [119, 0.05, 79],
         "rotation": [0, 135, 0]
@@ -3628,6 +3706,7 @@
       },
       "MeshRenderer": {
         "model": "@third_party/street_lamp_01/street_lamp_01_1k.gltf#as_streetlamp01",
+        "primitive": 0,
         "emissive": [4000, 3800, 3400],
         "emissiveFactor": [1, 1, 1],
         "emissiveMaterials": [
@@ -3636,6 +3715,44 @@
         ]
       },
       "RigidBody": {},
+      "Transform": {
+        "position": [73, 0.05, 105],
+        "rotation": [0, 315, 0]
+      }
+    },
+    "e_flood2bulb": {
+      "name": "Floodlight bulb",
+      "order": "b36",
+      "MeshRenderer": {
+        "model": "@third_party/street_lamp_01/street_lamp_01_1k.gltf#as_streetlamp01",
+        "primitive": 2,
+        "emissive": [4000, 3800, 3400],
+        "emissiveFactor": [1, 1, 1],
+        "emissiveMaterials": [
+          "street_lamp_01_bulb",
+          "street_lamp_01_glass"
+        ],
+        "castShadows": false
+      },
+      "Transform": {
+        "position": [73, 0.05, 105],
+        "rotation": [0, 315, 0]
+      }
+    },
+    "e_flood2glass": {
+      "name": "Floodlight glass",
+      "order": "b35",
+      "MeshRenderer": {
+        "model": "@third_party/street_lamp_01/street_lamp_01_1k.gltf#as_streetlamp01",
+        "primitive": 1,
+        "emissive": [4000, 3800, 3400],
+        "emissiveFactor": [1, 1, 1],
+        "emissiveMaterials": [
+          "street_lamp_01_bulb",
+          "street_lamp_01_glass"
+        ],
+        "castShadows": false
+      },
       "Transform": {
         "position": [73, 0.05, 105],
         "rotation": [0, 315, 0]
@@ -3653,7 +3770,7 @@
         "outerAngle": 48
       },
       "Transform": {
-        "position": [73, 3.75, 79],
+        "position": [73, 3.32, 79],
         "rotation": [-167.56044, -52.877934, -170.02449]
       }
     },
@@ -3669,7 +3786,7 @@
         "outerAngle": 48
       },
       "Transform": {
-        "position": [119, 3.75, 79],
+        "position": [119, 3.32, 79],
         "rotation": [-167.56044, 52.877934, 170.02449]
       }
     },
@@ -3685,7 +3802,7 @@
         "outerAngle": 48
       },
       "Transform": {
-        "position": [73, 3.75, 105],
+        "position": [73, 3.32, 105],
         "rotation": [-22.619854, -67.02727, -20.98786]
       }
     },
@@ -4464,12 +4581,51 @@
       "order": "b2C",
       "MeshRenderer": {
         "model": "@third_party/security_light/security_light_1k.gltf#as_securitylight",
+        "primitive": 0,
         "emissive": [3000, 2900, 2700],
         "emissiveFactor": [1, 1, 1],
         "emissiveMaterials": [
           "security_light_bulb",
           "security_light_glass"
         ]
+      },
+      "Transform": {
+        "position": [90, 6.6, 103.6],
+        "rotation": [0, 180, 0]
+      }
+    },
+    "e_seclightbulb": {
+      "name": "Security light bulb",
+      "order": "b37",
+      "MeshRenderer": {
+        "model": "@third_party/security_light/security_light_1k.gltf#as_securitylight",
+        "primitive": 1,
+        "emissive": [3000, 2900, 2700],
+        "emissiveFactor": [1, 1, 1],
+        "emissiveMaterials": [
+          "security_light_bulb",
+          "security_light_glass"
+        ],
+        "castShadows": false
+      },
+      "Transform": {
+        "position": [90, 6.6, 103.6],
+        "rotation": [0, 180, 0]
+      }
+    },
+    "e_seclightglass": {
+      "name": "Security light glass",
+      "order": "b38",
+      "MeshRenderer": {
+        "model": "@third_party/security_light/security_light_1k.gltf#as_securitylight",
+        "primitive": 2,
+        "emissive": [3000, 2900, 2700],
+        "emissiveFactor": [1, 1, 1],
+        "emissiveMaterials": [
+          "security_light_bulb",
+          "security_light_glass"
+        ],
+        "castShadows": false
       },
       "Transform": {
         "position": [90, 6.6, 103.6],
